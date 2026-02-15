@@ -2,15 +2,16 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0b0f14">
-  <title>Медси Бот — Воспитатели</title>
+  <title>Медси Бот</title>
   <link rel="shortcut icon" type="image/x-icon" href="favicon.ico?">
 
   <style>
     html{
-      -webkit-text-size-adjust: 100%;
-      text-size-adjust: 100%;
+      -webkit-text-size-adjust:100%;
+      text-size-adjust:100%;
     }
     html,body{
       margin:0;
@@ -18,10 +19,64 @@
       height:100%;
       background:#0b0f14;
       overflow:hidden;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
     }
 
-    /* iframe */
+    /* ===== LOADER ===== */
+    #loader{
+      position:fixed;
+      inset:0;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      background:#0b0f14;
+      color:#ecf1f8;
+      z-index:10;
+      transition:opacity .4s ease;
+    }
+
+    #loader.hidden{
+      opacity:0;
+      pointer-events:none;
+    }
+
+    .loader-title{
+      font-size:18px;
+      font-weight:700;
+      margin:0 0 10px;
+    }
+
+    .loader-text{
+      font-size:15px;
+      color:#b7c1cf;
+      margin:0 0 22px;
+      min-height:20px;
+      text-align:center;
+      padding:0 20px;
+    }
+
+    .dots{
+      display:flex;
+      gap:8px;
+    }
+
+    .dot{
+      width:10px;
+      height:10px;
+      border-radius:50%;
+      background:rgba(255,255,255,0.25);
+      animation:bounce 1s infinite ease-in-out;
+    }
+    .dot:nth-child(2){ animation-delay:.15s; }
+    .dot:nth-child(3){ animation-delay:.3s; }
+
+    @keyframes bounce{
+      0%,80%,100%{ transform:translateY(0); opacity:.3; }
+      40%{ transform:translateY(-8px); opacity:1; }
+    }
+
+    /* ===== IFRAME ===== */
     iframe{
       position:fixed;
       inset:0;
@@ -29,116 +84,29 @@
       height:100vh;
       border:0;
       background:#0b0f14;
-
-      opacity:0;
-      transition: opacity .25s ease;
-    }
-    iframe.ready{
-      opacity:1;
     }
 
-    /* iOS 16+ */
-    @supports (height: 100dvh){
+    @supports(height:100dvh){
       iframe{ height:100dvh; }
-    }
-
-    /* Loading overlay */
-    .loading{
-      position:fixed;
-      inset:0;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:24px;
-      background:
-        radial-gradient(120% 80% at 10% 0%, rgba(106,193,255,0.18), transparent 55%),
-        radial-gradient(120% 80% at 90% 0%, rgba(168,85,247,0.16), transparent 55%),
-        #0b0f14;
-      transition: opacity .25s ease, visibility .25s ease;
-    }
-    .loading.hide{
-      opacity:0;
-      visibility:hidden;
-      pointer-events:none;
-    }
-
-    .card{
-      width:min(520px, 100%);
-      background: rgba(15,20,27,0.86);
-      border:1px solid rgba(255,255,255,0.10);
-      border-radius:20px;
-      padding:18px 18px 16px;
-      box-shadow:0 0 0 1px rgba(255,255,255,0.04);
-      text-align:center;
-    }
-
-    .title{
-      margin:0 0 6px;
-      font-size:1.25rem;
-      font-weight:800;
-      letter-spacing:.2px;
-      color:#ecf1f8;
-    }
-
-    .sub{
-      margin:0 0 14px;
-      color:#b7c1cf;
-      font-size:1rem;
-      line-height:1.55;
-    }
-
-    .spinner{
-      width:42px;
-      height:42px;
-      border-radius:50%;
-      border:3px solid rgba(255,255,255,0.14);
-      border-top-color: rgba(122,193,255,0.95);
-      animation: spin 0.9s linear infinite;
-      margin: 10px auto 8px;
-    }
-    @keyframes spin{
-      to{ transform:rotate(360deg); }
-    }
-
-    .hint{
-      margin:8px 0 0;
-      font-size:0.92rem;
-      color:#9fb0c4;
-    }
-
-    .btn{
-      margin-top:12px;
-      display:inline-block;
-      padding:10px 14px;
-      border-radius:12px;
-      background: rgba(255,255,255,0.08);
-      border:1px solid rgba(255,255,255,0.18);
-      color:#ecf1f8;
-      font-weight:700;
-      cursor:pointer;
-      user-select:none;
-    }
-    .btn:active{
-      transform: translateY(1px);
     }
   </style>
 </head>
 
 <body>
 
-  <!-- Loading screen -->
-  <div id="loading" class="loading">
-    <div class="card">
-      <div class="title">Загрузка страницы…</div>
-      <div class="sub">Обычно это занимает несколько секунд.</div>
-      <div class="spinner"></div>
-      <div id="hint" class="hint">Подключаемся к серверу.</div>
+  <!-- LOADING SCREEN -->
+  <div id="loader">
+    <h1 class="loader-title">Медси Бот</h1>
+    <p class="loader-text" id="loaderText">Подключаемся…</p>
 
-      <div class="btn" id="reloadBtn">Обновить</div>
+    <div class="dots">
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
     </div>
   </div>
 
-  <!-- App iframe -->
+  <!-- APP -->
   <iframe
     id="appFrame"
     src="https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec?view=educators"
@@ -147,40 +115,34 @@
   ></iframe>
 
   <script>
-    const frame   = document.getElementById("appFrame");
-    const loading = document.getElementById("loading");
-    const hint    = document.getElementById("hint");
-    const reload  = document.getElementById("reloadBtn");
+    const loader     = document.getElementById("loader");
+    const loaderText = document.getElementById("loaderText");
+    const frame      = document.getElementById("appFrame");
 
-    // маленькие подсказки, чтобы не казалось что зависло
-    const hints = [
-      "Подключаемся к серверу.",
-      "Загружаем интерфейс.",
-      "Почти готово…"
+    // красивые сменяющиеся фразы
+    const phrases = [
+      "Подключаемся…",
+      "Загружаем интерфейс…",
+      "Почти готово…",
+      "Ещё секундочку…"
     ];
+
     let i = 0;
+    const interval = setInterval(() => {
+      i = (i + 1) % phrases.length;
+      loaderText.textContent = phrases[i];
+    }, 1400);
 
-    const timer = setInterval(() => {
-      i = (i + 1) % hints.length;
-      hint.textContent = hints[i];
-    }, 1200);
-
-    // когда iframe загрузился — убираем экран загрузки
+    // когда iframe загрузился → плавно скрываем loader
     frame.addEventListener("load", () => {
-      clearInterval(timer);
-      loading.classList.add("hide");
-      frame.classList.add("ready");
-      document.title = "Отчёты — Воспитатели";
+      clearInterval(interval);
+      loader.classList.add("hidden");
+
+      // полностью убираем через 400мс
+      setTimeout(() => {
+        loader.style.display = "none";
+      }, 450);
     });
-
-    // если слишком долго — меняем текст
-    setTimeout(() => {
-      if (!frame.classList.contains("ready")) {
-        hint.textContent = "Загрузка занимает дольше обычного…";
-      }
-    }, 9000);
-
-    reload.addEventListener("click", () => location.reload());
   </script>
 
 </body>
