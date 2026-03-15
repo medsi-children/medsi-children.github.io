@@ -64,55 +64,67 @@
     }
 
     .medsi-loader{
-    display:flex;
-    align-items:flex-end;
-    gap:12px;
-  }
-  
+      position:relative;
+      width:300px;
+      height:120px;
+      margin-top:4px;
+    }
+    
     .medsi-dot{
+      position:absolute;
       border-radius:50%;
       background:#0fc7ce;
-      animation:medsiPulse 1.2s infinite ease-in-out;
-      box-shadow:0 6px 16px rgba(15,199,206,0.18);
+      box-shadow:0 8px 20px rgba(15,199,206,0.16);
+      animation:medsiFloat 1.8s infinite ease-in-out;
     }
     
     .medsi-dot-1{
-      width:28px;
-      height:28px;
+      width:68px;
+      height:68px;
+      left:0;
+      bottom:6px;
       animation-delay:0s;
     }
     
     .medsi-dot-2{
-      width:20px;
-      height:20px;
-      animation-delay:.12s;
+      width:52px;
+      height:52px;
+      left:84px;
+      top:6px;
+      animation-delay:.15s;
     }
     
     .medsi-dot-3{
-      width:36px;
-      height:36px;
-      animation-delay:.24s;
+      width:44px;
+      height:44px;
+      left:154px;
+      bottom:22px;
+      animation-delay:.3s;
     }
     
     .medsi-dot-4{
-      width:24px;
-      height:24px;
-      animation-delay:.36s;
+      width:36px;
+      height:36px;
+      left:224px;
+      top:24px;
+      animation-delay:.45s;
     }
     
     .medsi-dot-5{
-      width:16px;
-      height:16px;
-      animation-delay:.48s;
+      width:28px;
+      height:28px;
+      left:278px;
+      bottom:30px;
+      animation-delay:.6s;
     }
-  
-    @keyframes medsiPulse{
+    
+    @keyframes medsiFloat{
       0%,100%{
         transform:translateY(0) scale(1);
-        opacity:.72;
+        opacity:.95;
       }
       50%{
-        transform:translateY(-8px) scale(1.08);
+        transform:translateY(-4px) scale(1.03);
         opacity:1;
       }
     }
