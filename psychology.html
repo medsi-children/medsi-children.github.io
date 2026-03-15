@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport"
         content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0f14">
-  <title>Медси Бот</title>
+  <meta name="theme-color" content="#0fc7ce">
+  <title>Панель психологов</title>
   <link rel="shortcut icon" type="image/x-icon" href="favicon.ico?">
   <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
 
@@ -14,11 +14,15 @@
       -webkit-text-size-adjust:100%;
       text-size-adjust:100%;
     }
+
     html,body{
       margin:0;
       padding:0;
       height:100%;
-      background:#0b0f14;
+      background:
+        radial-gradient(circle at top left, rgba(15,199,206,0.12), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(15,199,206,0.08), transparent 28%),
+        #f7fbfc;
       overflow:hidden;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
     }
@@ -31,8 +35,12 @@
       flex-direction:column;
       align-items:center;
       justify-content:center;
-      background:#0b0f14;
-      color:#ecf1f8;
+      padding:24px;
+      background:
+        radial-gradient(circle at top left, rgba(15,199,206,0.12), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(15,199,206,0.08), transparent 28%),
+        #f7fbfc;
+      color:#11424a;
       z-index:10;
       transition:opacity .4s ease;
     }
@@ -50,31 +58,77 @@
 
     .loader-text{
       font-size:15px;
-      color:#b7c1cf;
+      color:#5f7f86;
       margin:0 0 22px;
       min-height:20px;
       text-align:center;
       padding:0 20px;
     }
 
-    .dots{
-      display:flex;
-      gap:8px;
+    .medsi-loader{
+      position:relative;
+      width:104px;
+      height:48px;
+      margin-top:10px;
     }
 
-    .dot{
-      width:10px;
-      height:10px;
+    .medsi-dot{
+      position:absolute;
       border-radius:50%;
-      background:rgba(255,255,255,0.25);
-      animation:bounce 1s infinite ease-in-out;
+      background:#0fc7ce;
+      box-shadow:0 3px 10px rgba(15,199,206,0.10);
+      animation:medsiFloat 1.8s infinite ease-in-out;
     }
-    .dot:nth-child(2){ animation-delay:.15s; }
-    .dot:nth-child(3){ animation-delay:.3s; }
 
-    @keyframes bounce{
-      0%,80%,100%{ transform:translateY(0); opacity:.3; }
-      40%{ transform:translateY(-8px); opacity:1; }
+    .medsi-dot-1{
+      width:28px;
+      height:28px;
+      left:0;
+      bottom:2px;
+      animation-delay:0s;
+    }
+
+    .medsi-dot-2{
+      width:22px;
+      height:22px;
+      left:23px;
+      top:1px;
+      animation-delay:.12s;
+    }
+
+    .medsi-dot-3{
+      width:19px;
+      height:19px;
+      left:45px;
+      bottom:8px;
+      animation-delay:.24s;
+    }
+
+    .medsi-dot-4{
+      width:16px;
+      height:16px;
+      left:66px;
+      top:5px;
+      animation-delay:.36s;
+    }
+
+    .medsi-dot-5{
+      width:12px;
+      height:12px;
+      left:84px;
+      bottom:11px;
+      animation-delay:.48s;
+    }
+
+    @keyframes medsiFloat{
+      0%,100%{
+        transform:translateY(0) scale(1);
+        opacity:.95;
+      }
+      50%{
+        transform:translateY(-4px) scale(1.03);
+        opacity:1;
+      }
     }
 
     /* ===== IFRAME ===== */
@@ -84,7 +138,7 @@
       width:100vw;
       height:100vh;
       border:0;
-      background:#0b0f14;
+      background:#f7fbfc;
     }
 
     @supports(height:100dvh){
@@ -100,10 +154,12 @@
     <h1 class="loader-title">Медси Бот</h1>
     <p class="loader-text" id="loaderText">Подключаемся…</p>
 
-    <div class="dots">
-      <div class="dot"></div>
-      <div class="dot"></div>
-      <div class="dot"></div>
+    <div class="medsi-loader">
+      <div class="medsi-dot medsi-dot-1"></div>
+      <div class="medsi-dot medsi-dot-2"></div>
+      <div class="medsi-dot medsi-dot-3"></div>
+      <div class="medsi-dot medsi-dot-4"></div>
+      <div class="medsi-dot medsi-dot-5"></div>
     </div>
   </div>
 
@@ -120,7 +176,6 @@
     const loaderText = document.getElementById("loaderText");
     const frame      = document.getElementById("appFrame");
 
-    // красивые сменяющиеся фразы
     const phrases = [
       "Подключаемся…",
       "Загружаем интерфейс…",
@@ -134,12 +189,10 @@
       loaderText.textContent = phrases[i];
     }, 1400);
 
-    // когда iframe загрузился → плавно скрываем loader
     frame.addEventListener("load", () => {
       clearInterval(interval);
       loader.classList.add("hidden");
 
-      // полностью убираем через 400мс
       setTimeout(() => {
         loader.style.display = "none";
       }, 450);
