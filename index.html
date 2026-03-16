@@ -174,28 +174,78 @@
     const loader     = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
     const frame      = document.getElementById("appFrame");
-
-    // сменяющиеся фразы
+  
+    const APP_ORIGIN = "https://script.google.com";
+    const PARENT_PHONE_KEY = "medsi_parent_phone";
+  
     const phrases = [
       "Подключаемся…",
       "Загружаем интерфейс…",
       "Почти готово…",
       "Ещё секундочку…"
     ];
-
+  
+    function getSavedParentPhone() {
+      try {
+        return localStorage.getItem(PARENT_PHONE_KEY) || "";
+      } catch (e) {
+        return "";
+      }
+    }
+  
+    function saveParentPhone(phone) {
+      try {
+        const clean = String(phone || "").replace(/\D+/g, "");
+        if (clean) localStorage.setItem(PARENT_PHONE_KEY, clean);
+      } catch (e) {}
+    }
+  
+    function clearParentPhone() {
+      try {
+        localStorage.removeItem(PARENT_PHONE_KEY);
+      } catch (e) {}
+    }
+  
+    function sendSavedPhoneToIframe() {
+      const phone = getSavedParentPhone();
+      if (!phone || !frame.contentWindow) return;
+  
+      frame.contentWindow.postMessage(
+        {
+          type: "MEDSI_RESTORE_BY_PHONE",
+          phone: phone
+        },
+        APP_ORIGIN
+      );
+    }
+  
+    window.addEventListener("message", (event) => {
+      if (event.origin !== APP_ORIGIN) return;
+  
+      const data = event.data || {};
+  
+      if (data.type === "MEDSI_PARENT_AUTHORIZED") {
+        saveParentPhone(data.phone || "");
+      }
+  
+      if (data.type === "MEDSI_PARENT_LOGOUT") {
+        clearParentPhone();
+      }
+    });
+  
     let i = 0;
     const interval = setInterval(() => {
       i = (i + 1) % phrases.length;
       loaderText.textContent = phrases[i];
     }, 1400);
-
-    // когда iframe загрузился → скрываем loader
+  
     frame.addEventListener("load", () => {
       clearInterval(interval);
       loader.classList.add("hidden");
-
+  
       setTimeout(() => {
         loader.style.display = "none";
+        sendSavedPhoneToIframe();
       }, 450);
     });
   </script>
