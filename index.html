@@ -169,13 +169,12 @@
     allow="clipboard-read; clipboard-write; fullscreen"
     referrerpolicy="no-referrer"
   ></iframe>
-
-  <script>
-    const loader     = document.getElementById("loader");
-    const loaderText = document.getElementById("loaderText");
-    const frame      = document.getElementById("appFrame");
   
-    const APP_ORIGIN = "https://script.google.com";
+  <script>
+    const loader = document.getElementById("loader");
+    const loaderText = document.getElementById("loaderText");
+    const frame = document.getElementById("appFrame");
+  
     const PARENT_PHONE_KEY = "medsi_parent_phone";
   
     const phrases = [
@@ -215,14 +214,14 @@
           type: "MEDSI_RESTORE_BY_PHONE",
           phone: phone
         },
-        APP_ORIGIN
+        "*"
       );
     }
   
     window.addEventListener("message", (event) => {
-      if (event.origin !== APP_ORIGIN) return;
-  
       const data = event.data || {};
+  
+      if (!data || typeof data !== "object") return;
   
       if (data.type === "MEDSI_PARENT_AUTHORIZED") {
         saveParentPhone(data.phone || "");
