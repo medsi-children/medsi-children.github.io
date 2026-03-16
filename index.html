@@ -176,6 +176,8 @@
     const frame = document.getElementById("appFrame");
   
     const PARENT_PHONE_KEY = "medsi_parent_phone";
+    let restoreRetryTimer = null;
+    let restoreRetryCount = 0;
   
     const phrases = [
       "Подключаемся…",
@@ -205,7 +207,7 @@
       } catch (e) {}
     }
   
-    function sendSavedPhoneToIframe() {
+    function postRestorePhoneToIframe() {
       const phone = getSavedParentPhone();
       if (!phone || !frame.contentWindow) return;
   
@@ -218,9 +220,29 @@
       );
     }
   
+    function startRestoreRetries() {
+      stopRestoreRetries();
+      restoreRetryCount = 0;
+  
+      restoreRetryTimer = setInterval(() => {
+        restoreRetryCount += 1;
+        postRestorePhoneToIframe();
+  
+        if (restoreRetryCount >= 12) {
+          stopRestoreRetries();
+        }
+      }, 700);
+    }
+  
+    function stopRestoreRetries() {
+      if (restoreRetryTimer) {
+        clearInterval(restoreRetryTimer);
+        restoreRetryTimer = null;
+      }
+    }
+  
     window.addEventListener("message", (event) => {
       const data = event.data || {};
-  
       if (!data || typeof data !== "object") return;
   
       if (data.type === "MEDSI_PARENT_AUTHORIZED") {
@@ -229,6 +251,16 @@
   
       if (data.type === "MEDSI_PARENT_LOGOUT") {
         clearParentPhone();
+        stopRestoreRetries();
+      }
+  
+      if (data.type === "MEDSI_CHILD_READY") {
+        postRestorePhoneToIframe();
+        startRestoreRetries();
+      }
+  
+      if (data.type === "MEDSI_CHILD_RESTORE_APPLIED") {
+        stopRestoreRetries();
       }
     });
   
@@ -244,8 +276,13 @@
   
       setTimeout(() => {
         loader.style.display = "none";
-        sendSavedPhoneToIframe();
       }, 450);
+    });
+  
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        postRestorePhoneToIframe();
+      }
     });
   </script>
 
