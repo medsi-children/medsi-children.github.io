@@ -171,9 +171,12 @@
   ></iframe>
   
   <script>
-    const loader     = document.getElementById("loader");
+    const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
-    const frame      = document.getElementById("appFrame");
+    const frame = document.getElementById("appFrame");
+  
+    const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
+    const PARENT_PHONE_KEY = "medsi_parent_phone";
   
     const phrases = [
       "Подключаемся…",
@@ -181,6 +184,54 @@
       "Почти готово…",
       "Ещё секундочку…"
     ];
+  
+    function onlyDigits(value) {
+      return String(value || "").replace(/\D+/g, "");
+    }
+  
+    function getSavedParentPhone() {
+      try {
+        return onlyDigits(localStorage.getItem(PARENT_PHONE_KEY) || "");
+      } catch (e) {
+        return "";
+      }
+    }
+  
+    function saveParentPhone(phone) {
+      try {
+        const clean = onlyDigits(phone);
+        if (clean) localStorage.setItem(PARENT_PHONE_KEY, clean);
+      } catch (e) {}
+    }
+  
+    function clearParentPhone() {
+      try {
+        localStorage.removeItem(PARENT_PHONE_KEY);
+      } catch (e) {}
+    }
+  
+    function buildIframeUrl() {
+      const savedPhone = getSavedParentPhone();
+      if (savedPhone) {
+        return APP_BASE_URL + "#restorePhone=" + encodeURIComponent(savedPhone);
+      }
+      return APP_BASE_URL;
+    }
+  
+    frame.src = buildIframeUrl();
+  
+    window.addEventListener("message", (event) => {
+      const data = event.data || {};
+      if (!data || typeof data !== "object") return;
+  
+      if (data.type === "MEDSI_SAVE_PHONE") {
+        saveParentPhone(data.phone || "");
+      }
+  
+      if (data.type === "MEDSI_CLEAR_PHONE") {
+        clearParentPhone();
+      }
+    });
   
     let i = 0;
     const interval = setInterval(() => {
