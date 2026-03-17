@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Переадресация…</title>
+  <script>
+    (function () {
+      var path = location.pathname.replace(/^\/+|\/+$/g, '');
+      var target = location.origin + '/';
+
+      if (/^\d{10,15}$/.test(path)) {
+        target += '?autologin=' + encodeURIComponent(path);
+      }
+
+      location.replace(target);
+    })();
+  </script>
+</head>
+<body></body>
+</html>
