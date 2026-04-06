@@ -2,11 +2,18 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  
+  <!-- Важно для полноэкранного режима на Android -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0fc7ce">
+
   <title>Медси Бот</title>
   <link rel="shortcut icon" type="image/x-icon" href="favicon.ico?">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.json">
 
   <style>
     html, body {
@@ -21,6 +28,7 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
     }
 
+    /* ===== LOADER ===== */
     #loader {
       position: fixed;
       inset: 0;
@@ -40,7 +48,12 @@
       pointer-events: none;
     }
 
-    .loader-title { font-size: 18px; font-weight: 700; margin: 0 0 10px; }
+    .loader-title { 
+      font-size: 18px; 
+      font-weight: 700; 
+      margin: 0 0 10px; 
+    }
+
     .loader-text { 
       font-size: 15px; 
       color: #5f7f86; 
@@ -81,6 +94,10 @@
       height: 100vh;
       border: 0;
       background: #f7fbfc;
+    }
+
+    @supports (height: 100dvh) {
+      iframe { height: 100dvh; }
     }
   </style>
 </head>
@@ -131,23 +148,21 @@
 
     frame.src = buildIframeUrl();
 
-    // Быстрая смена текста
     let i = 0;
     const interval = setInterval(() => {
       i = (i + 1) % phrases.length;
       loaderText.textContent = phrases[i];
     }, 850);
 
-    // Максимально быстрый hide
     frame.addEventListener("load", () => {
       clearInterval(interval);
       loader.classList.add("hidden");
-
-      // Минимальная задержка только чтобы анимация opacity успела сработать
       setTimeout(() => {
         loader.style.display = "none";
       }, 350);
     });
+
+    window.loadStartTime = Date.now();
   </script>
 </body>
 </html>
