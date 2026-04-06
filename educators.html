@@ -2,17 +2,19 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0fc7ce">
+
   <title>Панель воспитателей</title>
   <link rel="shortcut icon" type="image/x-icon" href="favicon.ico?">
   <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
+  <link rel="manifest" href="/manifest.json">
 
   <style>
-    html {
-      -webkit-text-size-adjust: 100%;
-      text-size-adjust: 100%;
-    }
     html, body {
       margin: 0;
       padding: 0;
@@ -25,7 +27,6 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
     }
 
-    /* ===== LOADER ===== */
     #loader {
       position: fixed;
       inset: 0;
@@ -45,18 +46,13 @@
       pointer-events: none;
     }
 
-    .loader-title {
-      font-size: 18px;
-      font-weight: 700;
-      margin: 0 0 10px;
-    }
-
-    .loader-text {
-      font-size: 15px;
-      color: #5f7f86;
-      margin: 0 0 22px;
-      min-height: 20px;
-      text-align: center;
+    .loader-title { font-size: 18px; font-weight: 700; margin: 0 0 10px; }
+    .loader-text { 
+      font-size: 15px; 
+      color: #5f7f86; 
+      margin: 0 0 22px; 
+      min-height: 20px; 
+      text-align: center; 
       padding: 0 20px;
     }
 
@@ -86,7 +82,6 @@
       50% { transform: translateY(-4px) scale(1.03); opacity: 1; }
     }
 
-    /* ===== IFRAME ===== */
     iframe {
       position: fixed;
       inset: 0;
@@ -103,9 +98,8 @@
 </head>
 <body>
 
-  <!-- LOADING SCREEN -->
   <div id="loader">
-    <h1 class="loader-title">Медси Бот</h1>
+    <h1 class="loader-title">Панель воспитателей</h1>
     <p class="loader-text" id="loaderText">Подключаемся…</p>
     <div class="medsi-loader">
       <div class="medsi-dot medsi-dot-1"></div>
@@ -116,7 +110,6 @@
     </div>
   </div>
 
-  <!-- APP -->
   <iframe
     id="appFrame"
     src="https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec?view=educators"
@@ -129,44 +122,22 @@
     const loaderText = document.getElementById("loaderText");
     const frame = document.getElementById("appFrame");
 
-    const phrases = [
-      "Подключаемся…",
-      "Загружаем интерфейс…",
-      "Почти готово…",
-      "Ещё секундочку…"
-    ];
+    const phrases = ["Подключаемся…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
 
-    // Смена текста чуть быстрее
     let i = 0;
     const interval = setInterval(() => {
       i = (i + 1) % phrases.length;
       loaderText.textContent = phrases[i];
     }, 950);
 
-    // Обработка загрузки iframe
     frame.addEventListener("load", () => {
       clearInterval(interval);
-
-      // Минимальное время показа лоадера — 800 мс (чтобы не мигало)
-      const minDisplayTime = 800;
-      const elapsed = Date.now() - (window.loadStartTime || Date.now());
-
-      if (elapsed < minDisplayTime) {
-        setTimeout(() => {
-          loader.classList.add("hidden");
-          setTimeout(() => {
-            loader.style.display = "none";
-          }, 280);
-        }, minDisplayTime - elapsed);
-      } else {
-        loader.classList.add("hidden");
-        setTimeout(() => {
-          loader.style.display = "none";
-        }, 280);
-      }
+      loader.classList.add("hidden");
+      setTimeout(() => {
+        loader.style.display = "none";
+      }, 280);
     });
 
-    // Запоминаем время старта загрузки
     window.loadStartTime = Date.now();
   </script>
 </body>
