@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  
+
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -19,7 +19,7 @@
       margin: 0;
       padding: 0;
       height: 100%;
-      background: 
+      background:
         radial-gradient(circle at top left, rgba(15,199,206,0.12), transparent 32%),
         radial-gradient(circle at bottom right, rgba(15,199,206,0.08), transparent 28%),
         #f7fbfc;
@@ -47,12 +47,12 @@
     }
 
     .loader-title { font-size: 18px; font-weight: 700; margin: 0 0 10px; }
-    .loader-text { 
-      font-size: 15px; 
-      color: #5f7f86; 
-      margin: 0 0 22px; 
-      min-height: 20px; 
-      text-align: center; 
+    .loader-text {
+      font-size: 15px;
+      color: #5f7f86;
+      margin: 0 0 22px;
+      min-height: 20px;
+      text-align: center;
       padding: 0 20px;
     }
 
@@ -112,17 +112,28 @@
 
   <iframe
     id="appFrame"
-    src="https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec?view=educators"
+    src=""
     allow="clipboard-read; clipboard-write; fullscreen"
     referrerpolicy="no-referrer"
   ></iframe>
 
   <script>
+    const APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
+
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
     const frame = document.getElementById("appFrame");
 
-    const phrases = ["Мощная пятка…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
+    const params = new URLSearchParams(window.location.search);
+    const key = params.get("key") || "";
+
+    const iframeUrl = new URL(APP_SCRIPT_URL);
+    iframeUrl.searchParams.set("view", "educators");
+    if (key) iframeUrl.searchParams.set("key", key);
+
+    frame.src = iframeUrl.toString();
+
+    const phrases = ["Одну минуточку…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
 
     let i = 0;
     const interval = setInterval(() => {
