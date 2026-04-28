@@ -7,13 +7,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Воспитатели">
   <meta name="theme-color" content="#0fc7ce">
 
   <title>Панель воспитателей</title>
   <link rel="shortcut icon" type="image/x-icon" href="favicon.ico?">
   <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
-  <link rel="manifest" href="/manifest-educators.json">
 
   <style>
     html, body {
@@ -113,37 +111,15 @@
 
   <iframe
     id="appFrame"
-    src=""
+    src="https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec?view=educators"
     allow="clipboard-read; clipboard-write; fullscreen"
     referrerpolicy="no-referrer"
   ></iframe>
 
   <script>
-    const APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
-    const EDUCATOR_KEY_STORAGE = "medsi_educator_access_key";
-
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
     const frame = document.getElementById("appFrame");
-
-    const params = new URLSearchParams(window.location.search);
-    const keyFromUrl = params.get("key") || "";
-
-    let savedKey = "";
-    try {
-      if (keyFromUrl) {
-        localStorage.setItem(EDUCATOR_KEY_STORAGE, keyFromUrl);
-      }
-      savedKey = localStorage.getItem(EDUCATOR_KEY_STORAGE) || "";
-    } catch (e) {}
-
-    const key = keyFromUrl || savedKey;
-
-    const iframeUrl = new URL(APP_SCRIPT_URL);
-    iframeUrl.searchParams.set("view", "educators");
-    if (key) iframeUrl.searchParams.set("key", key);
-
-    frame.src = iframeUrl.toString();
 
     const phrases = ["Одну минуточку…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
 
