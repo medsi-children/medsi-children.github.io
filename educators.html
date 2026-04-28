@@ -6,14 +6,25 @@
 
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0fc7ce">
 
   <title>Панель воспитателей</title>
   <link rel="shortcut icon" type="image/x-icon" href="favicon.ico?">
   <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
+  <link rel="manifest" href="/manifest.json">
 
   <style>
+    html {
+      height: 100%;
+      min-height: 100%;
+      background-color: #f7fbfc;
+      background:
+        radial-gradient(circle at top left, rgba(15,199,206,0.12), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(15,199,206,0.08), transparent 28%),
+        #f7fbfc;
+    }
+
     html, body {
       margin: 0;
       padding: 0;
@@ -29,7 +40,11 @@
     }
 
     body {
-      min-height: 100vh;
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: auto;
+      min-height: 0;
     }
 
     body::before {
@@ -101,19 +116,25 @@
     }
 
     iframe {
-      position: fixed;
+      position: absolute;
       inset: 0;
       z-index: 1;
-      width: 100vw;
-      height: 100vh;
+      width: 100%;
+      height: 100%;
       border: 0;
       background: #f7fbfc;
     }
 
-    @supports (height: 100dvh) {
-      iframe { height: 100dvh; }
-      html, body { min-height: 100dvh; }
-      body::before { min-height: calc(100dvh + 320px); }
+    @supports (-webkit-touch-callout: none) {
+      html {
+        height: -webkit-fill-available;
+        min-height: -webkit-fill-available;
+      }
+
+      body {
+        height: auto;
+        min-height: 0;
+      }
     }
   </style>
 </head>
