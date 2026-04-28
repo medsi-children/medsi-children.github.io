@@ -146,21 +146,27 @@
       return saved ? APP_BASE_URL + "#restorePhone=" + encodeURIComponent(saved) : APP_BASE_URL;
     }
 
-    frame.src = buildIframeUrl();
-
     let i = 0;
     const interval = setInterval(() => {
       i = (i + 1) % phrases.length;
       loaderText.textContent = phrases[i];
     }, 850);
 
-    frame.addEventListener("load", () => {
+    function hideLoader() {
       clearInterval(interval);
       loader.classList.add("hidden");
       setTimeout(() => {
         loader.style.display = "none";
       }, 350);
+    }
+
+    frame.addEventListener("load", hideLoader);
+    window.addEventListener("pageshow", () => {
+      if (frame.contentWindow) setTimeout(hideLoader, 1200);
     });
+
+    setTimeout(hideLoader, 6000);
+    frame.src = buildIframeUrl();
 
     window.loadStartTime = Date.now();
   </script>
