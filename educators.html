@@ -18,6 +18,7 @@
       margin: 0;
       padding: 0;
       height: 100%;
+      min-height: 100%;
       background-color: #f7fbfc;
       background:
         radial-gradient(circle at top left, rgba(15,199,206,0.12), transparent 32%),
@@ -27,11 +28,16 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
     }
 
+    body {
+      min-height: 100vh;
+    }
+
     body::before {
       content: "";
       position: fixed;
-      inset: -80px 0;
+      inset: -160px 0;
       z-index: 0;
+      min-height: calc(100vh + 320px);
       background:
         radial-gradient(circle at top left, rgba(15,199,206,0.12), transparent 32%),
         radial-gradient(circle at bottom right, rgba(15,199,206,0.08), transparent 28%),
@@ -106,6 +112,8 @@
 
     @supports (height: 100dvh) {
       iframe { height: 100dvh; }
+      html, body { min-height: 100dvh; }
+      body::before { min-height: calc(100dvh + 320px); }
     }
   </style>
 </head>
