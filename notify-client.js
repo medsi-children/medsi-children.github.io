@@ -142,10 +142,9 @@
     try {
       fetch(url, {
         method: 'POST',
-        mode: 'cors',
-        headers: { 'content-type': 'application/json' },
+        mode: 'no-cors',
+        headers: { 'content-type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(body || {}),
-        keepalive: true
       }).catch(() => {});
     } catch (e) {}
   }
