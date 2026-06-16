@@ -131,6 +131,7 @@
     const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
     const APP_VERSION = "20260616";
     const PARENT_PHONE_KEY = "medsi_parent_phone";
+    const SESSION_MESSAGE_TYPE = "medsi:parent-session";
 
     const phrases = ["Подключаемся…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
 
@@ -148,6 +149,48 @@
       const url = APP_BASE_URL + "?v=" + encodeURIComponent(APP_VERSION);
       return saved ? url + "#restorePhone=" + encodeURIComponent(saved) : url;
     }
+
+    function saveParentPhone(phone) {
+      const digits = onlyDigits(phone);
+      if (!digits) return;
+      try { localStorage.setItem(PARENT_PHONE_KEY, digits); }
+      catch (e) {}
+    }
+
+    function clearParentPhone() {
+      try { localStorage.removeItem(PARENT_PHONE_KEY); }
+      catch (e) {}
+    }
+
+    function replyWithSavedPhone() {
+      const saved = getSavedParentPhone();
+      if (!saved || !frame.contentWindow) return;
+      frame.contentWindow.postMessage({
+        type: SESSION_MESSAGE_TYPE,
+        action: "restore",
+        phone: saved
+      }, "*");
+    }
+
+    window.addEventListener("message", (event) => {
+      if (event.source !== frame.contentWindow) return;
+      const data = event.data || {};
+      if (data.type !== SESSION_MESSAGE_TYPE) return;
+
+      if (data.action === "save") {
+        saveParentPhone(data.phone);
+        return;
+      }
+
+      if (data.action === "clear") {
+        clearParentPhone();
+        return;
+      }
+
+      if (data.action === "get") {
+        replyWithSavedPhone();
+      }
+    });
 
     let i = 0;
     const interval = setInterval(() => {
