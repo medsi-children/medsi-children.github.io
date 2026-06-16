@@ -11,6 +11,7 @@
     button: null,
     status: null,
     frame: null,
+    appEndpointUrl: '',
     hideButtonTimer: null,
     hideStatusTimer: null,
     hasShownIntro: false
@@ -77,26 +78,55 @@
 
   function sendSubscriptionToApp(subscription, targetWindow) {
     const target = targetWindow || (state.frame && state.frame.contentWindow);
-    if (!target || !state.identity) return;
+    if (!state.identity) return;
 
-    target.postMessage({
+    const message = {
       type: PUSH_MESSAGE_TYPE,
       action: 'save',
       role: state.identity.role,
       phone: state.identity.phone || '',
       subscription: subscription ? subscription.toJSON() : null,
       userAgent: navigator.userAgent || ''
-    }, '*');
+    };
+
+    if (target) target.postMessage(message, '*');
+    sendPushRequestToServer(message);
   }
 
   function deleteSubscriptionInApp(subscription) {
-    if (!state.frame || !state.frame.contentWindow || !subscription) return;
+    if (!subscription) return;
 
-    state.frame.contentWindow.postMessage({
+    const message = {
       type: PUSH_MESSAGE_TYPE,
       action: 'delete',
       endpoint: subscription.endpoint || ''
-    }, '*');
+    };
+
+    if (state.frame && state.frame.contentWindow) {
+      state.frame.contentWindow.postMessage(message, '*');
+    }
+    sendPushRequestToServer(message);
+  }
+
+  function sendPushRequestToServer(message) {
+    if (!state.appEndpointUrl || !message) return;
+
+    try {
+      fetch(state.appEndpointUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'content-type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: message.action,
+          role: message.role,
+          phone: message.phone,
+          endpoint: message.endpoint,
+          subscription: message.subscription,
+          userAgent: message.userAgent
+        }),
+        keepalive: true
+      }).catch(() => {});
+    } catch (e) {}
   }
 
   async function getSubscription() {
@@ -206,14 +236,20 @@
       return;
     }
 
+    let subscription = null;
     if (Notification.permission === 'granted') {
+      try {
+        subscription = await getSubscription();
+      } catch (e) {
+        subscription = null;
+      }
+    }
+
+    if (subscription) {
       state.button.textContent = 'Отключить уведомления';
       state.button.disabled = false;
 
-      try {
-        const subscription = await getSubscription();
-        if (subscription) sendSubscriptionToApp(subscription);
-      } catch (e) {}
+      sendSubscriptionToApp(subscription);
 
       if (options && options.reveal) revealButtonFor(ENABLED_VISIBLE_MS);
       return;
@@ -257,6 +293,7 @@
 
   function init(options) {
     state.frame = document.getElementById(options && options.frameId || 'appFrame');
+    state.appEndpointUrl = String(options && options.appEndpointUrl || '').trim();
     injectStyles();
 
     const panel = document.createElement('div');

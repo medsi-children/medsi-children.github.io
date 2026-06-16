@@ -117,11 +117,12 @@
     referrerpolicy="no-referrer"
   ></iframe>
 
-  <script src="/notify-client.js?v=20260616-push3"></script>
+  <script src="/notify-client.js?v=20260616-push4"></script>
   <script>
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
     const frame = document.getElementById("appFrame");
+    const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
 
     const phrases = ["Одну минуточку…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
 
@@ -145,6 +146,7 @@
     if (window.MedsiPush) {
       window.MedsiPush.init({
         frameId: "appFrame",
+        appEndpointUrl: APP_BASE_URL,
         identity: { role: "educator" }
       });
     }
