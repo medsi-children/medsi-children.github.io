@@ -75,10 +75,11 @@
     return outputArray;
   }
 
-  function sendSubscriptionToApp(subscription) {
-    if (!state.frame || !state.frame.contentWindow || !state.identity) return;
+  function sendSubscriptionToApp(subscription, targetWindow) {
+    const target = targetWindow || (state.frame && state.frame.contentWindow);
+    if (!target || !state.identity) return;
 
-    state.frame.contentWindow.postMessage({
+    target.postMessage({
       type: PUSH_MESSAGE_TYPE,
       action: 'save',
       role: state.identity.role,
@@ -242,6 +243,17 @@
 
     document.head.appendChild(style);
   }
+
+  window.addEventListener('message', event => {
+    const data = event.data || {};
+    if (data.type !== PUSH_MESSAGE_TYPE || data.action !== 'get') return;
+
+    getSubscription()
+      .then(subscription => {
+        if (subscription) sendSubscriptionToApp(subscription, event.source);
+      })
+      .catch(() => {});
+  });
 
   function init(options) {
     state.frame = document.getElementById(options && options.frameId || 'appFrame');
