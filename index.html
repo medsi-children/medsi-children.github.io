@@ -162,20 +162,31 @@
       catch (e) {}
     }
 
-    function replyWithSavedPhone() {
+    function replyWithSavedPhone(targetWindow) {
       const saved = getSavedParentPhone();
-      if (!saved || !frame.contentWindow) return;
-      frame.contentWindow.postMessage({
+      const target = targetWindow || frame.contentWindow;
+      if (!saved || !target) return;
+      target.postMessage({
         type: SESSION_MESSAGE_TYPE,
         action: "restore",
         phone: saved
       }, "*");
     }
 
+    function isAllowedSessionOrigin(origin) {
+      if (origin === "https://script.google.com") return true;
+      if (origin === "https://script.googleusercontent.com") return true;
+      return /\.googleusercontent\.com$/.test(new URL(origin).hostname);
+    }
+
     window.addEventListener("message", (event) => {
-      if (event.source !== frame.contentWindow) return;
       const data = event.data || {};
       if (data.type !== SESSION_MESSAGE_TYPE) return;
+      try {
+        if (!isAllowedSessionOrigin(event.origin)) return;
+      } catch (e) {
+        return;
+      }
 
       if (data.action === "save") {
         saveParentPhone(data.phone);
@@ -188,7 +199,7 @@
       }
 
       if (data.action === "get") {
-        replyWithSavedPhone();
+        replyWithSavedPhone(event.source);
       }
     });
 
