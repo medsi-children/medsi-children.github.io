@@ -117,6 +117,7 @@
     referrerpolicy="no-referrer"
   ></iframe>
 
+  <script src="/notify-client.js?v=20260616-push1"></script>
   <script>
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
@@ -136,7 +137,17 @@
       setTimeout(() => {
         loader.style.display = "none";
       }, 280);
+      if (window.MedsiPush) {
+        window.MedsiPush.sendCurrentSubscription().catch(() => {});
+      }
     });
+
+    if (window.MedsiPush) {
+      window.MedsiPush.init({
+        frameId: "appFrame",
+        identity: { role: "educator" }
+      });
+    }
 
     window.loadStartTime = Date.now();
   </script>

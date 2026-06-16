@@ -123,6 +123,7 @@
     referrerpolicy="no-referrer"
   ></iframe>
 
+  <script src="/notify-client.js?v=20260616-push1"></script>
   <script>
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
@@ -155,11 +156,15 @@
       if (!digits) return;
       try { localStorage.setItem(PARENT_PHONE_KEY, digits); }
       catch (e) {}
+      if (window.MedsiPush) {
+        window.MedsiPush.setIdentity({ role: "parent", phone: digits });
+      }
     }
 
     function clearParentPhone() {
       try { localStorage.removeItem(PARENT_PHONE_KEY); }
       catch (e) {}
+      if (window.MedsiPush) window.MedsiPush.clearIdentity();
     }
 
     function replyWithSavedPhone(targetWindow) {
@@ -219,12 +224,24 @@
     }
 
     frame.addEventListener("load", hideLoader);
+    frame.addEventListener("load", () => {
+      if (window.MedsiPush && getSavedParentPhone()) {
+        window.MedsiPush.setIdentity({ role: "parent", phone: getSavedParentPhone() });
+        window.MedsiPush.sendCurrentSubscription().catch(() => {});
+      }
+    });
     window.addEventListener("pageshow", () => {
       if (frame.contentWindow) setTimeout(hideLoader, 1200);
     });
 
     setTimeout(hideLoader, 6000);
     frame.src = buildIframeUrl();
+    if (window.MedsiPush) {
+      window.MedsiPush.init({ frameId: "appFrame" });
+      if (getSavedParentPhone()) {
+        window.MedsiPush.setIdentity({ role: "parent", phone: getSavedParentPhone() });
+      }
+    }
 
     window.loadStartTime = Date.now();
   </script>
