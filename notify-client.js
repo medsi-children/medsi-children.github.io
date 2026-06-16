@@ -12,6 +12,7 @@
     status: null,
     frame: null,
     appEndpointUrl: '',
+    pushServiceUrl: '',
     hideButtonTimer: null,
     hideStatusTimer: null,
     hasShownIntro: false
@@ -109,21 +110,41 @@
   }
 
   function sendPushRequestToServer(message) {
-    if (!state.appEndpointUrl || !message) return;
+    if (!message) return;
 
+    if (state.pushServiceUrl && message.action === 'save') {
+      sendPushRequest(state.pushServiceUrl + '/subscribe', {
+        role: message.role,
+        phone: message.phone,
+        subscription: message.subscription,
+        userAgent: message.userAgent
+      });
+    }
+
+    if (state.pushServiceUrl && message.action === 'delete') {
+      sendPushRequest(state.pushServiceUrl + '/unsubscribe', {
+        endpoint: message.endpoint
+      });
+    }
+
+    if (!state.appEndpointUrl) return;
+    sendPushRequest(state.appEndpointUrl, {
+      action: message.action,
+      role: message.role,
+      phone: message.phone,
+      endpoint: message.endpoint,
+      subscription: message.subscription,
+      userAgent: message.userAgent
+    });
+  }
+
+  function sendPushRequest(url, body) {
     try {
-      fetch(state.appEndpointUrl, {
+      fetch(url, {
         method: 'POST',
-        mode: 'no-cors',
-        headers: { 'content-type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: message.action,
-          role: message.role,
-          phone: message.phone,
-          endpoint: message.endpoint,
-          subscription: message.subscription,
-          userAgent: message.userAgent
-        }),
+        mode: 'cors',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body || {}),
         keepalive: true
       }).catch(() => {});
     } catch (e) {}
@@ -294,6 +315,7 @@
   function init(options) {
     state.frame = document.getElementById(options && options.frameId || 'appFrame');
     state.appEndpointUrl = String(options && options.appEndpointUrl || '').trim();
+    state.pushServiceUrl = String(options && options.pushServiceUrl || '').replace(/\/+$/, '');
     injectStyles();
 
     const panel = document.createElement('div');
@@ -306,13 +328,18 @@
     state.button.type = 'button';
     state.button.className = 'medsi-push-btn hidden';
     state.button.textContent = 'Включить уведомления';
-    state.button.addEventListener('click', () => {
-      if (Notification.permission === 'granted') {
-        unsubscribe().catch(() => setStatus('Не удалось отключить уведомления.'));
-        return;
-      }
+    state.button.addEventListener('click', async () => {
+      try {
+        const subscription = await getSubscription();
+        if (subscription) {
+          await unsubscribe();
+          return;
+        }
 
-      subscribe().catch(() => setStatus('Не удалось включить уведомления.'));
+        await subscribe();
+      } catch (e) {
+        setStatus('Не удалось изменить уведомления.');
+      }
     });
 
     panel.appendChild(state.status);

@@ -123,13 +123,14 @@
     referrerpolicy="no-referrer"
   ></iframe>
 
-  <script src="/notify-client.js?v=20260616-push4"></script>
+  <script src="/notify-client.js?v=20260616-push6"></script>
   <script>
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
     const frame = document.getElementById("appFrame");
 
     const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
+    const PUSH_SERVICE_URL = "https://medsi-push-worker.medsi-children.workers.dev";
     const APP_VERSION = "20260616-session2";
     const PARENT_PHONE_KEY = "medsi_parent_phone";
     const SESSION_MESSAGE_TYPE = "medsi:parent-session";
@@ -239,7 +240,8 @@
     if (window.MedsiPush) {
       window.MedsiPush.init({
         frameId: "appFrame",
-        appEndpointUrl: APP_BASE_URL
+        appEndpointUrl: APP_BASE_URL,
+        pushServiceUrl: PUSH_SERVICE_URL
       });
       if (getSavedParentPhone()) {
         window.MedsiPush.setIdentity({ role: "parent", phone: getSavedParentPhone() });
