@@ -291,10 +291,10 @@
     style.id = 'medsiPushStyles';
     style.textContent = [
       '.medsi-push-panel{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:20;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}',
-      '.medsi-push-btn{pointer-events:auto;width:auto;min-width:0;max-width:240px;min-height:40px;padding:9px 14px;border-radius:999px;border:1px solid rgba(15,199,206,.34);background:rgba(255,255,255,.94);color:#0f8f98;font:700 14px/1.15 system-ui,-apple-system,Segoe UI,Roboto,Arial;box-shadow:0 12px 26px rgba(15,199,206,.18);backdrop-filter:blur(12px)}',
+      '.medsi-push-btn{pointer-events:auto;width:auto;min-width:0;max-width:240px;min-height:40px;padding:9px 14px;border-radius:999px;border:1px solid rgba(15,199,206,.34);background:rgba(255,255,255,.94);color:#0f8f98;font:700 14px/1.15 system-ui,-apple-system,Segoe UI,Roboto,Arial;box-shadow:0 12px 26px rgba(15,199,206,.18);backdrop-filter:blur(12px);opacity:1;transform:translateY(0);visibility:visible;transition:opacity .26s ease,transform .26s ease,visibility 0s linear 0s}',
       '.medsi-push-btn:disabled{opacity:.82}',
-      '.medsi-push-status{max-width:min(320px,calc(100vw - 32px));padding:7px 10px;border-radius:12px;background:linear-gradient(135deg,rgba(36,211,218,.96),rgba(15,167,178,.96));color:#fff;font:700 12px/1.25 system-ui,-apple-system,Segoe UI,Roboto,Arial;text-align:center;box-shadow:0 10px 20px rgba(15,167,178,.24)}',
-      '.medsi-push-status.hidden,.medsi-push-btn.hidden{display:none}'
+      '.medsi-push-status{max-width:min(320px,calc(100vw - 32px));padding:7px 10px;border-radius:12px;background:linear-gradient(135deg,rgba(36,211,218,.96),rgba(15,167,178,.96));color:#fff;font:700 12px/1.25 system-ui,-apple-system,Segoe UI,Roboto,Arial;text-align:center;box-shadow:0 10px 20px rgba(15,167,178,.24);opacity:1;transform:translateY(0);visibility:visible;transition:opacity .26s ease,transform .26s ease,visibility 0s linear 0s}',
+      '.medsi-push-status.hidden,.medsi-push-btn.hidden{opacity:0;transform:translateY(8px);visibility:hidden;pointer-events:none;transition:opacity .26s ease,transform .26s ease,visibility 0s linear .26s}'
     ].join('');
 
     document.head.appendChild(style);

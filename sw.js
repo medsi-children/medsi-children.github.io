@@ -16,6 +16,9 @@ self.addEventListener('push', event => {
     icon: payload.icon || '/apple-touch-icon.png',
     badge: payload.badge || '/apple-touch-icon.png',
     tag: payload.tag || 'medsi-message',
+    renotify: true,
+    silent: false,
+    timestamp: Date.now(),
     data: {
       url: payload.url || '/'
     }
