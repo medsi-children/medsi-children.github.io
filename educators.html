@@ -159,10 +159,16 @@
       });
     }
 
-    const iframeUrl = buildIframeUrl();
-    if (frame.getAttribute("src") !== iframeUrl) {
-      frame.src = iframeUrl;
+    function syncIframeUrl() {
+      const iframeUrl = buildIframeUrl();
+      if (frame.getAttribute("src") !== iframeUrl) {
+        frame.src = iframeUrl;
+      }
     }
+
+    window.addEventListener("hashchange", syncIframeUrl);
+    window.addEventListener("pageshow", syncIframeUrl);
+    syncIframeUrl();
     window.loadStartTime = Date.now();
   </script>
 </body>

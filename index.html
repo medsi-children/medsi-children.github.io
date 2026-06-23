@@ -234,12 +234,22 @@
         window.MedsiPush.sendCurrentSubscription().catch(() => {});
       }
     });
+
+    function syncIframeUrl() {
+      const nextUrl = buildIframeUrl();
+      if (frame.getAttribute("src") !== nextUrl) {
+        frame.src = nextUrl;
+      }
+    }
+
+    window.addEventListener("hashchange", syncIframeUrl);
     window.addEventListener("pageshow", () => {
+      syncIframeUrl();
       if (frame.contentWindow) setTimeout(hideLoader, 1200);
     });
 
     setTimeout(hideLoader, 6000);
-    frame.src = buildIframeUrl();
+    syncIframeUrl();
     if (window.MedsiPush) {
       window.MedsiPush.init({
         frameId: "appFrame",
