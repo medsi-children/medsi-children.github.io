@@ -6,14 +6,13 @@
 
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Воспитатели">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="theme-color" content="#0fc7ce">
 
   <title>Панель воспитателей</title>
   <link rel="shortcut icon" type="image/x-icon" href="favicon.ico?">
   <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
-  <link rel="manifest" href="/educators-manifest.json">
+  <link rel="manifest" href="/manifest.json">
 
   <style>
     html, body {
@@ -119,7 +118,7 @@
     referrerpolicy="no-referrer"
   ></iframe>
 
-  <script src="/notify-client.js?v=20260623-debug3"></script>
+  <script src="/notify-client.js?v=20260623-clean1"></script>
   <script>
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
@@ -129,52 +128,7 @@
 
     function buildIframeUrl() {
       const url = APP_BASE_URL + "?view=educators&v=20260623-deploy764";
-      const hash = String(window.location.hash || "").replace(/^#/, "");
-      return hash ? url + "#" + hash : url;
-    }
-
-    let pendingTargetCheckInFlight = false;
-
-    function routeNotificationUrl(urlRaw) {
-      let target;
-      try {
-        target = new URL(String(urlRaw || "/"), window.location.origin);
-      } catch (e) {
-        return false;
-      }
-
-      if (target.origin !== window.location.origin) return false;
-
-      if (target.pathname !== "/educators.html") {
-        window.location.replace(target.pathname + target.search + target.hash);
-        return true;
-      }
-
-      if (target.hash) {
-        if (window.location.hash !== target.hash) {
-          window.location.hash = target.hash;
-        }
-        syncIframeUrl();
-        return true;
-      }
-
-      return false;
-    }
-
-    async function applyPendingNotificationTarget() {
-      if (pendingTargetCheckInFlight) return;
-      if (!window.MedsiPush || !window.MedsiPush.getPendingTarget) return;
-
-      pendingTargetCheckInFlight = true;
-      try {
-        const pending = await window.MedsiPush.getPendingTarget();
-        if (pending && pending.url) {
-          routeNotificationUrl(pending.url);
-        }
-      } catch (e) {
-      } finally {
-        pendingTargetCheckInFlight = false;
-      }
+      return url;
     }
 
     const phrases = ["Одну минуточку…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
@@ -203,7 +157,6 @@
         pushServiceUrl: PUSH_SERVICE_URL,
         identity: { role: "educator" }
       });
-      applyPendingNotificationTarget();
     }
 
     function syncIframeUrl() {
@@ -216,7 +169,6 @@
     window.addEventListener("hashchange", syncIframeUrl);
     window.addEventListener("pageshow", () => {
       syncIframeUrl();
-      applyPendingNotificationTarget();
     });
     syncIframeUrl();
     window.loadStartTime = Date.now();

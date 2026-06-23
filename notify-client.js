@@ -2,7 +2,7 @@
   const PUSH_MESSAGE_TYPE = 'medsi:push-subscription';
   const IDENTITY_KEY = 'medsi_push_identity';
   const VAPID_PUBLIC_KEY = 'BOP6j6f_c1Rw_Zi-vyL3c6NpjmEKYqiISsQtCl7v8F3iV-XyNUnIqUYrppQKRHi6jnhMKTuKuF4HkPKziL8-cXE';
-  const SERVICE_WORKER_URL = '/sw-debug1.js?v=20260623-debug2';
+  const SERVICE_WORKER_URL = '/sw.js?v=20260623-clean1';
   const INTRO_VISIBLE_MS = 5000;
   const ENABLED_VISIBLE_MS = 5000;
   const STATUS_VISIBLE_MS = 3600;
@@ -204,28 +204,6 @@
     updateButton({ reveal: true });
   }
 
-  async function getPendingTarget() {
-    if (!state.pushServiceUrl || !isSupported()) return null;
-
-    try {
-      const subscription = await getSubscription();
-      const endpoint = subscription && subscription.endpoint ? subscription.endpoint : '';
-      if (!endpoint) return null;
-
-      const response = await fetch(state.pushServiceUrl + '/pending', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ endpoint })
-      });
-
-      const result = await response.json().catch(() => null);
-      if (!result || !result.ok || !result.pending || !result.pending.url) return null;
-      return result.pending;
-    } catch (e) {
-      return null;
-    }
-  }
-
   function setStatus(text) {
     if (!state.status) return;
     if (state.hideStatusTimer) {
@@ -376,7 +354,6 @@
     init,
     setIdentity: saveIdentity,
     clearIdentity,
-    getPendingTarget,
     sendCurrentSubscription: async function () {
       const subscription = await getSubscription();
       if (subscription) sendSubscriptionToApp(subscription);

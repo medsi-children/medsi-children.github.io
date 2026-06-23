@@ -7,7 +7,6 @@
   <!-- Важно для полноэкранного режима на Android -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Медси">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="theme-color" content="#0fc7ce">
 
@@ -124,7 +123,7 @@
     referrerpolicy="no-referrer"
   ></iframe>
 
-  <script src="/notify-client.js?v=20260623-debug3"></script>
+  <script src="/notify-client.js?v=20260623-clean1"></script>
   <script>
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
@@ -154,74 +153,6 @@
       if (saved) hash.set("restorePhone", saved);
       const hashString = hash.toString();
       return hashString ? url + "#" + hashString : url;
-    }
-
-    function getEducatorChatPhoneFromHash() {
-      try {
-        const hash = new URLSearchParams(String(window.location.hash || "").replace(/^#/, ""));
-        const role = String(hash.get("role") || "").trim().toLowerCase();
-        if (role !== "educator") return "";
-        const digits = onlyDigits(hash.get("chat") || hash.get("phone") || "").slice(-10);
-        return digits.length === 10 ? digits : "";
-      } catch (e) {
-        return "";
-      }
-    }
-
-    function routeEducatorChatDeepLink() {
-      const phone = getEducatorChatPhoneFromHash();
-      if (!phone) return false;
-
-      const targetHash = "#role=educator&chat=" + encodeURIComponent(phone);
-      const target = "/educators.html" + targetHash;
-      if (window.location.pathname !== "/educators.html" || window.location.hash !== targetHash) {
-        window.location.replace(target);
-      }
-      return true;
-    }
-
-    let pendingTargetCheckInFlight = false;
-
-    function routeNotificationUrl(urlRaw) {
-      let target;
-      try {
-        target = new URL(String(urlRaw || "/"), window.location.origin);
-      } catch (e) {
-        return false;
-      }
-
-      if (target.origin !== window.location.origin) return false;
-
-      if (target.pathname === "/educators.html") {
-        window.location.replace(target.pathname + target.search + target.hash);
-        return true;
-      }
-
-      if (target.hash) {
-        if (window.location.hash !== target.hash) {
-          window.location.hash = target.hash;
-        }
-        syncIframeUrl();
-        return true;
-      }
-
-      return false;
-    }
-
-    async function applyPendingNotificationTarget() {
-      if (pendingTargetCheckInFlight) return;
-      if (!window.MedsiPush || !window.MedsiPush.getPendingTarget) return;
-
-      pendingTargetCheckInFlight = true;
-      try {
-        const pending = await window.MedsiPush.getPendingTarget();
-        if (pending && pending.url) {
-          routeNotificationUrl(pending.url);
-        }
-      } catch (e) {
-      } finally {
-        pendingTargetCheckInFlight = false;
-      }
     }
 
     function saveParentPhone(phone) {
@@ -305,7 +236,6 @@
     });
 
     function syncIframeUrl() {
-      if (routeEducatorChatDeepLink()) return;
       const nextUrl = buildIframeUrl();
       if (frame.getAttribute("src") !== nextUrl) {
         frame.src = nextUrl;
@@ -315,7 +245,6 @@
     window.addEventListener("hashchange", syncIframeUrl);
     window.addEventListener("pageshow", () => {
       syncIframeUrl();
-      applyPendingNotificationTarget();
       if (frame.contentWindow) setTimeout(hideLoader, 1200);
     });
 
@@ -330,7 +259,6 @@
       if (getSavedParentPhone()) {
         window.MedsiPush.setIdentity({ role: "parent", phone: getSavedParentPhone() });
       }
-      applyPendingNotificationTarget();
     }
 
     window.loadStartTime = Date.now();
