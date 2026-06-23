@@ -36,17 +36,20 @@ self.addEventListener('push', event => {
     };
   }
 
-  const title = payload.title || 'Медси Бот';
+  const notification = payload.notification || payload;
+  const data = notification.data || payload.data || {};
+  const url = notification.navigate || payload.url || data.url || '/';
+  const title = notification.title || payload.title || 'Медси Бот';
   const options = {
-    body: payload.body || 'Новое сообщение',
-    icon: payload.icon || '/apple-touch-icon.png',
-    badge: payload.badge || '/apple-touch-icon.png',
-    tag: payload.tag || 'medsi-message',
+    body: notification.body || payload.body || 'Новое сообщение',
+    icon: notification.icon || payload.icon || '/apple-touch-icon.png',
+    badge: notification.badge || payload.badge || '/apple-touch-icon.png',
+    tag: notification.tag || payload.tag || 'medsi-message',
     renotify: true,
     silent: false,
     timestamp: Date.now(),
     data: {
-      url: payload.url || '/'
+      url
     }
   };
 
