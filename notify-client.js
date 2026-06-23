@@ -203,6 +203,28 @@
     updateButton({ reveal: true });
   }
 
+  async function getPendingTarget() {
+    if (!state.pushServiceUrl || !isSupported()) return null;
+
+    try {
+      const subscription = await getSubscription();
+      const endpoint = subscription && subscription.endpoint ? subscription.endpoint : '';
+      if (!endpoint) return null;
+
+      const response = await fetch(state.pushServiceUrl + '/pending', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ endpoint })
+      });
+
+      const result = await response.json().catch(() => null);
+      if (!result || !result.ok || !result.pending || !result.pending.url) return null;
+      return result.pending;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function setStatus(text) {
     if (!state.status) return;
     if (state.hideStatusTimer) {
@@ -353,6 +375,7 @@
     init,
     setIdentity: saveIdentity,
     clearIdentity,
+    getPendingTarget,
     sendCurrentSubscription: async function () {
       const subscription = await getSubscription();
       if (subscription) sendSubscriptionToApp(subscription);

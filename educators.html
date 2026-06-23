@@ -117,7 +117,7 @@
     referrerpolicy="no-referrer"
   ></iframe>
 
-  <script src="/notify-client.js?v=20260617-push11"></script>
+  <script src="/notify-client.js?v=20260623-pending1"></script>
   <script>
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
@@ -129,6 +129,50 @@
       const url = APP_BASE_URL + "?view=educators&v=20260623-deploy762";
       const hash = String(window.location.hash || "").replace(/^#/, "");
       return hash ? url + "#" + hash : url;
+    }
+
+    let pendingTargetCheckInFlight = false;
+
+    function routeNotificationUrl(urlRaw) {
+      let target;
+      try {
+        target = new URL(String(urlRaw || "/"), window.location.origin);
+      } catch (e) {
+        return false;
+      }
+
+      if (target.origin !== window.location.origin) return false;
+
+      if (target.pathname !== "/educators.html") {
+        window.location.replace(target.pathname + target.search + target.hash);
+        return true;
+      }
+
+      if (target.hash) {
+        if (window.location.hash !== target.hash) {
+          window.location.hash = target.hash;
+        }
+        syncIframeUrl();
+        return true;
+      }
+
+      return false;
+    }
+
+    async function applyPendingNotificationTarget() {
+      if (pendingTargetCheckInFlight) return;
+      if (!window.MedsiPush || !window.MedsiPush.getPendingTarget) return;
+
+      pendingTargetCheckInFlight = true;
+      try {
+        const pending = await window.MedsiPush.getPendingTarget();
+        if (pending && pending.url) {
+          routeNotificationUrl(pending.url);
+        }
+      } catch (e) {
+      } finally {
+        pendingTargetCheckInFlight = false;
+      }
     }
 
     const phrases = ["Одну минуточку…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
@@ -157,6 +201,7 @@
         pushServiceUrl: PUSH_SERVICE_URL,
         identity: { role: "educator" }
       });
+      applyPendingNotificationTarget();
     }
 
     function syncIframeUrl() {
@@ -167,7 +212,10 @@
     }
 
     window.addEventListener("hashchange", syncIframeUrl);
-    window.addEventListener("pageshow", syncIframeUrl);
+    window.addEventListener("pageshow", () => {
+      syncIframeUrl();
+      applyPendingNotificationTarget();
+    });
     syncIframeUrl();
     window.loadStartTime = Date.now();
   </script>

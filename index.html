@@ -123,7 +123,7 @@
     referrerpolicy="no-referrer"
   ></iframe>
 
-  <script src="/notify-client.js?v=20260617-push11"></script>
+  <script src="/notify-client.js?v=20260623-pending1"></script>
   <script>
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
@@ -177,6 +177,50 @@
         window.location.replace(target);
       }
       return true;
+    }
+
+    let pendingTargetCheckInFlight = false;
+
+    function routeNotificationUrl(urlRaw) {
+      let target;
+      try {
+        target = new URL(String(urlRaw || "/"), window.location.origin);
+      } catch (e) {
+        return false;
+      }
+
+      if (target.origin !== window.location.origin) return false;
+
+      if (target.pathname === "/educators.html") {
+        window.location.replace(target.pathname + target.search + target.hash);
+        return true;
+      }
+
+      if (target.hash) {
+        if (window.location.hash !== target.hash) {
+          window.location.hash = target.hash;
+        }
+        syncIframeUrl();
+        return true;
+      }
+
+      return false;
+    }
+
+    async function applyPendingNotificationTarget() {
+      if (pendingTargetCheckInFlight) return;
+      if (!window.MedsiPush || !window.MedsiPush.getPendingTarget) return;
+
+      pendingTargetCheckInFlight = true;
+      try {
+        const pending = await window.MedsiPush.getPendingTarget();
+        if (pending && pending.url) {
+          routeNotificationUrl(pending.url);
+        }
+      } catch (e) {
+      } finally {
+        pendingTargetCheckInFlight = false;
+      }
     }
 
     function saveParentPhone(phone) {
@@ -270,6 +314,7 @@
     window.addEventListener("hashchange", syncIframeUrl);
     window.addEventListener("pageshow", () => {
       syncIframeUrl();
+      applyPendingNotificationTarget();
       if (frame.contentWindow) setTimeout(hideLoader, 1200);
     });
 
@@ -284,6 +329,7 @@
       if (getSavedParentPhone()) {
         window.MedsiPush.setIdentity({ role: "parent", phone: getSavedParentPhone() });
       }
+      applyPendingNotificationTarget();
     }
 
     window.loadStartTime = Date.now();
