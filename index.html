@@ -149,7 +149,10 @@
     function buildIframeUrl() {
       const saved = getSavedParentPhone();
       const url = APP_BASE_URL + "?v=" + encodeURIComponent(APP_VERSION);
-      return saved ? url + "#restorePhone=" + encodeURIComponent(saved) : url;
+      const hash = new URLSearchParams(String(window.location.hash || "").replace(/^#/, ""));
+      if (saved) hash.set("restorePhone", saved);
+      const hashString = hash.toString();
+      return hashString ? url + "#" + hashString : url;
     }
 
     function saveParentPhone(phone) {

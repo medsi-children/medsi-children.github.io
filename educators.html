@@ -125,6 +125,12 @@
     const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
     const PUSH_SERVICE_URL = "https://medsi-push-worker.medsi-children.workers.dev";
 
+    function buildIframeUrl() {
+      const url = APP_BASE_URL + "?view=educators&v=20260617-push743";
+      const hash = String(window.location.hash || "").replace(/^#/, "");
+      return hash ? url + "#" + hash : url;
+    }
+
     const phrases = ["Одну минуточку…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
 
     let i = 0;
@@ -153,6 +159,10 @@
       });
     }
 
+    const iframeUrl = buildIframeUrl();
+    if (frame.getAttribute("src") !== iframeUrl) {
+      frame.src = iframeUrl;
+    }
     window.loadStartTime = Date.now();
   </script>
 </body>
