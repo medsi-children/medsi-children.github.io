@@ -2,6 +2,7 @@
   const PUSH_MESSAGE_TYPE = 'medsi:push-subscription';
   const IDENTITY_KEY = 'medsi_push_identity';
   const VAPID_PUBLIC_KEY = 'BOP6j6f_c1Rw_Zi-vyL3c6NpjmEKYqiISsQtCl7v8F3iV-XyNUnIqUYrppQKRHi6jnhMKTuKuF4HkPKziL8-cXE';
+  const SERVICE_WORKER_URL = '/sw.js?v=20260623-debug1';
   const INTRO_VISIBLE_MS = 5000;
   const ENABLED_VISIBLE_MS = 5000;
   const STATUS_VISIBLE_MS = 3600;
@@ -151,7 +152,7 @@
 
   async function getSubscription() {
     if (!isSupported()) return null;
-    const registration = await navigator.serviceWorker.register('/sw.js');
+    const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL);
     return registration.pushManager.getSubscription();
   }
 
@@ -180,7 +181,7 @@
       return;
     }
 
-    const registration = await navigator.serviceWorker.register('/sw.js');
+    const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL);
     const existing = await registration.pushManager.getSubscription();
     const subscription = existing || await registration.pushManager.subscribe({
       userVisibleOnly: true,
