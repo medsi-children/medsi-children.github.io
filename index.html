@@ -155,6 +155,30 @@
       return hashString ? url + "#" + hashString : url;
     }
 
+    function getEducatorChatPhoneFromHash() {
+      try {
+        const hash = new URLSearchParams(String(window.location.hash || "").replace(/^#/, ""));
+        const role = String(hash.get("role") || "").trim().toLowerCase();
+        if (role !== "educator") return "";
+        const digits = onlyDigits(hash.get("chat") || hash.get("phone") || "").slice(-10);
+        return digits.length === 10 ? digits : "";
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function routeEducatorChatDeepLink() {
+      const phone = getEducatorChatPhoneFromHash();
+      if (!phone) return false;
+
+      const targetHash = "#role=educator&chat=" + encodeURIComponent(phone);
+      const target = "/educators.html" + targetHash;
+      if (window.location.pathname !== "/educators.html" || window.location.hash !== targetHash) {
+        window.location.replace(target);
+      }
+      return true;
+    }
+
     function saveParentPhone(phone) {
       const digits = onlyDigits(phone);
       if (!digits) return;
@@ -236,6 +260,7 @@
     });
 
     function syncIframeUrl() {
+      if (routeEducatorChatDeepLink()) return;
       const nextUrl = buildIframeUrl();
       if (frame.getAttribute("src") !== nextUrl) {
         frame.src = nextUrl;
