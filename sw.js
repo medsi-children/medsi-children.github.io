@@ -38,6 +38,15 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
 
+  const notificationData = event.notification.data || {};
+  const targetUrl = new URL(
+    notificationData && notificationData.url
+      ? notificationData.url
+      : '/',
+    self.location.origin
+  ).href;
+  const targetPath = new URL(targetUrl).pathname;
+
   event.waitUntil((async () => {
     const clientsList = await clients.matchAll({
       type: 'window',
@@ -45,14 +54,15 @@ self.addEventListener('notificationclick', event => {
     });
 
     for (const client of clientsList) {
-      if ('focus' in client) {
+      const clientPath = new URL(client.url || '/', self.location.origin).pathname;
+      if (clientPath === targetPath && 'focus' in client) {
         await client.focus();
         return;
       }
     }
 
     if (clients.openWindow) {
-      await clients.openWindow('/');
+      await clients.openWindow(targetUrl);
     }
   })());
 });
