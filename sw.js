@@ -45,7 +45,13 @@ self.addEventListener('notificationclick', event => {
       : '/',
     self.location.origin
   ).href;
-  const targetPath = new URL(targetUrl).pathname;
+  function normalizePanelPath(path) {
+    const value = String(path || '/');
+    if (value === '/educators.html') return '/educators';
+    return value;
+  }
+
+  const targetPath = normalizePanelPath(new URL(targetUrl).pathname);
 
   event.waitUntil((async () => {
     const clientsList = await clients.matchAll({
@@ -54,7 +60,7 @@ self.addEventListener('notificationclick', event => {
     });
 
     for (const client of clientsList) {
-      const clientPath = new URL(client.url || '/', self.location.origin).pathname;
+      const clientPath = normalizePanelPath(new URL(client.url || '/', self.location.origin).pathname);
       if (clientPath === targetPath && 'focus' in client) {
         await client.focus();
         return;
