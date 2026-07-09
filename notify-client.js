@@ -2,7 +2,7 @@
   const PUSH_MESSAGE_TYPE = 'medsi:push-subscription';
   const IDENTITY_KEY = 'medsi_push_identity';
   const VAPID_PUBLIC_KEY = 'BOP6j6f_c1Rw_Zi-vyL3c6NpjmEKYqiISsQtCl7v8F3iV-XyNUnIqUYrppQKRHi6jnhMKTuKuF4HkPKziL8-cXE';
-  const SERVICE_WORKER_URL = '/sw.js?v=20260629-panel2';
+  const SERVICE_WORKER_URL = '/sw.js?v=20260709-network-first';
   const INTRO_VISIBLE_MS = 5000;
   const ENABLED_VISIBLE_MS = 5000;
   const STATUS_VISIBLE_MS = 3600;
