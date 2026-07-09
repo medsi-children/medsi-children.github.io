@@ -3816,8 +3816,9 @@
   }
 
   const THREAD_PRELOAD_BURST = 0;
-  const THREAD_PRELOAD_TOP_DELAY = 6000;
-  const THREAD_PRELOAD_TAIL_DELAY = 6000;
+  const THREAD_PRELOAD_TOP_DELAY = 9000;
+  const THREAD_PRELOAD_TAIL_DELAY = 9000;
+  const THREAD_PRELOAD_START_DELAY = 8000;
   let threadPreloadTimer = null;
   let threadPreloadRequestTimer = null;
   let threadPreloadQueue = [];
@@ -3839,11 +3840,16 @@
 
   function shouldPauseThreadPreload_(){
     const activeThread = $('screenChatThread');
+    const apiState = window.MedsiApi && typeof window.MedsiApi.getQueueState === 'function'
+      ? window.MedsiApi.getQueueState()
+      : null;
+
     return !!(
       document.hidden ||
       chatListRefreshInFlight ||
       readChatsRefreshInFlight ||
       threadFetchInFlight ||
+      (apiState && (apiState.active > 0 || apiState.queued > 0)) ||
       (activeThread && !activeThread.classList.contains('hidden'))
     );
   }
@@ -3940,7 +3946,7 @@
       threadPreloadTimer = null;
     }
 
-    const startDelay = isChatsScreenVisible_() ? 0 : THREAD_PRELOAD_TAIL_DELAY;
+    const startDelay = isChatsScreenVisible_() ? THREAD_PRELOAD_START_DELAY : THREAD_PRELOAD_TAIL_DELAY;
     threadPreloadTimer = setTimeout(pumpThreadPreload, startDelay);
   }
 
