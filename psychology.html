@@ -3,23 +3,23 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0fc7ce">
+
   <title>Групповая психотерапия</title>
   <link rel="shortcut icon" type="image/x-icon" href="favicon.ico?">
   <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
-  <link rel="manifest" href="/educators-manifest.json">
-  <script>
-    window.location.replace("https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec?view=psychology&v=20260709-emergency" + (window.location.hash || ""));
-  </script>
+  <link rel="manifest" href="/manifest.json">
+
   <style>
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
-      background:
+      background: 
         radial-gradient(circle at top left, rgba(15,199,206,0.12), transparent 32%),
         radial-gradient(circle at bottom right, rgba(15,199,206,0.08), transparent 28%),
         #f7fbfc;
@@ -37,15 +37,22 @@
       padding: 24px;
       background: inherit;
       color: #11424a;
+      z-index: 10;
+      transition: opacity 0.4s ease;
+    }
+
+    #loader.hidden {
+      opacity: 0;
+      pointer-events: none;
     }
 
     .loader-title { font-size: 18px; font-weight: 700; margin: 0 0 10px; }
-    .loader-text {
-      font-size: 15px;
-      color: #5f7f86;
-      margin: 0 0 22px;
-      min-height: 20px;
-      text-align: center;
+    .loader-text { 
+      font-size: 15px; 
+      color: #5f7f86; 
+      margin: 0 0 22px; 
+      min-height: 20px; 
+      text-align: center; 
       padding: 0 20px;
     }
 
@@ -75,12 +82,26 @@
       50% { transform: translateY(-4px) scale(1.03); opacity: 1; }
     }
 
+    iframe {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      border: 0;
+      background: #f7fbfc;
+    }
+
+    @supports (height: 100dvh) {
+      iframe { height: 100dvh; }
+    }
   </style>
+  <script src="/notify-client.js?v=20260710-direct-iframe"></script>
 </head>
 <body>
+
   <div id="loader">
     <h1 class="loader-title">Групповая психотерапия</h1>
-    <p class="loader-text">Открываем раздел…</p>
+    <p class="loader-text" id="loaderText">Подключаемся…</p>
     <div class="medsi-loader">
       <div class="medsi-dot medsi-dot-1"></div>
       <div class="medsi-dot medsi-dot-2"></div>
@@ -89,5 +110,50 @@
       <div class="medsi-dot medsi-dot-5"></div>
     </div>
   </div>
+
+  <iframe
+    id="appFrame"
+    src="https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec?view=psychology"
+    allow="clipboard-read; clipboard-write; fullscreen"
+    referrerpolicy="no-referrer"
+  ></iframe>
+
+  <script>
+    const loader = document.getElementById("loader");
+    const loaderText = document.getElementById("loaderText");
+    const frame = document.getElementById("appFrame");
+    const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
+    const PUSH_SERVICE_URL = "https://medsi-push-worker.medsi-children.workers.dev";
+
+    const phrases = ["Подключаемся…", "Загружаем интерфейс…", "Миша, кря-кря.", "Ещё секундочку…"];
+
+    let i = 0;
+    const interval = setInterval(() => {
+      i = (i + 1) % phrases.length;
+      loaderText.textContent = phrases[i];
+    }, 950);
+
+    frame.addEventListener("load", () => {
+      clearInterval(interval);
+      loader.classList.add("hidden");
+      setTimeout(() => {
+        loader.style.display = "none";
+      }, 280);
+      if (window.MedsiPush) {
+        window.MedsiPush.sendCurrentSubscription().catch(() => {});
+      }
+    });
+
+    if (window.MedsiPush) {
+      window.MedsiPush.init({
+        frameId: "appFrame",
+        appEndpointUrl: APP_BASE_URL,
+        pushServiceUrl: PUSH_SERVICE_URL,
+        identity: { role: "educator" }
+      });
+    }
+
+    window.loadStartTime = Date.now();
+  </script>
 </body>
 </html>
