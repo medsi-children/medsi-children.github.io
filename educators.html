@@ -105,9 +105,11 @@
     </div>
   </div>
 
+  <script src="/notify-client.js?v=20260629-panel2"></script>
   <script>
     const loaderText = document.getElementById("loaderText");
     const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
+    const PUSH_SERVICE_URL = "https://medsi-push-worker.medsi-children.workers.dev";
     const APP_VERSION = "20260709-direct774";
 
     function buildAppUrl() {
@@ -135,7 +137,18 @@
       loaderText.innerHTML = 'Если панель не открылась, <a class="open-link" href="' + targetUrl + '">нажмите сюда</a>.';
     }, 3500);
 
-    window.location.replace(targetUrl);
+    if (window.MedsiPush) {
+      window.MedsiPush.init({
+        appEndpointUrl: APP_BASE_URL,
+        pushServiceUrl: PUSH_SERVICE_URL,
+        identity: { role: "educator" }
+      });
+      window.MedsiPush.sendCurrentSubscription().catch(() => {});
+    }
+
+    setTimeout(() => {
+      window.location.replace(targetUrl);
+    }, 650);
     window.loadStartTime = Date.now();
   </script>
 </body>
