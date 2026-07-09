@@ -4317,8 +4317,6 @@
     show('screenChats');
     setTheme('');
 
-    const readNeedsWarmup = !educatorCache.readChatsList || !educatorCache.readChatsList.length;
-
     // Render the appropriate list based on current state
     if (showingReadChats) {
       if (educatorCache.readChatsList && educatorCache.readChatsList.length) {
@@ -4344,9 +4342,6 @@
 
     if (options.refreshNow === true) {
       refreshVisibleChatList({ showSpinner: !!options.showSpinner });
-      if (readNeedsWarmup) {
-        loadReadChatsInBackground({ showSpinner: false });
-      }
       return;
     }
 
@@ -4356,14 +4351,7 @@
     );
     if (needsRefresh) {
       refreshVisibleChatList({ showSpinner: !!options.showSpinner });
-      if (readNeedsWarmup) {
-        loadReadChatsInBackground({ showSpinner: false });
-      }
       return;
-    }
-
-    if (readNeedsWarmup) {
-      loadReadChatsInBackground({ showSpinner: false });
     }
   }
 
@@ -4615,13 +4603,7 @@
           queuePriorityThreadPreload_();
         }
 
-        // Read chats are preloaded softly after the active list has had time to settle.
-        if (readChatsLoadingTimer) {
-          clearTimeout(readChatsLoadingTimer);
-        }
-        readChatsLoadingTimer = setTimeout(() => {
-          preloadReadChatsInBackground();
-        }, 8000);
+        // Staging: read chats load only after the explicit "Открыть прочитанные чаты" tap.
       })
       .withFailureHandler(() => {
         // Silently fail - we'll load when user clicks
