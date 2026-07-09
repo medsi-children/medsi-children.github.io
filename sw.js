@@ -3,24 +3,7 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil((async () => {
-    try {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(key => caches.delete(key)));
-    } catch (e) {}
-
-    await self.clients.claim();
-  })());
-});
-
-self.addEventListener('fetch', event => {
-  const request = event.request;
-  if (!request || request.method !== 'GET') return;
-
-  if (request.mode === 'navigate') {
-    event.respondWith(fetch(request, { cache: 'reload' }));
-    return;
-  }
+  event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('push', event => {
