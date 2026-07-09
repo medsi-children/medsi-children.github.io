@@ -119,7 +119,7 @@
     referrerpolicy="no-referrer"
   ></iframe>
 
-  <script src="/notify-client.js?v=20260629-panel2"></script>
+  <script src="/notify-client.js?v=20260709-cf-proxy"></script>
   <script>
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
@@ -151,6 +151,14 @@
       }
     });
 
+    function hideLoaderFallback() {
+      clearInterval(interval);
+      loader.classList.add("hidden");
+      setTimeout(() => {
+        loader.style.display = "none";
+      }, 280);
+    }
+
     if (window.MedsiPush) {
       window.MedsiPush.init({
         frameId: "appFrame",
@@ -170,7 +178,9 @@
     window.addEventListener("hashchange", syncIframeUrl);
     window.addEventListener("pageshow", () => {
       syncIframeUrl();
+      setTimeout(hideLoaderFallback, 1800);
     });
+    setTimeout(hideLoaderFallback, 6500);
     syncIframeUrl();
     window.loadStartTime = Date.now();
   </script>
