@@ -9,6 +9,7 @@
   const queue = [];
   let activeRequests = 0;
   let requestSeq = 0;
+  let debugPanel = null;
 
   const METHOD_PRIORITY = {
     sendParentChatMessage: 10,
@@ -52,6 +53,50 @@
       });
       if (diagnostics.length > 120) diagnostics.splice(0, diagnostics.length - 120);
     } catch (e) {}
+    updateDebugPanel();
+  }
+
+  function isDebugEnabled() {
+    try {
+      return /(?:^|[?&])debugApi=1(?:&|$)/.test(window.location.search || '') ||
+        window.localStorage.getItem('medsi_api_debug') === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function updateDebugPanel() {
+    if (!isDebugEnabled()) return;
+    try {
+      if (!debugPanel) {
+        debugPanel = document.createElement('div');
+        debugPanel.style.cssText = [
+          'position:fixed',
+          'left:8px',
+          'right:8px',
+          'bottom:8px',
+          'z-index:99999',
+          'padding:8px 10px',
+          'border-radius:12px',
+          'background:rgba(17,66,74,.92)',
+          'color:#fff',
+          'font:12px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial',
+          'box-shadow:0 8px 22px rgba(0,0,0,.18)',
+          'white-space:pre-wrap',
+          'pointer-events:none'
+        ].join(';');
+        document.addEventListener('DOMContentLoaded', () => {
+          if (document.body && !debugPanel.isConnected) document.body.appendChild(debugPanel);
+        });
+        if (document.body) document.body.appendChild(debugPanel);
+      }
+
+      const recent = diagnostics.slice(-5).map(item => {
+        const status = item.ok ? 'ok' : 'ERR';
+        return `${item.method}: ${status} ${item.durationMs || 0}ms${item.message ? ' — ' + item.message : ''}`;
+      }).join('\n');
+      debugPanel.textContent = `API active=${activeRequests} queued=${queue.length}\n${recent || 'waiting...'}`;
+    } catch (e) {}
   }
 
   function runQueue() {
@@ -69,6 +114,7 @@
         .catch(item.reject)
         .finally(() => {
           activeRequests = Math.max(0, activeRequests - 1);
+          updateDebugPanel();
           runQueue();
         });
     }
@@ -84,6 +130,7 @@
         resolve,
         reject
       });
+      updateDebugPanel();
       runQueue();
     });
   }
