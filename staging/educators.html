@@ -2770,7 +2770,7 @@
     }
   }
 </style>
-<script src="./medsi-api-client.js?v=20260709-stable-minimal"></script>
+<script src="./medsi-api-client.js?v=20260710-worker-queue"></script>
 </head>
 
 <body data-screen="screenChoose">
@@ -3824,7 +3824,7 @@
   let threadPreloadRunning = false;
   let threadPreloadProcessed = 0;
   let threadPreloadSignature = '';
-  const CHAT_LIST_REQUEST_TIMEOUT_MS = 30000;
+  const CHAT_LIST_REQUEST_TIMEOUT_MS = 65000;
   const THREAD_PRELOAD_REQUEST_TIMEOUT_MS = 10000;
 
   function isChatsScreenVisible_(){
@@ -4063,13 +4063,14 @@
               queuePriorityThreadPreload_();
             }
             
-            // Schedule background loading of read chats
-            if (readChatsLoadingTimer) {
-              clearTimeout(readChatsLoadingTimer);
+            if (!STAGING_DISABLE_BACKGROUND_API) {
+              if (readChatsLoadingTimer) {
+                clearTimeout(readChatsLoadingTimer);
+              }
+              readChatsLoadingTimer = setTimeout(() => {
+                loadReadChatsInBackground();
+              }, 800);
             }
-            readChatsLoadingTimer = setTimeout(() => {
-              loadReadChatsInBackground();
-            }, 800);
           }
         })
         .listUnreadParentChats();
