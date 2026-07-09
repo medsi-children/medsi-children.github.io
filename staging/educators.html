@@ -2770,7 +2770,7 @@
     }
   }
 </style>
-<script src="./medsi-api-client.js?v=20260710-worker-queue"></script>
+<script src="./medsi-api-client.js?v=20260710-worker-error-text"></script>
 </head>
 
 <body data-screen="screenChoose">
@@ -4487,13 +4487,13 @@
 
         queuePriorityThreadPreload_();
       })
-      .withFailureHandler(() => {
+      .withFailureHandler(error => {
         if (!finishRequest()) return;
         const stillVisible = !$('screenChats').classList.contains('hidden');
         if (token !== chatsListRequestToken) return;
 
         if (isChatsVisible) {
-          $('chatListError').textContent = 'Сервер недоступен.';
+          $('chatListError').textContent = 'Сервер недоступен: ' + ((error && error.message) || String(error || 'неизвестная ошибка'));
           $('chatListError').classList.remove('hidden');
         }
       })
@@ -4567,10 +4567,16 @@
           }
         }
       })
-      .withFailureHandler(() => {
+      .withFailureHandler(error => {
         if (!finishRequest()) return;
         if (token !== readChatsRequestToken) return;
-        // Silently fail - read chats are just a bonus
+        if (isChatsVisible && showingReadChats) {
+          $('chatListError').textContent = 'Сервер недоступен: ' + ((error && error.message) || String(error || 'неизвестная ошибка'));
+          $('chatListError').classList.remove('hidden');
+          if (!educatorCache.readChatsList || !educatorCache.readChatsList.length) {
+            renderReadChatList([]);
+          }
+        }
       })
       .listReadParentChats();
   }
