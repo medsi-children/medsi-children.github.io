@@ -103,15 +103,6 @@
   </style>
 </head>
 <body>
-  <script>
-    (function () {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || '') ||
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (!isIOS) return;
-      const url = 'https://medsi-push-worker.medsi-children.workers.dev/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec?v=20260709-ios-direct';
-      window.location.replace(url + (window.location.hash || ''));
-    }());
-  </script>
 
   <div id="loader">
     <h1 class="loader-title">Медси Бот</h1>
