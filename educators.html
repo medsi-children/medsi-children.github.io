@@ -83,11 +83,18 @@
       50% { transform: translateY(-4px) scale(1.03); opacity: 1; }
     }
 
-    .open-link {
-      color: #0a9fa7;
-      font-weight: 800;
-      text-decoration: none;
-      border-bottom: 1px solid rgba(10,159,167,0.32);
+    iframe {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      min-height: 100svh;
+      border: 0;
+      background: #f7fbfc;
+    }
+
+    @supports (height: 100dvh) {
+      iframe { height: 100dvh; min-height: 100dvh; }
     }
   </style>
 </head>
@@ -95,7 +102,7 @@
 
   <div id="loader">
     <h1 class="loader-title">Панель воспитателей</h1>
-    <p class="loader-text" id="loaderText">Открываем панель…</p>
+    <p class="loader-text" id="loaderText">Подключаемся…</p>
     <div class="medsi-loader">
       <div class="medsi-dot medsi-dot-1"></div>
       <div class="medsi-dot medsi-dot-2"></div>
@@ -105,50 +112,66 @@
     </div>
   </div>
 
+  <iframe
+    id="appFrame"
+    src="https://medsi-push-worker.medsi-children.workers.dev/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec?view=educators&v=20260709-cf-proxy"
+    allow="clipboard-read; clipboard-write; fullscreen"
+    referrerpolicy="no-referrer"
+  ></iframe>
+
   <script src="/notify-client.js?v=20260629-panel2"></script>
   <script>
+    const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
-    const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
+    const frame = document.getElementById("appFrame");
+    const APP_BASE_URL = "https://medsi-push-worker.medsi-children.workers.dev/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
     const PUSH_SERVICE_URL = "https://medsi-push-worker.medsi-children.workers.dev";
-    const APP_VERSION = "20260709-direct774";
 
-    function buildAppUrl() {
-      const url = new URL(APP_BASE_URL);
-      const source = new URLSearchParams(window.location.search || "");
-      source.forEach((value, key) => {
-        if (key !== "view" && key !== "v") url.searchParams.set(key, value);
-      });
-      url.searchParams.set("view", "educators");
-      url.searchParams.set("v", APP_VERSION);
-      if (window.location.hash) url.hash = window.location.hash;
-      return url.toString();
+    function buildIframeUrl() {
+      const url = APP_BASE_URL + "?view=educators&v=20260709-cf-proxy";
+      return url;
     }
 
-    const targetUrl = buildAppUrl();
-    const phrases = ["Открываем панель…", "Переключаемся на рабочий адрес…", "Почти готово…"];
+    const phrases = ["Одну минуточку…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
+
     let i = 0;
     const interval = setInterval(() => {
       i = (i + 1) % phrases.length;
       loaderText.textContent = phrases[i];
     }, 950);
 
-    setTimeout(() => {
+    frame.addEventListener("load", () => {
       clearInterval(interval);
-      loaderText.innerHTML = 'Если панель не открылась, <a class="open-link" href="' + targetUrl + '">нажмите сюда</a>.';
-    }, 3500);
+      loader.classList.add("hidden");
+      setTimeout(() => {
+        loader.style.display = "none";
+      }, 280);
+      if (window.MedsiPush) {
+        window.MedsiPush.sendCurrentSubscription().catch(() => {});
+      }
+    });
 
     if (window.MedsiPush) {
       window.MedsiPush.init({
+        frameId: "appFrame",
         appEndpointUrl: APP_BASE_URL,
         pushServiceUrl: PUSH_SERVICE_URL,
         identity: { role: "educator" }
       });
-      window.MedsiPush.sendCurrentSubscription().catch(() => {});
     }
 
-    setTimeout(() => {
-      window.location.replace(targetUrl);
-    }, 650);
+    function syncIframeUrl() {
+      const iframeUrl = buildIframeUrl();
+      if (frame.getAttribute("src") !== iframeUrl) {
+        frame.src = iframeUrl;
+      }
+    }
+
+    window.addEventListener("hashchange", syncIframeUrl);
+    window.addEventListener("pageshow", () => {
+      syncIframeUrl();
+    });
+    syncIframeUrl();
     window.loadStartTime = Date.now();
   </script>
 </body>
