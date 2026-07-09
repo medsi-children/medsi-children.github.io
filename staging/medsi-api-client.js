@@ -1,7 +1,7 @@
 (function () {
   const DEFAULT_API_URL = 'https://medsi-push-worker.medsi-children.workers.dev/api';
   const API_URL = window.MEDSI_API_URL || DEFAULT_API_URL;
-  const MAX_CONCURRENT_REQUESTS = 2;
+  const MAX_CONCURRENT_REQUESTS = 1;
   const REQUEST_TIMEOUT_MS = 45000;
   const RETRY_DELAY_MS = 900;
   const MAX_RETRIES = 1;
