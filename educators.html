@@ -3811,20 +3811,41 @@
     delayedEducatorPreloadTimer = setTimeout(() => {
       delayedEducatorPreloadTimer = null;
       preloadEducatorData();
-    }, 180);
+    }, 3000);
   }
 
-  const THREAD_PRELOAD_BURST = 3;
-  const THREAD_PRELOAD_TOP_DELAY = 220;
-  const THREAD_PRELOAD_TAIL_DELAY = 900;
+  const THREAD_PRELOAD_BURST = 0;
+  const THREAD_PRELOAD_TOP_DELAY = 6000;
+  const THREAD_PRELOAD_TAIL_DELAY = 6000;
   let threadPreloadTimer = null;
   let threadPreloadRequestTimer = null;
   let threadPreloadQueue = [];
   let threadPreloadRunning = false;
   let threadPreloadProcessed = 0;
   let threadPreloadSignature = '';
-  const CHAT_LIST_REQUEST_TIMEOUT_MS = 12000;
+  const CHAT_LIST_REQUEST_TIMEOUT_MS = 30000;
   const THREAD_PRELOAD_REQUEST_TIMEOUT_MS = 10000;
+
+  function isChatsScreenVisible_(){
+    const screen = $('screenChats');
+    return !!screen && !screen.classList.contains('hidden');
+  }
+
+  function isChooseScreenVisible_(){
+    const screen = $('screenChoose');
+    return !!screen && !screen.classList.contains('hidden');
+  }
+
+  function shouldPauseThreadPreload_(){
+    const activeThread = $('screenChatThread');
+    return !!(
+      document.hidden ||
+      chatListRefreshInFlight ||
+      readChatsRefreshInFlight ||
+      threadFetchInFlight ||
+      (activeThread && !activeThread.classList.contains('hidden'))
+    );
+  }
 
   function stopThreadPreload(){
     if (threadPreloadTimer) {
@@ -3875,6 +3896,8 @@
   }
 
   function queuePriorityThreadPreload_(){
+    if (!isChatsScreenVisible_() && !isChooseScreenVisible_()) return;
+
     const priorityChats = buildPriorityPreloadChats_();
     if (!priorityChats.length) return;
     queueThreadPreload(priorityChats);
@@ -3916,7 +3939,8 @@
       threadPreloadTimer = null;
     }
 
-    pumpThreadPreload();
+    const startDelay = isChatsScreenVisible_() ? 0 : THREAD_PRELOAD_TAIL_DELAY;
+    threadPreloadTimer = setTimeout(pumpThreadPreload, startDelay);
   }
 
   function pumpThreadPreload(){
@@ -3928,6 +3952,11 @@
 
     if (document.hidden) {
       threadPreloadTimer = setTimeout(pumpThreadPreload, 5000);
+      return;
+    }
+
+    if (shouldPauseThreadPreload_()) {
+      threadPreloadTimer = setTimeout(pumpThreadPreload, THREAD_PRELOAD_TAIL_DELAY);
       return;
     }
 
@@ -3991,7 +4020,7 @@
 
     // Load chat list in parallel, so opening parents chat is not blocked
     // by background thread preload on a cold backend start.
-    loadChatListForPreviews(true);
+    loadChatListForPreviews(false);
 
     refreshUnreadParentsBanner();
 
@@ -4342,6 +4371,8 @@
   let chatListAutoRefreshTimer = null;
   let chatListRefreshInFlight = false;
   let readChatsRefreshInFlight = false;
+  let backgroundUnreadChatsPreloadToken = 0;
+  let backgroundReadChatsPreloadToken = 0;
 
   function startChatListAutoRefresh(){
     stopChatListAutoRefresh();
@@ -4537,7 +4568,7 @@
           // but keep unread chats first via priority queue builder.
           queuePriorityThreadPreload_();
           
-          if (isChatsVisible && showingReadChats && changed) {
+          if (isChatsVisible && showingReadChats) {
             renderReadChatList(educatorCache.readChatsList);
           } else if (isChatsVisible && !showingReadChats && hasLoadedUnreadChats() && (!educatorCache.chatList || !educatorCache.chatList.length)) {
             renderChatList([]);
@@ -4558,11 +4589,11 @@
   function preloadParentChats() {
     if (!canUseGoogleScriptRun()) return;
 
-    const token = ++chatsListRequestToken;
+    const token = ++backgroundUnreadChatsPreloadToken;
 
     google.script.run
       .withSuccessHandler(res => {
-        if (token !== chatsListRequestToken) {
+        if (token !== backgroundUnreadChatsPreloadToken) {
           return;
         }
 
@@ -4576,13 +4607,13 @@
           queuePriorityThreadPreload_();
         }
 
-        // Schedule background loading of read chats
+        // Read chats are preloaded softly after the active list has had time to settle.
         if (readChatsLoadingTimer) {
           clearTimeout(readChatsLoadingTimer);
         }
         readChatsLoadingTimer = setTimeout(() => {
           preloadReadChatsInBackground();
-        }, 180);
+        }, 8000);
       })
       .withFailureHandler(() => {
         // Silently fail - we'll load when user clicks
@@ -4595,12 +4626,13 @@
    */
   function preloadReadChatsInBackground() {
     if (!canUseGoogleScriptRun()) return;
+    if (readChatsRefreshInFlight) return;
 
-    const token = ++readChatsRequestToken;
+    const token = ++backgroundReadChatsPreloadToken;
 
     google.script.run
       .withSuccessHandler(res => {
-        if (token !== readChatsRequestToken) return;
+        if (token !== backgroundReadChatsPreloadToken) return;
         if (res && res.ok) {
           const readChats = dedupeChatListByPhone(res.chats || []);
           educatorCache.readChatsList = readChats;
@@ -4623,13 +4655,12 @@
       if (educatorCache.readChatsList && educatorCache.readChatsList.length) {
         renderReadChatList(educatorCache.readChatsList);
       } else {
-        // Show skeleton instead of auto-loading
-        // User can click refresh button if they want to load them
+        $('chatListError').classList.add('hidden');
         $('chatList').innerHTML = makeChatsSkeleton(4);
       }
 
       if (!educatorCache.readChatsList || !educatorCache.readChatsList.length) {
-        loadReadChatsInBackground({ showSpinner: false });
+        loadReadChatsInBackground({ showSpinner: true });
       }
     } else {
       // Show unread chats
@@ -6121,6 +6152,7 @@
     if (!silent) {
       closeReactionPickers();
       removePhoneFromThreadPreloadQueue(activeChatPhone);
+      stopThreadPreload();
       stopUnreadParentsPolling();
       setParentMessageBannerVisible(false);
       cancelEdit();
