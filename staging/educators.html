@@ -3023,6 +3023,7 @@
   const CHAT_BG_URL = 'https://medsi-children.github.io/background.png';
   const MESSAGE_REACTIONS = ['❤️','👍','👌','🙏','🥰','😁'];
   const PUSH_MESSAGE_TYPE = 'medsi:push-subscription';
+  const STAGING_DISABLE_BACKGROUND_API = true;
 
   function preloadChatBackground(){
     const img = new Image();
@@ -3566,6 +3567,7 @@
   }
 
   function startUnreadParentsPolling(){
+    if (STAGING_DISABLE_BACKGROUND_API) return;
     // Removed periodic polling - now only manual refresh via button
     stopUnreadParentsPolling();
     // Only do initial check when called explicitly
@@ -3801,6 +3803,7 @@
   }
 
   function scheduleEducatorPreload(){
+    if (STAGING_DISABLE_BACKGROUND_API) return;
     if (delayedEducatorPreloadTimer) {
       clearTimeout(delayedEducatorPreloadTimer);
       delayedEducatorPreloadTimer = null;
@@ -4373,6 +4376,7 @@
   let backgroundReadChatsPreloadToken = 0;
 
   function startChatListAutoRefresh(){
+    if (STAGING_DISABLE_BACKGROUND_API) return;
     stopChatListAutoRefresh();
 
     if ($('screenChats').classList.contains('hidden')) {
@@ -6116,6 +6120,7 @@
   }
 
   function startThreadAutoRefresh(){
+    if (STAGING_DISABLE_BACKGROUND_API) return;
     stopThreadAutoRefresh();
 
     // Keep refresh gentle so reading the thread does not cause repeated layout jumps.
@@ -8170,9 +8175,7 @@
   preloadChatBackground();
   hydrateEducatorCacheFromSession();
   
-  // Start preloading chats in background immediately 
-  // (do this right after hydrating cache, before any UI setup)
-  preloadParentChats();
+  // Staging: background API warmup is disabled. Screens load data only after explicit taps.
   
   showingReadChats = false;
 
