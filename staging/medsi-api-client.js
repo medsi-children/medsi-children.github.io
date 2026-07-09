@@ -7,7 +7,6 @@
   const MAX_RETRIES = 1;
   const diagnostics = [];
   const queue = [];
-  const activeMethods = [];
   let activeRequests = 0;
   let requestSeq = 0;
   let debugPanel = null;
@@ -96,14 +95,7 @@
         const status = item.ok ? 'ok' : 'ERR';
         return `${item.method}: ${status} ${item.durationMs || 0}ms${item.message ? ' — ' + item.message : ''}`;
       }).join('\n');
-      const activeText = activeMethods.length ? `active: ${activeMethods.join(', ')}` : '';
-      const queuedText = queue.length ? `queued: ${queue.map(item => item.method).join(', ')}` : '';
-      debugPanel.textContent = [
-        `API active=${activeRequests} queued=${queue.length}`,
-        activeText,
-        queuedText,
-        recent || 'waiting...'
-      ].filter(Boolean).join('\n');
+      debugPanel.textContent = `API active=${activeRequests} queued=${queue.length}\n${recent || 'waiting...'}`;
     } catch (e) {}
   }
 
@@ -116,16 +108,12 @@
 
       const item = queue.shift();
       activeRequests += 1;
-      activeMethods.push(item.method);
-      updateDebugPanel();
 
       runApiRequest(item.method, item.args)
         .then(item.resolve)
         .catch(item.reject)
         .finally(() => {
           activeRequests = Math.max(0, activeRequests - 1);
-          const methodIndex = activeMethods.indexOf(item.method);
-          if (methodIndex >= 0) activeMethods.splice(methodIndex, 1);
           updateDebugPanel();
           runQueue();
         });
@@ -283,8 +271,6 @@
     getQueueState: () => ({
       active: activeRequests,
       queued: queue.length,
-      activeMethods: activeMethods.slice(),
-      queuedMethods: queue.map(item => item.method),
       recent: diagnostics.slice(-20)
     })
   };

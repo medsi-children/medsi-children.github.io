@@ -2770,7 +2770,7 @@
     }
   }
 </style>
-<script src="./medsi-api-client.js?v=20260709-staging-stable"></script>
+<script src="./medsi-api-client.js?v=20260709-working-minimal"></script>
 </head>
 
 <body data-screen="screenChoose">
@@ -3816,9 +3816,8 @@
   }
 
   const THREAD_PRELOAD_BURST = 0;
-  const THREAD_PRELOAD_TOP_DELAY = 9000;
-  const THREAD_PRELOAD_TAIL_DELAY = 9000;
-  const THREAD_PRELOAD_START_DELAY = 8000;
+  const THREAD_PRELOAD_TOP_DELAY = 6000;
+  const THREAD_PRELOAD_TAIL_DELAY = 6000;
   let threadPreloadTimer = null;
   let threadPreloadRequestTimer = null;
   let threadPreloadQueue = [];
@@ -3840,16 +3839,11 @@
 
   function shouldPauseThreadPreload_(){
     const activeThread = $('screenChatThread');
-    const apiState = window.MedsiApi && typeof window.MedsiApi.getQueueState === 'function'
-      ? window.MedsiApi.getQueueState()
-      : null;
-
     return !!(
       document.hidden ||
       chatListRefreshInFlight ||
       readChatsRefreshInFlight ||
       threadFetchInFlight ||
-      (apiState && (apiState.active > 0 || apiState.queued > 0)) ||
       (activeThread && !activeThread.classList.contains('hidden'))
     );
   }
@@ -3946,7 +3940,7 @@
       threadPreloadTimer = null;
     }
 
-    const startDelay = isChatsScreenVisible_() ? THREAD_PRELOAD_START_DELAY : THREAD_PRELOAD_TAIL_DELAY;
+    const startDelay = isChatsScreenVisible_() ? 0 : THREAD_PRELOAD_TAIL_DELAY;
     threadPreloadTimer = setTimeout(pumpThreadPreload, startDelay);
   }
 
@@ -4317,6 +4311,8 @@
     show('screenChats');
     setTheme('');
 
+    const readNeedsWarmup = !educatorCache.readChatsList || !educatorCache.readChatsList.length;
+
     // Render the appropriate list based on current state
     if (showingReadChats) {
       if (educatorCache.readChatsList && educatorCache.readChatsList.length) {
@@ -4342,6 +4338,9 @@
 
     if (options.refreshNow === true) {
       refreshVisibleChatList({ showSpinner: !!options.showSpinner });
+      if (readNeedsWarmup) {
+        loadReadChatsInBackground({ showSpinner: false });
+      }
       return;
     }
 
@@ -4351,7 +4350,14 @@
     );
     if (needsRefresh) {
       refreshVisibleChatList({ showSpinner: !!options.showSpinner });
+      if (readNeedsWarmup) {
+        loadReadChatsInBackground({ showSpinner: false });
+      }
       return;
+    }
+
+    if (readNeedsWarmup) {
+      loadReadChatsInBackground({ showSpinner: false });
     }
   }
 
@@ -4603,7 +4609,13 @@
           queuePriorityThreadPreload_();
         }
 
-        // Staging: read chats load only after the explicit "Открыть прочитанные чаты" tap.
+        // Read chats are preloaded softly after the active list has had time to settle.
+        if (readChatsLoadingTimer) {
+          clearTimeout(readChatsLoadingTimer);
+        }
+        readChatsLoadingTimer = setTimeout(() => {
+          preloadReadChatsInBackground();
+        }, 8000);
       })
       .withFailureHandler(() => {
         // Silently fail - we'll load when user clicks
