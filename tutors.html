@@ -139,6 +139,49 @@
     const frame = document.getElementById("appFrame");
     const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
     const PUSH_SERVICE_URL = "https://medsi-push-worker.medsi-children.workers.dev";
+    const TUTOR_SESSION_KEY = "medsi_tutor_session_v1";
+    const TUTOR_SESSION_MESSAGE_TYPE = "medsi:tutor-session";
+
+    function getSavedTutorSession() {
+      try { return String(localStorage.getItem(TUTOR_SESSION_KEY) || ""); } catch (e) { return ""; }
+    }
+
+    function saveTutorSession(token) {
+      const value = String(token || "");
+      if (!value) return;
+      try { localStorage.setItem(TUTOR_SESSION_KEY, value); } catch (e) {}
+    }
+
+    function clearTutorSession() {
+      try { localStorage.removeItem(TUTOR_SESSION_KEY); } catch (e) {}
+    }
+
+    function isAllowedTutorSessionOrigin(origin) {
+      if (origin === "null" || origin === "https://script.google.com" || origin === "https://script.googleusercontent.com") return true;
+      try { return /(^|\.)googleusercontent\.com$/.test(new URL(origin).hostname); } catch (e) { return false; }
+    }
+
+    function replyWithSavedTutorSession(targetWindow) {
+      const target = targetWindow || frame.contentWindow;
+      if (!target) return;
+      target.postMessage({
+        type: TUTOR_SESSION_MESSAGE_TYPE,
+        action: "restore",
+        token: getSavedTutorSession()
+      }, "*");
+    }
+
+    window.addEventListener("message", event => {
+      const data = event.data || {};
+      if (data.type !== TUTOR_SESSION_MESSAGE_TYPE || !isAllowedTutorSessionOrigin(event.origin)) return;
+      if (data.action === "save") {
+        saveTutorSession(data.token);
+      } else if (data.action === "clear") {
+        clearTutorSession();
+      } else if (data.action === "get") {
+        replyWithSavedTutorSession(event.source);
+      }
+    });
 
     const phrases = ["Одну минуточку…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
 
@@ -157,6 +200,7 @@
       if (window.MedsiPush) {
         window.MedsiPush.sendCurrentSubscription().catch(() => {});
       }
+      replyWithSavedTutorSession(frame.contentWindow);
     });
 
     if (window.MedsiPush) {
