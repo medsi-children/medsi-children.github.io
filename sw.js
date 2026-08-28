@@ -47,7 +47,6 @@ self.addEventListener('notificationclick', event => {
   ).href;
   function normalizePanelPath(path) {
     const value = String(path || '/');
-    if (value === '/educators.html') return '/educators';
     if (value === '/tutors.html') return '/tutors';
     return value;
   }
