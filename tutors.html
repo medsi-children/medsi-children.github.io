@@ -104,6 +104,12 @@
       height: 100vh;
       border: 0;
       background: #f7fbfc;
+      opacity: 0;
+      transition: opacity 0.42s ease;
+    }
+
+    body.app-ready iframe {
+      opacity: 1;
     }
 
     @supports (height: 100dvh) {
@@ -140,6 +146,8 @@
     const PUSH_SERVICE_URL = "https://medsi-push-worker.medsi-children.workers.dev";
     const TUTOR_SESSION_KEY = "medsi_tutor_session_v1";
     const TUTOR_SESSION_MESSAGE_TYPE = "medsi:tutor-session";
+    const TUTOR_UI_MESSAGE_TYPE = "medsi:tutor-ui";
+    let shellRevealed = false;
 
     function getSavedTutorSession() {
       try { return String(localStorage.getItem(TUTOR_SESSION_KEY) || ""); } catch (e) { return ""; }
@@ -176,9 +184,25 @@
       }, "*");
     }
 
+    function revealApp() {
+      if (shellRevealed) return;
+      shellRevealed = true;
+      clearInterval(interval);
+      document.body.classList.add("app-ready");
+      loader.classList.add("hidden");
+      setTimeout(() => {
+        loader.style.display = "none";
+      }, 440);
+    }
+
     window.addEventListener("message", event => {
       const data = event.data || {};
-      if (data.type !== TUTOR_SESSION_MESSAGE_TYPE || !isAllowedTutorSessionOrigin(event.origin)) return;
+      if (!isAllowedTutorSessionOrigin(event.origin)) return;
+      if (data.type === TUTOR_UI_MESSAGE_TYPE && (data.action === "ready" || data.action === "auth")) {
+        revealApp();
+        return;
+      }
+      if (data.type !== TUTOR_SESSION_MESSAGE_TYPE) return;
       if (data.action === "save") {
         saveTutorSession(data.token);
       } else if (data.action === "clear") {
@@ -197,11 +221,6 @@
     }, 950);
 
     frame.addEventListener("load", () => {
-      clearInterval(interval);
-      loader.classList.add("hidden");
-      setTimeout(() => {
-        loader.style.display = "none";
-      }, 280);
       if (window.MedsiPush) {
         window.MedsiPush.sendCurrentSubscription().catch(() => {});
       }
