@@ -128,7 +128,6 @@
 
   <iframe
     id="appFrame"
-    src="https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec?view=tutors"
     allow="clipboard-read; clipboard-write; fullscreen"
     referrerpolicy="no-referrer"
   ></iframe>
@@ -144,6 +143,12 @@
 
     function getSavedTutorSession() {
       try { return String(localStorage.getItem(TUTOR_SESSION_KEY) || ""); } catch (e) { return ""; }
+    }
+
+    function buildTutorIframeUrl() {
+      const saved = getSavedTutorSession();
+      const base = APP_BASE_URL + "?view=tutors";
+      return saved ? base + "#restoreTutor=" + encodeURIComponent(saved) : base;
     }
 
     function saveTutorSession(token) {
@@ -212,6 +217,7 @@
       });
     }
 
+    frame.src = buildTutorIframeUrl();
     window.loadStartTime = Date.now();
   </script>
 </body>
