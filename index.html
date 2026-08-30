@@ -174,12 +174,11 @@
     }
 
     syncShellViewportHeight();
-    window.addEventListener("resize", syncShellViewportHeight);
+    // На iPhone resize / visualViewport.resize срабатывают не только при
+    // повороте, но и при открытии клавиатуры. Не уменьшаем в этот момент
+    // iframe, иначе весь экран уезжает вверх и под ним остаётся пустое поле.
+    // Реальную смену размера обрабатываем при повороте устройства.
     window.addEventListener("orientationchange", () => setTimeout(syncShellViewportHeight, 120));
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", syncShellViewportHeight);
-      window.visualViewport.addEventListener("scroll", syncShellViewportHeight);
-    }
 
     const phrases = ["Подключаемся…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
 
