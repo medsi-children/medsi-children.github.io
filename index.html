@@ -105,6 +105,15 @@
     @supports (height: 100dvh) {
       iframe { height: var(--shell-viewport-height); }
     }
+
+    /* В установленном iOS-приложении visualViewport может не включать
+       домашнюю зону. При явной height свойство bottom у fixed iframe
+       игнорируется, и под ним остаётся белая полоса. Здесь iframe должен
+       растягиваться именно по top/bottom, как кадр панели воспитателей. */
+    html.standalone-app iframe {
+      height:auto;
+      bottom:0;
+    }
   </style>
   <script src="/notify-client.js?v=20260830-lower-panel"></script>
 </head>
@@ -130,6 +139,10 @@
   ></iframe>
 
   <script>
+    const isStandaloneApp = window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
+    if (isStandaloneApp) document.documentElement.classList.add("standalone-app");
+
     const loader = document.getElementById("loader");
     const loaderText = document.getElementById("loaderText");
     const frame = document.getElementById("appFrame");
