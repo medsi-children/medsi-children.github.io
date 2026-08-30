@@ -7,7 +7,7 @@
   <!-- Важно для полноэкранного режима на Android -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="theme-color" content="#0fc7ce">
 
   <title>Медси Бот</title>
@@ -25,13 +25,28 @@
     html, body {
       margin: 0;
       padding: 0;
+      width: 100%;
       height: 100%;
+      min-height: 100%;
+      background-color: #f7fbfc;
       background: 
         radial-gradient(circle at top left, rgba(15,199,206,0.12), transparent 32%),
         radial-gradient(circle at bottom right, rgba(15,199,206,0.08), transparent 28%),
         #f7fbfc;
       overflow: hidden;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    }
+
+    html::before {
+      content: "";
+      position: fixed;
+      z-index: -1;
+      inset: -80px 0;
+      background:
+        radial-gradient(circle at top left, rgba(15,199,206,0.12), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(15,199,206,0.08), transparent 28%),
+        #f7fbfc;
+      pointer-events: none;
     }
 
     /* ===== LOADER ===== */
@@ -100,7 +115,11 @@
       height: var(--shell-viewport-height);
       border: 0;
       background: #f7fbfc;
+      opacity: 0;
+      transition: opacity .42s ease;
     }
+
+    body.app-ready iframe { opacity: 1; }
 
     @supports (height: 100dvh) {
       iframe { height: var(--shell-viewport-height); }
@@ -249,6 +268,7 @@
 
     function hideLoader() {
       clearInterval(interval);
+      document.body.classList.add("app-ready");
       loader.classList.add("hidden");
       setTimeout(() => {
         loader.style.display = "none";
