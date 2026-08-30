@@ -135,6 +135,9 @@
     const frame = document.getElementById("appFrame");
 
     const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
+    // Меняем только при выпуске важных правок интерфейса. Параметр заставляет
+    // iOS заново загрузить вложенную Apps Script-панель, не сбрасывая сессию.
+    const APP_UI_VERSION = "20260830-parent-full-height";
     const PUSH_SERVICE_URL = "https://medsi-push-worker.medsi-children.workers.dev";
     const PARENT_PHONE_KEY = "medsi_parent_phone";
     const SESSION_MESSAGE_TYPE = "medsi:parent-session";
@@ -166,7 +169,8 @@
 
     function buildIframeUrl() {
       const saved = getSavedParentPhone();
-      return saved ? APP_BASE_URL + "#restorePhone=" + encodeURIComponent(saved) : APP_BASE_URL;
+      const url = APP_BASE_URL + "?ui=" + encodeURIComponent(APP_UI_VERSION);
+      return saved ? url + "#restorePhone=" + encodeURIComponent(saved) : url;
     }
 
     function saveParentPhone(phone) {
