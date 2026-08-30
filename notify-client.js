@@ -41,10 +41,19 @@
 
     if (!next.role) return;
 
+    const hasChanged = !state.identity ||
+      state.identity.role !== next.role ||
+      state.identity.phone !== next.phone;
+
     state.identity = next;
     try { localStorage.setItem(IDENTITY_KEY, JSON.stringify(next)); }
     catch (e) {}
-    updateButton({ reveal: true });
+
+    // При каждом сообщении из вложенной панели раньше заново запускался
+    // пятисекундный показ. Один и тот же пользователь получал второй всплывающий
+    // контрол уже поверх открытого чата. Обновляем кнопку лишь при смене роли
+    // или номера; первичная инициализация сама выполнит один показ ниже.
+    if (hasChanged) updateButton({ reveal: true });
   }
 
   function clearIdentity() {
