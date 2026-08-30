@@ -1,7 +1,7 @@
 {
-  "name": "Медси Бот — тест экрана",
-  "short_name": "Медси тест",
-  "description": "Тестовая оболочка родительской панели Медси",
+  "name": "Медси Бот",
+  "short_name": "Медси Бот",
+  "description": "Родительская панель Медси",
   "id": "/parents-test",
   "start_url": "/parents-test",
   "scope": "/",

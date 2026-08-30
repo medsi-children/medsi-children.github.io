@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="theme-color" content="#0fc7ce" />
-  <title>Медси Бот — тест</title>
+  <title>Медси Бот</title>
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/parents-test-manifest.json" />
   <style>
@@ -38,14 +38,18 @@
     iframe { position: fixed; inset: 0; width: 100vw; height: var(--shell-viewport-height); border: 0; background: #f7fbfc; opacity: 0; transition: opacity .42s ease; }
     body.ready iframe { opacity: 1; }
   </style>
+  <script src="/notify-client.js?v=20260830-lower-panel"></script>
 </head>
 <body>
   <div id="loader"><h1 class="loader-title">Медси Бот</h1><p id="loaderText" class="loader-text">Подключаемся…</p><div class="dots"><i class="dot"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i></div></div>
   <iframe id="appFrame" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer"></iframe>
   <script>
-    const APP_URL = 'https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec?parentShell=test';
+    const APP_BASE_URL = 'https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
+    const APP_URL = APP_BASE_URL + '?parentShell=clean';
+    const PUSH_URL = 'https://medsi-push-worker.medsi-children.workers.dev';
     const PHONE_KEY = 'medsi_parent_phone';
     const SESSION_TYPE = 'medsi:parent-session';
+    const PUSH_TYPE = 'medsi:push-subscription';
     const frame = document.getElementById('appFrame');
     const loader = document.getElementById('loader');
     const text = document.getElementById('loaderText');
@@ -59,15 +63,34 @@
     function reveal() { clearInterval(timer); document.body.classList.add('ready'); loader.classList.add('hidden'); setTimeout(() => { loader.style.display = 'none'; }, 440); }
     window.addEventListener('message', event => {
       const data = event.data || {};
-      if (!isAppOrigin(event.origin) || data.type !== SESSION_TYPE) return;
+      if (!isAppOrigin(event.origin)) return;
+      if (data.type === 'medsi:parent-screen') {
+        if (window.MedsiPush) window.MedsiPush.setPanelVisible(data.screen === 'screenChoose');
+        return;
+      }
+      if (data.type !== SESSION_TYPE) return;
       if (data.action === 'save') { try { localStorage.setItem(PHONE_KEY, digits(data.phone)); } catch (_) {} }
       if (data.action === 'clear') { try { localStorage.removeItem(PHONE_KEY); } catch (_) {} }
+      if (data.action === 'save' && window.MedsiPush) window.MedsiPush.setIdentity({ role: 'parent', phone: digits(data.phone) });
+      if (data.action === 'clear' && window.MedsiPush) window.MedsiPush.clearIdentity();
       if (data.action === 'get' && event.source) event.source.postMessage({ type: SESSION_TYPE, action: 'restore', phone: savedPhone() }, '*');
     });
     function syncHeight() { const viewport = window.visualViewport; const height = Math.round(viewport ? viewport.height : window.innerHeight); if (height > 0) document.documentElement.style.setProperty('--shell-viewport-height', height + 'px'); }
     syncHeight(); window.addEventListener('resize', syncHeight); window.addEventListener('orientationchange', () => setTimeout(syncHeight, 120));
     if (window.visualViewport) { window.visualViewport.addEventListener('resize', syncHeight); window.visualViewport.addEventListener('scroll', syncHeight); }
-    frame.addEventListener('load', reveal);
+    frame.addEventListener('load', () => {
+      reveal();
+      if (window.MedsiPush) window.MedsiPush.sendCurrentSubscription().catch(() => {});
+    });
+    if (window.MedsiPush) {
+      const phone = savedPhone();
+      window.MedsiPush.init({
+        frameId: 'appFrame',
+        appEndpointUrl: APP_BASE_URL,
+        pushServiceUrl: PUSH_URL,
+        identity: phone ? { role: 'parent', phone } : null
+      });
+    }
     frame.src = iframeUrl();
   </script>
 </body>
