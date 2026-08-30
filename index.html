@@ -106,7 +106,7 @@
       iframe { height: var(--shell-viewport-height); }
     }
   </style>
-  <script src="/notify-client.js?v=20260710-direct-iframe"></script>
+  <script src="/notify-client.js?v=20260830-chat-safe"></script>
 </head>
 <body>
 
@@ -137,7 +137,7 @@
     const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
     // Меняем только при выпуске важных правок интерфейса. Параметр заставляет
     // iOS заново загрузить вложенную Apps Script-панель, не сбрасывая сессию.
-    const APP_UI_VERSION = "20260830-parent-full-height";
+    const APP_UI_VERSION = "20260830-parent-shell-height";
     const PUSH_SERVICE_URL = "https://medsi-push-worker.medsi-children.workers.dev";
     const PARENT_PHONE_KEY = "medsi_parent_phone";
     const SESSION_MESSAGE_TYPE = "medsi:parent-session";
@@ -145,7 +145,12 @@
     function syncShellViewportHeight() {
       const viewport = window.visualViewport;
       const height = Math.round(viewport ? viewport.height : window.innerHeight);
-      if (height > 0) document.documentElement.style.setProperty("--shell-viewport-height", height + "px");
+      if (height <= 0) return;
+      document.documentElement.style.setProperty("--shell-viewport-height", height + "px");
+      const appFrame = document.getElementById("appFrame");
+      if (appFrame && appFrame.contentWindow) {
+        appFrame.contentWindow.postMessage({ type: "medsi:viewport", height }, "*");
+      }
     }
 
     syncShellViewportHeight();
@@ -210,6 +215,13 @@
 
     window.addEventListener("message", (event) => {
       const data = event.data || {};
+      if (data.type === "medsi:parent-screen") {
+        if (!isAllowedSessionOrigin(event.origin)) return;
+        if (window.MedsiPush) {
+          window.MedsiPush.setPanelVisible(data.screen === "screenChoose");
+        }
+        return;
+      }
       if (data.type !== SESSION_MESSAGE_TYPE) return;
       if (!isAllowedSessionOrigin(event.origin)) return;
 
@@ -245,7 +257,10 @@
       }
     }
 
-    frame.addEventListener("load", hideLoader);
+    frame.addEventListener("load", () => {
+      syncShellViewportHeight();
+      hideLoader();
+    });
     window.addEventListener("pageshow", () => {
       if (frame.contentWindow) setTimeout(hideLoader, 1200);
     });

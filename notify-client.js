@@ -16,7 +16,8 @@
     pushServiceUrl: '',
     hideButtonTimer: null,
     hideStatusTimer: null,
-    hasShownIntro: false
+    hasShownIntro: false,
+    panelVisible: true
   };
 
   function onlyDigits(value) {
@@ -233,6 +234,11 @@
   function revealButtonFor(ms) {
     if (!state.button) return;
 
+    if (!state.panelVisible) {
+      hideButton();
+      return;
+    }
+
     if (state.hideButtonTimer) {
       clearTimeout(state.hideButtonTimer);
       state.hideButtonTimer = null;
@@ -246,6 +252,11 @@
 
   async function updateButton(options) {
     if (!state.button) return;
+
+    if (!state.panelVisible) {
+      hideButton();
+      return;
+    }
 
     if (!isSupported()) {
       hideButton();
@@ -354,6 +365,15 @@
     init,
     setIdentity: saveIdentity,
     clearIdentity,
+    setPanelVisible: function (visible) {
+      state.panelVisible = !!visible;
+      if (!state.panelVisible) {
+        setStatus('');
+        hideButton();
+        return;
+      }
+      updateButton({ reveal: true });
+    },
     sendCurrentSubscription: async function () {
       const subscription = await getSubscription();
       if (subscription) sendSubscriptionToApp(subscription);
