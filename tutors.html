@@ -162,12 +162,11 @@
     }
 
     syncShellViewportHeight();
-    window.addEventListener("resize", syncShellViewportHeight);
+    // Не подписываемся на обычный resize / visualViewport.resize: в iOS они
+    // срабатывают при открытии клавиатуры. Если тогда уменьшить iframe до
+    // высоты клавиатуры, Safari «выстреливает» всей панелью вверх и остаётся
+    // пустое поле. Высоту оболочки меняем только при реальном повороте экрана.
     window.addEventListener("orientationchange", () => setTimeout(syncShellViewportHeight, 120));
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", syncShellViewportHeight);
-      window.visualViewport.addEventListener("scroll", syncShellViewportHeight);
-    }
 
     function getSavedTutorSession() {
       try { return String(localStorage.getItem(TUTOR_SESSION_KEY) || ""); } catch (e) { return ""; }
