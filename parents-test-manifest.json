@@ -1,0 +1,16 @@
+{
+  "name": "Медси Бот — тест экрана",
+  "short_name": "Медси тест",
+  "description": "Тестовая оболочка родительской панели Медси",
+  "id": "/parents-test",
+  "start_url": "/parents-test",
+  "scope": "/",
+  "display": "fullscreen",
+  "background_color": "#f7fbfc",
+  "theme_color": "#0fc7ce",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/apple-touch-icon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
