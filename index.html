@@ -16,6 +16,12 @@
   <link rel="manifest" href="/manifest.json">
 
   <style>
+    :root { --shell-viewport-height: 100vh; }
+
+    @supports (height: 100dvh) {
+      :root { --shell-viewport-height: 100dvh; }
+    }
+
     html, body {
       margin: 0;
       padding: 0;
@@ -91,13 +97,13 @@
       position: fixed;
       inset: 0;
       width: 100vw;
-      height: 100vh;
+      height: var(--shell-viewport-height);
       border: 0;
       background: #f7fbfc;
     }
 
     @supports (height: 100dvh) {
-      iframe { height: 100dvh; }
+      iframe { height: var(--shell-viewport-height); }
     }
   </style>
   <script src="/notify-client.js?v=20260710-direct-iframe"></script>
@@ -132,6 +138,20 @@
     const PUSH_SERVICE_URL = "https://medsi-push-worker.medsi-children.workers.dev";
     const PARENT_PHONE_KEY = "medsi_parent_phone";
     const SESSION_MESSAGE_TYPE = "medsi:parent-session";
+
+    function syncShellViewportHeight() {
+      const viewport = window.visualViewport;
+      const height = Math.round(viewport ? viewport.height : window.innerHeight);
+      if (height > 0) document.documentElement.style.setProperty("--shell-viewport-height", height + "px");
+    }
+
+    syncShellViewportHeight();
+    window.addEventListener("resize", syncShellViewportHeight);
+    window.addEventListener("orientationchange", () => setTimeout(syncShellViewportHeight, 120));
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", syncShellViewportHeight);
+      window.visualViewport.addEventListener("scroll", syncShellViewportHeight);
+    }
 
     const phrases = ["Подключаемся…", "Загружаем интерфейс…", "Почти готово…", "Ещё секундочку…"];
 
