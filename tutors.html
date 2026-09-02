@@ -157,6 +157,7 @@
     const TUTOR_SESSION_MESSAGE_TYPE = "medsi:tutor-session";
     const TUTOR_UI_MESSAGE_TYPE = "medsi:tutor-ui";
     let shellRevealed = false;
+    let shellRevealFallbackTimer = null;
 
     function syncShellViewportHeight() {
       const viewport = window.visualViewport;
@@ -221,6 +222,7 @@
     function revealApp() {
       if (shellRevealed) return;
       shellRevealed = true;
+      if (shellRevealFallbackTimer) clearTimeout(shellRevealFallbackTimer);
       clearInterval(interval);
       document.body.classList.add("app-ready");
       loader.classList.add("hidden");
@@ -259,6 +261,14 @@
         window.MedsiPush.sendCurrentSubscription().catch(() => {});
       }
       replyWithSavedTutorSession(frame.contentWindow);
+      // WebKit can drop the one-shot ready/auth postMessage coming from the
+      // nested Apps Script iframe. The iframe load event still fires only
+      // after its document and child frames have loaded, so never leave the
+      // shell loader covering an already-rendered tutor panel indefinitely.
+      if (!shellRevealed) {
+        if (shellRevealFallbackTimer) clearTimeout(shellRevealFallbackTimer);
+        shellRevealFallbackTimer = setTimeout(revealApp, 3000);
+      }
     });
 
     if (window.MedsiPush) {
