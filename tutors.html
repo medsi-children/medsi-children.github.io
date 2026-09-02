@@ -149,9 +149,9 @@
     const loaderText = document.getElementById("loaderText");
     const frame = document.getElementById("appFrame");
     const APP_BASE_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec";
-    // Bump only when the deployed Apps Script shell changes.  Google may
-    // otherwise keep an older iframe document for the same /exec URL.
-    const APP_BUILD = "20260902-direct-d1-read-867";
+    // Bump when the tutor shell/iframe contract changes. Google may otherwise
+    // keep an older iframe document for the same /exec URL.
+    const APP_BUILD = "20260902-direct-d1-read-868";
     const PUSH_SERVICE_URL = "https://medsi-push-worker.medsi-children.workers.dev";
     const TUTOR_SESSION_KEY = "medsi_tutor_session_v1";
     const TUTOR_SESSION_MESSAGE_TYPE = "medsi:tutor-session";
@@ -165,6 +165,18 @@
     }
 
     syncShellViewportHeight();
+    // Safari/PWA can report its pre-layout viewport during the first script
+    // tick.  Re-measure only while the shell is settling, before the Apps
+    // Script iframe can become interactive.  Do not keep a resize listener:
+    // keyboard opening must not shrink the fixed iframe.
+    requestAnimationFrame(syncShellViewportHeight);
+    setTimeout(syncShellViewportHeight, 120);
+    setTimeout(syncShellViewportHeight, 480);
+    window.addEventListener("pageshow", () => {
+      syncShellViewportHeight();
+      requestAnimationFrame(syncShellViewportHeight);
+      setTimeout(syncShellViewportHeight, 180);
+    });
     // Не подписываемся на обычный resize / visualViewport.resize: в iOS они
     // срабатывают при открытии клавиатуры. Если тогда уменьшить iframe до
     // высоты клавиатуры, Safari «выстреливает» всей панелью вверх и остаётся
