@@ -103,6 +103,13 @@
     let loadingThread = false;
     let sending = false;
 
+    function setSending(value) {
+      sending = !!value;
+      input.disabled = sending;
+      send.disabled = sending;
+      if (!sending) input.focus();
+    }
+
     function showListLoading(label) {
       list.replaceChildren();
       const node = document.createElement('div'); node.className = 'overlay-chat-list__loading'; node.textContent = label || 'Загружаем чаты…'; list.appendChild(node);
@@ -184,20 +191,56 @@
       } finally { loadingThread = false; }
     }
 
+    function refreshThreadInBackground(chat) {
+      if (!chat || !chat.phone) return;
+      const targetPhone = chat.phone;
+      transport.thread(session, targetPhone, '', 100)
+        .then(result => {
+          if (disposed) return;
+          const rows = Array.isArray(result && result.messages) ? result.messages : [];
+          setCachedThread(targetPhone, rows);
+          if (activeChat && phone10(activeChat.phone) === phone10(targetPhone)) renderThread({ messages: rows });
+        })
+        .catch(() => {});
+    }
+
     composer.addEventListener('submit', async event => {
       event.preventDefault();
       if (!activeChat || sending) return;
       const value = String(input.value || '').trim();
       if (!value) return;
-      sending = true; input.disabled = true; send.disabled = true;
+
+      const chatAtSend = activeChat;
+      const cachedBefore = getCachedThread(chatAtSend.phone);
+      const rowsBefore = cachedBefore && Array.isArray(cachedBefore.rows) ? cachedBefore.rows.slice() : [];
+      const optimistic = {
+        side:'educator',
+        type:'text',
+        text:value,
+        timestamp:Date.now(),
+        messageKey:'pending-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
+      };
+
+      setCachedThread(chatAtSend.phone, rowsBefore.concat(optimistic));
+      renderThread({ messages: rowsBefore.concat(optimistic) });
+      input.value = '';
+      setSending(true);
+
       try {
-        await transport.sendMessage(session, 'educator', activeChat.phone, { type:'text', text:value });
-        input.value = '';
-        await openChat(activeChat, true);
+        await transport.sendMessage(session, 'educator', chatAtSend.phone, { type:'text', text:value });
+
+        // The server has now confirmed the write. From this point it is safe
+        // to send another message or leave the app. Everything below is UI refresh only.
+        setSending(false);
+        refreshThreadInBackground(chatAtSend);
         loadChats(bucket, true);
       } catch (error) {
+        setCachedThread(chatAtSend.phone, rowsBefore);
+        if (activeChat && phone10(activeChat.phone) === phone10(chatAtSend.phone)) renderThread({ messages: rowsBefore });
+        input.value = value;
         overlay.showError((error && error.message) || 'Не удалось отправить сообщение.');
-      } finally { sending = false; input.disabled = false; send.disabled = false; input.focus(); }
+        setSending(false);
+      }
     });
     input.addEventListener('keydown', event => {
       const mobile = window.matchMedia('(max-width:560px),(hover:none) and (pointer:coarse)').matches;
