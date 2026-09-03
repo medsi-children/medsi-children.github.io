@@ -22,7 +22,7 @@
   <script src="/notify-client.js?v=20260710-direct-iframe"></script>
   <script src="/chat-overlay/transport.js?v=1"></script>
   <script src="/chat-overlay/educator-chat.js?v=1"></script>
-  <script src="/chat-overlay/overlay-core.js?v=1"></script>
+  <script src="/chat-overlay/overlay-core.js?v=3"></script>
 </head>
 <body>
   <div id="loader">
@@ -48,8 +48,9 @@
     function allowed(origin){if(origin==='null'||origin==='https://script.google.com'||origin==='https://script.googleusercontent.com')return true;try{return /(^|\.)googleusercontent\.com$/.test(new URL(origin).hostname)}catch(_){return false}}
     function replySession(target){if(target)target.postMessage({type:SESSION_MESSAGE_TYPE,action:'restore',token:savedSession()},'*')}
     function syncViewport(){const v=window.visualViewport;const h=Math.round(v?v.height:window.innerHeight);if(h>0)document.documentElement.style.setProperty('--shell-viewport-height',h+'px')}
-    function buildUrl(){let url=APP_BASE_URL+'?view=tutors&build=overlay-test-2&shellMode=tutors_test';const token=savedSession();if(token)url+='#restoreTutor='+encodeURIComponent(token);return url}
+    function buildUrl(){let url=APP_BASE_URL+'?view=tutors&build=overlay-test-3&shellMode=tutors_test';const token=savedSession();if(token)url+='#restoreTutor='+encodeURIComponent(token);return url}
     function reveal(){if(revealed)return;revealed=true;document.body.classList.add('app-ready');loader.classList.add('hidden');setTimeout(()=>loader.style.display='none',360)}
+    function helloOverlay(){if(frame.contentWindow)frame.contentWindow.postMessage({type:'medsi:chat-overlay',action:'hello'},'*')}
 
     syncViewport();requestAnimationFrame(syncViewport);setTimeout(syncViewport,120);window.addEventListener('orientationchange',()=>setTimeout(syncViewport,120));
     window.addEventListener('message',event=>{
@@ -63,15 +64,11 @@
       frameId:'appFrame',
       onOpen:(state,api)=>{
         if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}
-        if(state.role==='educator'&&window.MedsiEducatorOverlayChat){
-          overlayCleanup=MedsiEducatorOverlayChat.mount(api,state)||null;
-        }
+        if(state.role==='educator'&&window.MedsiEducatorOverlayChat){overlayCleanup=MedsiEducatorOverlayChat.mount(api,state)||null}
       },
-      onClose:()=>{
-        if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}
-      }
+      onClose:()=>{if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}}
     });
-    frame.addEventListener('load',()=>{syncViewport();replySession(frame.contentWindow);if(window.MedsiPush)MedsiPush.sendCurrentSubscription().catch(()=>{});setTimeout(reveal,2500)});
+    frame.addEventListener('load',()=>{syncViewport();replySession(frame.contentWindow);helloOverlay();setTimeout(helloOverlay,350);if(window.MedsiPush)MedsiPush.sendCurrentSubscription().catch(()=>{});setTimeout(reveal,2500)});
     frame.src=buildUrl();
     if(window.MedsiPush)MedsiPush.init({frameId:'appFrame',appEndpointUrl:APP_BASE_URL,pushServiceUrl:PUSH_SERVICE_URL,identity:{role:'educator'}});
     window.medsiOverlayTest=overlay;
