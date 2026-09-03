@@ -21,6 +21,7 @@
   </style>
   <script src="/notify-client.js?v=20260710-direct-iframe"></script>
   <script src="/chat-overlay/transport.js?v=2"></script>
+  <script src="/chat-overlay/preload.js?v=1"></script>
   <script src="/chat-overlay/educator-chat.js?v=2"></script>
   <script src="/chat-overlay/overlay-core.js?v=3"></script>
 </head>
@@ -66,6 +67,10 @@
     });
     window.addEventListener('message',event=>{
       const data=event.data||{};if(!allowed(event.origin))return;
+      if(data.type==='medsi:chat-overlay'&&data.action==='preload'&&data.role==='educator'){
+        if(window.MedsiOverlayPreload)MedsiOverlayPreload.educator(data);
+        return;
+      }
       if(data.type===UI_MESSAGE_TYPE&&(data.action==='ready'||data.action==='auth')){reveal();return}
       if(data.type!==SESSION_MESSAGE_TYPE)return;
       if(data.action==='save')saveSession(data.token);else if(data.action==='clear')clearSession();else if(data.action==='get')replySession(event.source);
