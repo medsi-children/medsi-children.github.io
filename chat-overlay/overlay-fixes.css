@@ -6,6 +6,11 @@
   transition:none !important;
 }
 .overlay-transient-loading{visibility:hidden !important;}
+.overlay-result-enter{animation:overlayResultEnter .18s ease both;}
+@keyframes overlayResultEnter{
+  from{opacity:0;transform:translateY(2px)}
+  to{opacity:1;transform:none}
+}
 
 /* Keep the original refresh glyph optically centered on every viewport. */
 .educator-exact-clone #screenChats .refresh-btn{
@@ -14,7 +19,8 @@
   line-height:1 !important;
 }
 .educator-exact-clone #screenChats .refresh-btn .refresh-label{
-  display:block !important;
+  display:grid !important;
+  place-items:center !important;
   width:1em !important;
   height:1em !important;
   line-height:1 !important;
