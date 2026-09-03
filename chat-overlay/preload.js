@@ -13,6 +13,10 @@
     return !!(entry && Date.now() - Number(entry.at || 0) <= MAX_AGE_MS);
   }
 
+  function hasMessages(result) {
+    return !!(result && Array.isArray(result.messages) && result.messages.length);
+  }
+
   function transport() {
     return window.MedsiOverlayTransport || null;
   }
@@ -24,12 +28,13 @@
     if (!t || !session || !session.token || !phone) return;
 
     const existing = parentThreadCache.get(phone);
-    if (fresh(existing)) return existing.result;
+    if (fresh(existing) && hasMessages(existing.result)) return existing.result;
     if (parentInflight && parentInflight.phone === phone) return parentInflight.promise;
 
     const promise = t._preloadOriginalThread(session, phone, '', 100)
       .then(result => {
-        parentThreadCache.set(phone, { at: Date.now(), result });
+        if (hasMessages(result)) parentThreadCache.set(phone, { at: Date.now(), result });
+        else parentThreadCache.delete(phone);
         return result;
       })
       .catch(() => null)
@@ -72,10 +77,11 @@
     t.thread = function (session, phone, beforeKey, limit) {
       const key = phone10(phone);
       const entry = !beforeKey ? parentThreadCache.get(key) : null;
-      if (fresh(entry)) {
+      if (fresh(entry) && hasMessages(entry.result)) {
         parentThreadCache.delete(key);
         return Promise.resolve(entry.result);
       }
+      if (entry) parentThreadCache.delete(key);
       return t._preloadOriginalThread(session, phone, beforeKey, limit);
     };
 
