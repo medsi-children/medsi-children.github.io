@@ -1,6 +1,15 @@
 (function () {
+  const listCache = new Map();
+  const threadCache = new Map();
+
   function text(value) { return String(value == null ? '' : value); }
   function phone10(value) { return String(value || '').replace(/\D+/g, '').slice(-10); }
+  function listKey(bucket) { return String(bucket || 'unread'); }
+  function getCachedList(bucket) { return listCache.get(listKey(bucket)) || null; }
+  function setCachedList(bucket, rows) { listCache.set(listKey(bucket), { rows: Array.isArray(rows) ? rows : [], at: Date.now() }); }
+  function getCachedThread(phone) { return threadCache.get(phone10(phone)) || null; }
+  function setCachedThread(phone, rows) { threadCache.set(phone10(phone), { rows: Array.isArray(rows) ? rows : [], at: Date.now() }); }
+
   function formatTime(value) {
     const date = new Date(Number(value));
     if (Number.isNaN(date.getTime())) return '';
@@ -58,43 +67,29 @@
     }
 
     overlay.body.replaceChildren();
-    const shell = document.createElement('div');
-    shell.className = 'overlay-educator';
-    const sidebar = document.createElement('section');
-    sidebar.className = 'overlay-chat-list';
-    const tabs = document.createElement('div');
-    tabs.className = 'overlay-chat-list__tabs';
-    const unreadBtn = document.createElement('button');
-    unreadBtn.type = 'button'; unreadBtn.textContent = 'Непрочитанные'; unreadBtn.className = 'active';
-    const readBtn = document.createElement('button');
-    readBtn.type = 'button'; readBtn.textContent = 'Прочитанные';
+    const shell = document.createElement('div'); shell.className = 'overlay-educator';
+    const sidebar = document.createElement('section'); sidebar.className = 'overlay-chat-list';
+    const tabs = document.createElement('div'); tabs.className = 'overlay-chat-list__tabs';
+    const unreadBtn = document.createElement('button'); unreadBtn.type = 'button'; unreadBtn.textContent = 'Непрочитанные'; unreadBtn.className = 'active';
+    const readBtn = document.createElement('button'); readBtn.type = 'button'; readBtn.textContent = 'Прочитанные';
     tabs.append(unreadBtn, readBtn);
-    const list = document.createElement('div');
-    list.className = 'overlay-chat-list__items';
+    const list = document.createElement('div'); list.className = 'overlay-chat-list__items';
     sidebar.append(tabs, list);
 
-    const threadPanel = document.createElement('section');
-    threadPanel.className = 'overlay-educator-thread empty';
-    const threadHeader = document.createElement('div');
-    threadHeader.className = 'overlay-educator-thread__header';
-    const mobileBack = document.createElement('button');
-    mobileBack.type = 'button'; mobileBack.className = 'overlay-educator-thread__back'; mobileBack.textContent = '‹';
+    const threadPanel = document.createElement('section'); threadPanel.className = 'overlay-educator-thread empty';
+    const threadHeader = document.createElement('div'); threadHeader.className = 'overlay-educator-thread__header';
+    const mobileBack = document.createElement('button'); mobileBack.type = 'button'; mobileBack.className = 'overlay-educator-thread__back'; mobileBack.textContent = '‹';
     const threadNames = document.createElement('div');
     const threadTitle = document.createElement('strong');
     const threadSubtitle = document.createElement('span');
     threadNames.append(threadTitle, threadSubtitle);
     threadHeader.append(mobileBack, threadNames);
-    const messages = document.createElement('div');
-    messages.className = 'overlay-thread__messages';
-    const empty = document.createElement('div');
-    empty.className = 'overlay-thread__empty'; empty.textContent = 'Выберите чат с родителем.';
+    const messages = document.createElement('div'); messages.className = 'overlay-thread__messages';
+    const empty = document.createElement('div'); empty.className = 'overlay-thread__empty'; empty.textContent = 'Выберите чат с родителем.';
     messages.appendChild(empty);
-    const composer = document.createElement('form');
-    composer.className = 'overlay-composer hidden';
-    const input = document.createElement('textarea');
-    input.className = 'overlay-composer__input'; input.rows = 1; input.maxLength = 4000; input.placeholder = 'Сообщение…';
-    const send = document.createElement('button');
-    send.className = 'overlay-composer__send'; send.type = 'submit'; send.textContent = '➤'; send.setAttribute('aria-label','Отправить');
+    const composer = document.createElement('form'); composer.className = 'overlay-composer hidden';
+    const input = document.createElement('textarea'); input.className = 'overlay-composer__input'; input.rows = 1; input.maxLength = 4000; input.placeholder = 'Сообщение…';
+    const send = document.createElement('button'); send.className = 'overlay-composer__send'; send.type = 'submit'; send.textContent = '➤'; send.setAttribute('aria-label','Отправить');
     composer.append(input, send);
     threadPanel.append(threadHeader, messages, composer);
     shell.append(sidebar, threadPanel);
@@ -132,14 +127,23 @@
       bucket = nextBucket || bucket;
       unreadBtn.classList.toggle('active', bucket === 'unread');
       readBtn.classList.toggle('active', bucket === 'read');
-      if (!silent) showListLoading();
+
+      const cached = getCachedList(bucket);
+      if (cached && !silent) {
+        chats = cached.rows;
+        renderList();
+      } else if (!silent) {
+        showListLoading();
+      }
+
       try {
         const result = await transport.chats(session, bucket);
         if (disposed) return;
         chats = Array.isArray(result.chats) ? result.chats : [];
+        setCachedList(bucket, chats);
         renderList();
       } catch (error) {
-        if (!silent) overlay.showError((error && error.message) || 'Не удалось загрузить список чатов.');
+        if (!cached && !silent) overlay.showError((error && error.message) || 'Не удалось загрузить список чатов.');
       }
     }
     function renderThread(result) {
@@ -159,18 +163,23 @@
       threadTitle.textContent = chat.childName || 'Чат с родителем';
       threadSubtitle.textContent = [chat.parentName, chat.phone].filter(Boolean).join(' · ');
       composer.classList.remove('hidden');
-      if (!silent) {
+
+      const cached = getCachedThread(chat.phone);
+      if (cached && !silent) renderThread({messages:cached.rows});
+      else if (!silent) {
         messages.replaceChildren(); const node = document.createElement('div'); node.className = 'overlay-thread__loading'; node.textContent = 'Загружаем сообщения…'; messages.appendChild(node);
       }
+
       loadingThread = true;
       try {
         const result = await transport.thread(session, chat.phone, '', 100);
         if (disposed || !activeChat || phone10(activeChat.phone) !== phone10(chat.phone)) return;
+        setCachedThread(chat.phone, result.messages || []);
         renderThread(result);
         transport.markRead(session, 'educator', chat.phone).catch(() => {});
         if (bucket === 'unread') setTimeout(() => loadChats('unread', true), 250);
       } catch (error) {
-        overlay.showError((error && error.message) || 'Не удалось открыть чат.');
+        if (!cached) overlay.showError((error && error.message) || 'Не удалось открыть чат.');
       } finally { loadingThread = false; }
     }
 
