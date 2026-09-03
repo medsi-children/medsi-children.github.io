@@ -39,7 +39,8 @@
     const list = document.createElement('div'); list.className = 'overlay-thread__messages';
 
     const cached = getCachedThread(phone);
-    if (!cached) {
+    const cachedHasMessages = !!(cached && Array.isArray(cached.rows) && cached.rows.length);
+    if (!cachedHasMessages) {
       const loading = document.createElement('div'); loading.className = 'overlay-thread__loading'; loading.textContent = 'Загружаем сообщения…'; list.appendChild(loading);
     }
 
@@ -113,7 +114,7 @@
       requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
     }
 
-    if (cached) render(cached.rows);
+    if (cachedHasMessages) render(cached.rows);
 
     async function refresh(options) {
       const preserveScroll = options && options.preserveScroll;
@@ -127,7 +128,7 @@
         if (preserveScroll && oldBottomGap > 80) list.scrollTop = Math.max(0, list.scrollHeight - list.clientHeight - oldBottomGap);
         transport.markRead(session, 'parent', phone).catch(() => {});
       } catch (error) {
-        if (!cached && !messages.length) overlay.showError((error && error.message) || 'Не удалось загрузить чат.');
+        if (!cachedHasMessages && !messages.length) overlay.showError((error && error.message) || 'Не удалось загрузить чат.');
       }
     }
 
@@ -163,7 +164,7 @@
       if (!mobile && event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); composer.requestSubmit(); }
     });
 
-    refresh({preserveScroll:!!cached});
+    refresh({preserveScroll:cachedHasMessages});
     const timer = setInterval(() => { if (!disposed && overlay.getState()) refresh({preserveScroll:true}); }, 8000);
     return function cleanup() { disposed = true; clearInterval(timer); };
   }
