@@ -20,8 +20,8 @@
     #appFrame{position:fixed;inset:0;width:100vw;height:var(--shell-viewport-height);border:0;background:#f7fbfc;opacity:0;transition:opacity .35s ease}body.app-ready #appFrame{opacity:1}
   </style>
   <script src="/notify-client.js?v=20260710-direct-iframe"></script>
-  <script src="/chat-overlay/transport.js?v=1"></script>
-  <script src="/chat-overlay/educator-chat.js?v=1"></script>
+  <script src="/chat-overlay/transport.js?v=2"></script>
+  <script src="/chat-overlay/educator-chat.js?v=2"></script>
   <script src="/chat-overlay/overlay-core.js?v=3"></script>
 </head>
 <body>
@@ -53,6 +53,17 @@
     function helloOverlay(){if(frame.contentWindow)frame.contentWindow.postMessage({type:'medsi:chat-overlay',action:'hello'},'*')}
 
     syncViewport();requestAnimationFrame(syncViewport);setTimeout(syncViewport,120);window.addEventListener('orientationchange',()=>setTimeout(syncViewport,120));
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState!=='visible')return;
+      syncViewport();
+      replySession(frame.contentWindow);
+      helloOverlay();
+      setTimeout(helloOverlay,250);
+    });
+    window.addEventListener('pageshow',()=>{
+      replySession(frame.contentWindow);
+      helloOverlay();
+    });
     window.addEventListener('message',event=>{
       const data=event.data||{};if(!allowed(event.origin))return;
       if(data.type===UI_MESSAGE_TYPE&&(data.action==='ready'||data.action==='auth')){reveal();return}
