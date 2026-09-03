@@ -23,6 +23,7 @@
   </style>
   <script src="/notify-client.js?v=20260830-lower-panel"></script>
   <script src="/chat-overlay/transport.js?v=2"></script>
+  <script src="/chat-overlay/preload.js?v=1"></script>
   <script src="/chat-overlay/parent-chat.js?v=3"></script>
   <script src="/chat-overlay/overlay-core.js?v=3"></script>
 </head>
@@ -69,6 +70,10 @@
     window.addEventListener('message',event=>{
       const data=event.data||{};
       if(!allowed(event.origin))return;
+      if(data.type==='medsi:chat-overlay'&&data.action==='preload'&&data.role==='parent'){
+        if(window.MedsiOverlayPreload)MedsiOverlayPreload.parent(data);
+        return;
+      }
       if(data.type==='medsi:parent-screen'){if(window.MedsiPush)MedsiPush.setPanelVisible(data.screen==='screenChoose');return}
       if(data.type!==SESSION_MESSAGE_TYPE)return;
       if(data.action==='save')savePhone(data.phone);
