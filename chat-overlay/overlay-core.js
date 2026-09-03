@@ -20,6 +20,7 @@
     const opts = options || {};
     const frame = document.getElementById(opts.frameId || 'appFrame');
     let state = null;
+    let refreshTimer = null;
 
     const root = makeElement('section', 'medsi-chat-overlay hidden');
     root.id = opts.overlayId || 'medsiChatOverlay';
@@ -74,34 +75,72 @@
       error.classList.add('hidden');
     }
 
+    function clearRefreshTimer() {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+
+    function requestSessionRefresh() {
+      if (!state || !frame || !frame.contentWindow) return;
+      frame.contentWindow.postMessage({
+        type: MESSAGE_TYPE,
+        action: 'refresh-session',
+        role: state.role || '',
+        phone: state.phone || ''
+      }, '*');
+    }
+
+    function scheduleSessionRefresh() {
+      clearRefreshTimer();
+      if (!state || !state.session) return;
+      const expiresAt = Number(state.session.expiresAt || 0);
+      if (!expiresAt) return;
+      const delay = Math.max(5000, expiresAt - Date.now() - 60000);
+      refreshTimer = setTimeout(requestSessionRefresh, delay);
+    }
+
     function close() {
+      clearRefreshTimer();
       setVisible(false);
       state = null;
       clearError();
       body.replaceChildren(status);
-      if (frame && frame.contentWindow) {
-        frame.contentWindow.postMessage({ type: MESSAGE_TYPE, action: 'closed' }, '*');
-      }
+      if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type: MESSAGE_TYPE, action: 'closed' }, '*');
       if (typeof opts.onClose === 'function') opts.onClose();
     }
 
     function open(payload) {
       state = payload || {};
       clearError();
-      title.textContent = state.role === 'educator'
-        ? 'Чат с родителями'
-        : 'Чат с воспитателями и психологами';
+      title.textContent = state.role === 'educator' ? 'Чат с родителями' : 'Чат с воспитателями и психологами';
       subtitle.textContent = [state.parentName, state.childName].filter(Boolean).join(' · ');
       statusTitle.textContent = 'Подключаем чат…';
       statusText.textContent = 'Загружаем сообщения из Cloudflare D1.';
       setVisible(true);
+      scheduleSessionRefresh();
       if (typeof opts.onOpen === 'function') opts.onOpen(state, api);
     }
 
     function handleMessage(event) {
       if (!allowedAppsScriptOrigin(event.origin)) return;
       const data = event.data || {};
-      if (data.type !== MESSAGE_TYPE || data.action !== 'open') return;
+      if (data.type !== MESSAGE_TYPE) return;
+
+      if (data.action === 'session') {
+        if (!state) return;
+        if (!data.session || !data.session.token) {
+          showError(data.message || 'Не удалось обновить сессию чата.');
+          refreshTimer = setTimeout(requestSessionRefresh, 15000);
+          return;
+        }
+        if (!state.session) state.session = {};
+        Object.assign(state.session, data.session);
+        clearError();
+        scheduleSessionRefresh();
+        return;
+      }
+
+      if (data.action !== 'open') return;
       if (!data.role || !data.session || !data.session.token) {
         state = null;
         title.textContent = data.role === 'educator' ? 'Чат с родителями' : 'Чат';
@@ -126,6 +165,7 @@
       close,
       showError,
       clearError,
+      requestSessionRefresh,
       getState: function () { return state; },
       messageType: MESSAGE_TYPE
     };
