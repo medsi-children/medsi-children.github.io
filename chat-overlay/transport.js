@@ -1,5 +1,6 @@
 (function () {
   const BASE_URL = 'https://medsi-chat-worker.medsi-children.workers.dev';
+  const TEST_UPLOAD_URL = 'https://medsi-chat-upload-test.medsi-children.workers.dev/chat-upload';
 
   function requireSession(session) {
     if (!session || !session.token) throw new Error('Нет активной сессии чата.');
@@ -100,14 +101,21 @@
     });
   }
 
-  async function upload(session, phone, file) {
-    const auth = requireSession(session);
+  function makeUploadId() {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID();
+    }
+    return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + '-' + Math.random().toString(36).slice(2);
+  }
+
+  async function uploadAttempt(auth, phone, file, uploadId) {
     let response;
     try {
-      response = await fetch(BASE_URL + '/lab/upload', {
+      response = await fetch(TEST_UPLOAD_URL, {
         method: 'POST',
         body: file,
         headers: {
+          'X-Medsi-Upload-Id': uploadId,
           'X-Medsi-Chat-Session': auth.token,
           'X-Medsi-Phone': String(phone || ''),
           'X-File-Name': String((file && file.name) || 'attachment'),
@@ -115,11 +123,39 @@
         }
       });
     } catch (error) {
-      throw new Error((error && error.message) || 'Не удалось загрузить файл.');
+      const wrapped = new Error((error && error.message) || 'Не удалось загрузить файл.');
+      wrapped.code = 'NETWORK';
+      throw wrapped;
     }
-    const payload = await response.json();
-    if (!response.ok || !payload.ok) throw new Error(payload.message || 'Не удалось загрузить файл.');
+
+    let payload;
+    try { payload = await response.json(); }
+    catch (_) {
+      const error = new Error('Сервер загрузки вернул некорректный ответ.');
+      error.code = 'BAD_RESPONSE';
+      throw error;
+    }
+
+    if (!response.ok || !payload || !payload.ok) {
+      const error = new Error((payload && payload.message) || 'Не удалось загрузить файл.');
+      error.code = 'HTTP-' + response.status;
+      throw error;
+    }
+
     return { ...payload, url: BASE_URL + String(payload.url || '') };
+  }
+
+  async function upload(session, phone, file) {
+    const auth = requireSession(session);
+    const uploadId = makeUploadId();
+
+    try {
+      return await uploadAttempt(auth, phone, file, uploadId);
+    } catch (error) {
+      if (!error || error.code !== 'NETWORK') throw error;
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return uploadAttempt(auth, phone, file, uploadId);
+    }
   }
 
   window.MedsiOverlayTransport = {
