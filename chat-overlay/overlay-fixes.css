@@ -53,6 +53,18 @@
 .educator-exact-clone #screenChats.hidden,
 .educator-exact-clone #screenChatThread.hidden{display:none !important;}
 
+/* Educator bubbles: keep the timestamp comfortable without making short messages look huge. */
+.educator-exact-clone .chat-box .msg{
+  width:fit-content;
+  min-width:150px;
+  max-width:85%;
+}
+.educator-exact-clone .chat-box .msg-time{
+  white-space:nowrap !important;
+  word-break:normal !important;
+  overflow-wrap:normal !important;
+}
+
 /* Match the original compact "Open read chats" control: no divider and no full-width slab. */
 .educator-exact-clone #chatList > div[style*="border-top"]{
   border-top:0 !important;
@@ -73,6 +85,7 @@
 }
 
 @media (max-width:560px){
+  .educator-exact-clone .chat-box .msg{min-width:145px;}
   .educator-exact-clone #chatList > div[style*="border-top"] > .btn{
     width:auto !important;
     max-width:calc(100% - 24px) !important;
