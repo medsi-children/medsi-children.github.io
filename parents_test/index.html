@@ -10,7 +10,7 @@
   <title>Медси Бот — тест чата</title>
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="/chat-overlay/overlay.css?v=2">
+  <link rel="stylesheet" href="/chat-overlay/overlay.css?v=3">
   <style>
     :root{--shell-viewport-height:100vh}
     @supports(height:100dvh){:root{--shell-viewport-height:100dvh}}
@@ -23,8 +23,8 @@
   </style>
   <script src="/notify-client.js?v=20260830-lower-panel"></script>
   <script src="/chat-overlay/transport.js?v=1"></script>
-  <script src="/chat-overlay/parent-chat.js?v=1"></script>
-  <script src="/chat-overlay/overlay-core.js?v=1"></script>
+  <script src="/chat-overlay/parent-chat.js?v=2"></script>
+  <script src="/chat-overlay/overlay-core.js?v=3"></script>
 </head>
 <body>
   <div id="loader">
@@ -49,8 +49,9 @@
     function allowed(origin){if(origin==='null'||origin==='https://script.google.com'||origin==='https://script.googleusercontent.com')return true;try{return /(^|\.)googleusercontent\.com$/.test(new URL(origin).hostname)}catch(_){return false}}
     function replyPhone(target){const phone=savedPhone();if(phone&&target)target.postMessage({type:SESSION_MESSAGE_TYPE,action:'restore',phone},'*')}
     function syncViewport(){const v=window.visualViewport;const h=Math.round(v?v.height:window.innerHeight);if(h>0)document.documentElement.style.setProperty('--shell-viewport-height',h+'px')}
-    function buildUrl(){const phone=savedPhone();let url=APP_BASE_URL+'?ui=overlay-test-1&shellMode=parents_test';if(phone)url+='#restorePhone='+encodeURIComponent(phone);return url}
+    function buildUrl(){const phone=savedPhone();let url=APP_BASE_URL+'?ui=overlay-test-2&shellMode=parents_test';if(phone)url+='#restorePhone='+encodeURIComponent(phone);return url}
     function reveal(){document.body.classList.add('app-ready');loader.classList.add('hidden');setTimeout(()=>loader.style.display='none',360)}
+    function helloOverlay(){if(frame.contentWindow)frame.contentWindow.postMessage({type:'medsi:chat-overlay',action:'hello'},'*')}
 
     syncViewport();
     window.addEventListener('orientationchange',()=>setTimeout(syncViewport,120));
@@ -68,15 +69,11 @@
       frameId:'appFrame',
       onOpen:(state,api)=>{
         if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}
-        if(state.role==='parent'&&window.MedsiParentOverlayChat){
-          overlayCleanup=MedsiParentOverlayChat.mount(api,state)||null;
-        }
+        if(state.role==='parent'&&window.MedsiParentOverlayChat){overlayCleanup=MedsiParentOverlayChat.mount(api,state)||null}
       },
-      onClose:()=>{
-        if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}
-      }
+      onClose:()=>{if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}}
     });
-    frame.addEventListener('load',()=>{syncViewport();reveal();replyPhone(frame.contentWindow);if(window.MedsiPush)MedsiPush.sendCurrentSubscription().catch(()=>{})});
+    frame.addEventListener('load',()=>{syncViewport();reveal();replyPhone(frame.contentWindow);helloOverlay();setTimeout(helloOverlay,350);if(window.MedsiPush)MedsiPush.sendCurrentSubscription().catch(()=>{})});
     frame.src=buildUrl();
 
     if(window.MedsiPush){
