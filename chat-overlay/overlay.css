@@ -1,0 +1,132 @@
+:root {
+  --medsi-chat-overlay-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  :root { --medsi-chat-overlay-height: 100dvh; }
+}
+
+.medsi-chat-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: var(--medsi-chat-overlay-height);
+  background:
+    radial-gradient(circle at top left, rgba(15,199,206,.10), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(15,199,206,.06), transparent 30%),
+    #f7fbfc;
+  color: #123f47;
+  font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity .22s ease, transform .22s ease, visibility 0s linear 0s;
+}
+
+.medsi-chat-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity .22s ease, transform .22s ease, visibility 0s linear .22s;
+}
+
+.medsi-chat-overlay__header {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 44px minmax(0,1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: calc(8px + env(safe-area-inset-top)) 10px 8px;
+  background: rgba(255,255,255,.91);
+  border-bottom: 1px solid rgba(14,104,112,.10);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.medsi-chat-overlay__back,
+.medsi-chat-overlay__header-spacer {
+  width: 44px;
+  height: 44px;
+}
+
+.medsi-chat-overlay__back {
+  appearance: none;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(15,199,206,.10);
+  color: #0d8f98;
+  font: 800 25px/1 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  cursor: pointer;
+}
+
+.medsi-chat-overlay__title-wrap {
+  min-width: 0;
+  text-align: center;
+}
+
+.medsi-chat-overlay__title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #11424a;
+}
+
+.medsi-chat-overlay__subtitle {
+  margin: 3px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.2;
+  color: #64868b;
+}
+
+.medsi-chat-overlay__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.medsi-chat-overlay__status {
+  margin: auto;
+  max-width: min(360px, calc(100vw - 40px));
+  padding: 20px;
+  text-align: center;
+}
+
+.medsi-chat-overlay__status-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #11424a;
+}
+
+.medsi-chat-overlay__status-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #62838a;
+}
+
+.medsi-chat-overlay__error {
+  margin: 12px 16px 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #fff0f0;
+  color: #a63f45;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.medsi-chat-overlay__error.hidden { display: none; }
