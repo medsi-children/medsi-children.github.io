@@ -1,264 +1,64 @@
-(function () {
-  const listCache = new Map();
-  const threadCache = new Map();
+(function(){
+  const REACTIONS=['❤️','👍','👌','🙏','🥰','😁'];
+  const QUICK_REPLIES=['Хорошо, спасибо','Понял(а), спасибо','Спасибо за информацию','Хорошо, передам'];
+  const listCache=new Map(),threadCache=new Map();
+  const text=v=>String(v==null?'':v),phone10=v=>String(v||'').replace(/\D+/g,'').slice(-10),displayPhone=v=>{const p=phone10(v);return p?'8'+p:''};
+  const getCachedThread=p=>threadCache.get(phone10(p))||null,setCachedThread=(p,r)=>threadCache.set(phone10(p),{rows:Array.isArray(r)?r:[],at:Date.now()});
+  function formatTime(v){const d=new Date(Number(v));return Number.isNaN(d.getTime())?'':d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}
+  function preview(c){if(!c)return'';if(c.lastType==='image')return c.lastText||'Фотография';if(c.lastType==='video')return c.lastText||'Видео';return c.lastText||'Нет сообщений'}
+  function mediaUrl(m){const id=String(m&&m.fileId||'');if(!id)return'';if(id.startsWith('kv:')||id.startsWith('r2:'))return window.MedsiOverlayTransport.baseUrl+'/media/'+encodeURIComponent(id.slice(3));return'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1200'}
+  function replyLabel(r){if(!r)return'';if(r.text)return String(r.text).slice(0,120);if(r.type==='image')return'Фотография';if(r.type==='video')return'Видео';return'Сообщение'}
+  function initials(c){const s=String(c&&c.childName||c&&c.parentName||'Р').trim();return s.split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase()||'Р'}
 
-  function text(value) { return String(value == null ? '' : value); }
-  function phone10(value) { return String(value || '').replace(/\D+/g, '').slice(-10); }
-  function displayPhone(value) { const phone = phone10(value); return phone ? '8' + phone : ''; }
-  function listKey(bucket) { return String(bucket || 'unread'); }
-  function getCachedList(bucket) { return listCache.get(listKey(bucket)) || null; }
-  function setCachedList(bucket, rows) { listCache.set(listKey(bucket), { rows: Array.isArray(rows) ? rows : [], at: Date.now() }); }
-  function getCachedThread(phone) { return threadCache.get(phone10(phone)) || null; }
-  function setCachedThread(phone, rows) { threadCache.set(phone10(phone), { rows: Array.isArray(rows) ? rows : [], at: Date.now() }); }
-
-  function formatTime(value) {
-    const date = new Date(Number(value));
-    if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
-  }
-  function preview(chat) {
-    if (!chat) return '';
-    if (chat.lastType === 'image') return chat.lastText || 'Фотография';
-    if (chat.lastType === 'video') return chat.lastText || 'Видео';
-    return chat.lastText || 'Нет сообщений';
-  }
-  function mediaUrl(message) {
-    const fileId = String(message && message.fileId || '');
-    if (!fileId) return '';
-    if (fileId.startsWith('kv:') || fileId.startsWith('r2:')) {
-      return window.MedsiOverlayTransport.baseUrl + '/media/' + encodeURIComponent(fileId.slice(3));
-    }
-    return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fileId) + '&sz=w1200';
-  }
-  function messageNode(message) {
-    const own = message && message.side === 'educator';
-    const item = document.createElement('article');
-    item.className = 'overlay-msg ' + (own ? 'overlay-msg--own' : 'overlay-msg--other');
-    item.dataset.messageKey = text(message && message.messageKey);
-    const bubble = document.createElement('div');
-    bubble.className = 'overlay-msg__bubble';
-    const url = mediaUrl(message);
-    if (url) {
-      const media = document.createElement(message.type === 'video' ? 'video' : 'img');
-      media.className = 'overlay-msg__media';
-      media.src = url;
-      if (message.type === 'video') media.controls = true;
-      bubble.appendChild(media);
-    }
-    if (message && message.text) {
-      const body = document.createElement('div');
-      body.className = 'overlay-msg__text';
-      body.textContent = text(message.text);
-      bubble.appendChild(body);
-    }
-    const meta = document.createElement('div');
-    meta.className = 'overlay-msg__meta';
-    meta.textContent = formatTime(message && message.timestamp);
-    bubble.appendChild(meta);
-    item.appendChild(bubble);
-    return item;
-  }
-
-  function mount(overlay, state) {
-    const transport = window.MedsiOverlayTransport;
-    const session = state && state.session;
-    if (!overlay || !transport || !session || !session.token) {
-      if (overlay) overlay.showError('Не удалось получить сессию воспитательского чата.');
-      return;
-    }
-
+  function mount(overlay,state){
+    const transport=window.MedsiOverlayTransport,session=state&&state.session;
+    if(!overlay||!transport||!session||!session.token){if(overlay)overlay.showError('Не удалось получить сессию воспитательского чата.');return}
     overlay.body.replaceChildren();
-    const shell = document.createElement('div'); shell.className = 'overlay-educator';
-    const sidebar = document.createElement('section'); sidebar.className = 'overlay-chat-list';
-    const tabs = document.createElement('div'); tabs.className = 'overlay-chat-list__tabs';
-    const unreadBtn = document.createElement('button'); unreadBtn.type = 'button'; unreadBtn.textContent = 'Непрочитанные'; unreadBtn.className = 'active';
-    const readBtn = document.createElement('button'); readBtn.type = 'button'; readBtn.textContent = 'Прочитанные';
-    tabs.append(unreadBtn, readBtn);
-    const list = document.createElement('div'); list.className = 'overlay-chat-list__items';
-    sidebar.append(tabs, list);
+    const shell=document.createElement('div');shell.className='overlay-educator';
+    const sidebar=document.createElement('section');sidebar.className='overlay-chat-list';
+    const head=document.createElement('div');head.className='overlay-chat-list__head';head.innerHTML='<strong>Диалоги</strong><span>Непрочитанные подсвечены</span>';
+    const list=document.createElement('div');list.className='overlay-chat-list__items';sidebar.append(head,list);
+    const panel=document.createElement('section');panel.className='overlay-educator-thread empty';
+    const header=document.createElement('div');header.className='overlay-educator-thread__header';
+    const back=document.createElement('button');back.type='button';back.className='overlay-educator-thread__back';back.textContent='‹';
+    const names=document.createElement('div'),title=document.createElement('strong'),subtitle=document.createElement('span');names.append(title,subtitle);header.append(back,names);
+    const messages=document.createElement('div');messages.className='overlay-thread__messages';const empty=document.createElement('div');empty.className='overlay-thread__empty';empty.textContent='Выберите чат с родителем.';messages.appendChild(empty);
+    const replyBar=document.createElement('div');replyBar.className='overlay-reply-bar hidden';const replyText=document.createElement('span');const replyClose=document.createElement('button');replyClose.type='button';replyClose.textContent='×';replyBar.append(replyText,replyClose);
+    const editBar=document.createElement('div');editBar.className='overlay-edit-bar hidden';const editText=document.createElement('span');const editClose=document.createElement('button');editClose.type='button';editClose.textContent='×';editBar.append(editText,editClose);
+    const uploadPreview=document.createElement('div');uploadPreview.className='overlay-upload-preview hidden';const uploadThumb=document.createElement('img');uploadThumb.className='overlay-upload-preview__thumb';const uploadInfo=document.createElement('div');uploadInfo.className='overlay-upload-preview__info';const uploadName=document.createElement('span');uploadName.className='overlay-upload-preview__name';const uploadKind=document.createElement('span');uploadKind.className='overlay-upload-preview__kind';uploadInfo.append(uploadName,uploadKind);const uploadClose=document.createElement('button');uploadClose.type='button';uploadClose.textContent='×';uploadPreview.append(uploadThumb,uploadInfo,uploadClose);
+    const composer=document.createElement('form');composer.className='overlay-composer hidden';
+    const attach=document.createElement('button');attach.type='button';attach.className='overlay-composer__attach';attach.textContent='＋';
+    const quick=document.createElement('button');quick.type='button';quick.className='overlay-composer__quick';quick.textContent='⚡';
+    const fileInput=document.createElement('input');fileInput.type='file';fileInput.accept='image/*,video/*';fileInput.hidden=true;
+    const input=document.createElement('textarea');input.className='overlay-composer__input';input.rows=1;input.maxLength=4000;input.placeholder='Сообщение…';
+    const send=document.createElement('button');send.className='overlay-composer__send';send.type='submit';send.textContent='➤';composer.append(attach,quick,fileInput,input,send);
+    const quickMenu=document.createElement('div');quickMenu.className='overlay-quick-menu hidden';QUICK_REPLIES.forEach(v=>{const b=document.createElement('button');b.type='button';b.textContent=v;b.onclick=()=>{input.value=v;quickMenu.classList.add('hidden');input.focus()};quickMenu.appendChild(b)});
+    panel.append(header,messages,replyBar,editBar,uploadPreview,composer,quickMenu);shell.append(sidebar,panel);overlay.body.appendChild(shell);
+    const shade=document.createElement('div');shade.className='overlay-context-shade hidden';const menu=document.createElement('div');menu.className='overlay-context-menu hidden';document.body.append(shade,menu);
 
-    const threadPanel = document.createElement('section'); threadPanel.className = 'overlay-educator-thread empty';
-    const threadHeader = document.createElement('div'); threadHeader.className = 'overlay-educator-thread__header';
-    const mobileBack = document.createElement('button'); mobileBack.type = 'button'; mobileBack.className = 'overlay-educator-thread__back'; mobileBack.textContent = '‹';
-    const threadNames = document.createElement('div');
-    const threadTitle = document.createElement('strong');
-    const threadSubtitle = document.createElement('span');
-    threadNames.append(threadTitle, threadSubtitle);
-    threadHeader.append(mobileBack, threadNames);
-    const messages = document.createElement('div'); messages.className = 'overlay-thread__messages';
-    const empty = document.createElement('div'); empty.className = 'overlay-thread__empty'; empty.textContent = 'Выберите чат с родителем.';
-    messages.appendChild(empty);
-    const composer = document.createElement('form'); composer.className = 'overlay-composer hidden';
-    const input = document.createElement('textarea'); input.className = 'overlay-composer__input'; input.rows = 1; input.maxLength = 4000; input.placeholder = 'Сообщение…';
-    const send = document.createElement('button'); send.className = 'overlay-composer__send'; send.type = 'submit'; send.textContent = '➤'; send.setAttribute('aria-label','Отправить');
-    composer.append(input, send);
-    threadPanel.append(threadHeader, messages, composer);
-    shell.append(sidebar, threadPanel);
-    overlay.body.appendChild(shell);
+    let chats=[],activeChat=null,disposed=false,sending=false,replyTo=null,editing=null,pendingFile=null,pendingPreviewUrl='';
+    const closeMenu=()=>{shade.classList.add('hidden');menu.classList.add('hidden');menu.replaceChildren()};shade.onclick=closeMenu;
+    function menuAction(icon,label,fn,danger){const b=document.createElement('button');b.type='button';b.className='overlay-context-action'+(danger?' danger':'');const i=document.createElement('span');i.className='overlay-context-icon';i.textContent=icon;const t=document.createElement('span');t.textContent=label;b.append(i,t);b.onclick=()=>{closeMenu();fn()};return b}
+    function setReply(m){replyTo=m||null;replyBar.classList.toggle('hidden',!replyTo);replyText.textContent=replyTo?'Ответ на сообщение: '+replyLabel(replyTo):'';if(replyTo){editing=null;editBar.classList.add('hidden');input.focus()}}
+    function setEditing(m){editing=m||null;editBar.classList.toggle('hidden',!editing);editText.textContent=editing?'Редактирование сообщения':'';if(editing){replyTo=null;replyBar.classList.add('hidden');input.value=String(editing.text||'');input.focus();input.setSelectionRange(input.value.length,input.value.length)}}
+    function clearPendingFile(){pendingFile=null;uploadPreview.classList.add('hidden');if(pendingPreviewUrl){URL.revokeObjectURL(pendingPreviewUrl);pendingPreviewUrl=''}uploadThumb.removeAttribute('src')}
+    replyClose.onclick=()=>setReply(null);editClose.onclick=()=>{setEditing(null);input.value=''};uploadClose.onclick=clearPendingFile;
 
-    let bucket = 'unread';
-    let chats = [];
-    let activeChat = null;
-    let disposed = false;
-    let loadingThread = false;
-    let sending = false;
+    function openMenu(m,bubble,e){if(!m||!m.messageKey||String(m.messageKey).startsWith('pending-'))return;e&&e.preventDefault();e&&e.stopPropagation();menu.replaceChildren();const rs=document.createElement('div');rs.className='overlay-context-reactions';REACTIONS.forEach(r=>{const b=document.createElement('button');b.type='button';b.textContent=r;b.onclick=async()=>{closeMenu();try{await transport.react(session,m.messageKey,r);await refreshThread(true)}catch(err){overlay.showError(err.message)}};rs.appendChild(b)});menu.appendChild(rs);const a=document.createElement('div');a.className='overlay-context-actions';a.appendChild(menuAction('↩','Ответить',()=>setReply(m)));const own=m.side==='educator';if(own&&m.type==='text')a.appendChild(menuAction('✎','Редактировать',()=>setEditing(m)));if(own)a.appendChild(menuAction('⌫','Удалить',async()=>{if(!confirm('Удалить это сообщение?'))return;try{await transport.remove(session,'educator',m.messageKey);await refreshThread(true)}catch(err){overlay.showError(err.message)}},true));menu.appendChild(a);shade.classList.remove('hidden');menu.classList.remove('hidden');if(matchMedia('(max-width:720px)').matches)return;const r=bubble.getBoundingClientRect();const w=290;menu.style.left=Math.min(innerWidth-w-12,Math.max(12,r.left+(r.width-w)/2))+'px';let top=r.bottom+8;if(top+220>innerHeight)top=Math.max(12,r.top-220);menu.style.top=top+'px'}
 
-    function setSending(value) {
-      sending = !!value;
-      input.disabled = sending;
-      send.disabled = sending;
-      if (!sending) input.focus();
-    }
+    function messageNode(m){const own=m&&m.side==='educator';const item=document.createElement('article');item.className='overlay-msg '+(own?'overlay-msg--own':'overlay-msg--other');const bubble=document.createElement('div');bubble.className='overlay-msg__bubble';if(!own){const s=document.createElement('div');s.className='overlay-msg__sender';s.textContent='Родитель '+(activeChat&&activeChat.parentName||'');bubble.appendChild(s)}if(m&&m.reply){const q=document.createElement('div');q.className='overlay-msg__reply';q.textContent=replyLabel(m.reply);bubble.appendChild(q)}const url=mediaUrl(m);if(url){const wrap=document.createElement('div');wrap.className='overlay-msg__media-wrap';const media=document.createElement(m.type==='video'?'video':'img');media.className='overlay-msg__media';media.src=url;if(m.type==='video'){media.controls=true;media.preload='metadata';const badge=document.createElement('span');badge.className='overlay-msg__video-badge';badge.textContent='▶ Видео';wrap.append(media,badge)}else wrap.appendChild(media);bubble.appendChild(wrap)}if(m&&m.text){const body=document.createElement('div');body.className='overlay-msg__text';body.textContent=text(m.text);bubble.appendChild(body)}const meta=document.createElement('div');meta.className='overlay-msg__meta';meta.textContent=[m&&m.reaction||'',formatTime(m&&m.timestamp),m&&m.editedAt?'изм.':''].filter(Boolean).join(' · ');bubble.appendChild(meta);bubble.onclick=e=>openMenu(m,bubble,e);bubble.oncontextmenu=e=>openMenu(m,bubble,e);item.appendChild(bubble);return item}
+    function renderThread(rows,stick=true){messages.replaceChildren();const arr=Array.isArray(rows)?rows:[];if(!arr.length){const n=document.createElement('div');n.className='overlay-thread__empty';n.textContent='Здесь пока нет сообщений.';messages.appendChild(n)}else arr.forEach(r=>messages.appendChild(messageNode(r)));if(stick)requestAnimationFrame(()=>messages.scrollTop=messages.scrollHeight)}
 
-    function showListLoading(label) {
-      list.replaceChildren();
-      const node = document.createElement('div'); node.className = 'overlay-chat-list__loading'; node.textContent = label || 'Загружаем чаты…'; list.appendChild(node);
-    }
-    function renderList() {
-      list.replaceChildren();
-      if (!chats.length) {
-        const node = document.createElement('div'); node.className = 'overlay-chat-list__empty'; node.textContent = bucket === 'read' ? 'Прочитанных чатов пока нет.' : 'Непрочитанных чатов нет.'; list.appendChild(node); return;
-      }
-      chats.forEach(chat => {
-        const card = document.createElement('button');
-        card.type = 'button'; card.className = 'overlay-chat-card';
-        if (activeChat && phone10(activeChat.phone) === phone10(chat.phone)) card.classList.add('active');
-        const name = document.createElement('strong'); name.textContent = chat.childName || chat.parentName || displayPhone(chat.phone) || 'Родитель';
-        const parent = document.createElement('span'); parent.className = 'overlay-chat-card__parent'; parent.textContent = chat.parentName || displayPhone(chat.phone) || '';
-        const last = document.createElement('span'); last.className = 'overlay-chat-card__preview'; last.textContent = preview(chat);
-        card.append(name, parent, last);
-        card.addEventListener('click', () => openChat(chat));
-        list.appendChild(card);
-      });
-    }
-    async function loadChats(nextBucket, silent) {
-      bucket = nextBucket || bucket;
-      unreadBtn.classList.toggle('active', bucket === 'unread');
-      readBtn.classList.toggle('active', bucket === 'read');
-
-      const cached = getCachedList(bucket);
-      if (cached && !silent) {
-        chats = cached.rows;
-        renderList();
-      } else if (!silent) {
-        showListLoading();
-      }
-
-      try {
-        const result = await transport.chats(session, bucket);
-        if (disposed) return;
-        chats = Array.isArray(result.chats) ? result.chats : [];
-        setCachedList(bucket, chats);
-        renderList();
-      } catch (error) {
-        if (!cached && !silent) overlay.showError((error && error.message) || 'Не удалось загрузить список чатов.');
-      }
-    }
-    function renderThread(result) {
-      messages.replaceChildren();
-      const rows = Array.isArray(result && result.messages) ? result.messages : [];
-      if (!rows.length) {
-        const node = document.createElement('div'); node.className = 'overlay-thread__empty'; node.textContent = 'Здесь пока нет сообщений.'; messages.appendChild(node);
-      } else rows.forEach(row => messages.appendChild(messageNode(row)));
-      requestAnimationFrame(() => { messages.scrollTop = messages.scrollHeight; });
-    }
-    async function openChat(chat, silent) {
-      if (!chat || !chat.phone || loadingThread) return;
-      activeChat = chat;
-      renderList();
-      threadPanel.classList.remove('empty');
-      shell.classList.add('thread-open');
-      threadTitle.textContent = chat.childName || 'Чат с родителем';
-      threadSubtitle.textContent = [chat.parentName, displayPhone(chat.phone)].filter(Boolean).join(' · ');
-      composer.classList.remove('hidden');
-
-      const cached = getCachedThread(chat.phone);
-      if (cached && !silent) renderThread({messages:cached.rows});
-      else if (!silent) {
-        messages.replaceChildren(); const node = document.createElement('div'); node.className = 'overlay-thread__loading'; node.textContent = 'Загружаем сообщения…'; messages.appendChild(node);
-      }
-
-      loadingThread = true;
-      try {
-        const result = await transport.thread(session, chat.phone, '', 100);
-        if (disposed || !activeChat || phone10(activeChat.phone) !== phone10(chat.phone)) return;
-        setCachedThread(chat.phone, result.messages || []);
-        renderThread(result);
-        transport.markRead(session, 'educator', chat.phone).catch(() => {});
-        if (bucket === 'unread') setTimeout(() => loadChats('unread', true), 250);
-      } catch (error) {
-        if (!cached) overlay.showError((error && error.message) || 'Не удалось открыть чат.');
-      } finally { loadingThread = false; }
-    }
-
-    function refreshThreadInBackground(chat) {
-      if (!chat || !chat.phone) return;
-      const targetPhone = chat.phone;
-      transport.thread(session, targetPhone, '', 100)
-        .then(result => {
-          if (disposed) return;
-          const rows = Array.isArray(result && result.messages) ? result.messages : [];
-          setCachedThread(targetPhone, rows);
-          if (activeChat && phone10(activeChat.phone) === phone10(targetPhone)) renderThread({ messages: rows });
-        })
-        .catch(() => {});
-    }
-
-    composer.addEventListener('submit', async event => {
-      event.preventDefault();
-      if (!activeChat || sending) return;
-      const value = String(input.value || '').trim();
-      if (!value) return;
-
-      const chatAtSend = activeChat;
-      const cachedBefore = getCachedThread(chatAtSend.phone);
-      const rowsBefore = cachedBefore && Array.isArray(cachedBefore.rows) ? cachedBefore.rows.slice() : [];
-      const optimistic = {
-        side:'educator',
-        type:'text',
-        text:value,
-        timestamp:Date.now(),
-        messageKey:'pending-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
-      };
-
-      setCachedThread(chatAtSend.phone, rowsBefore.concat(optimistic));
-      renderThread({ messages: rowsBefore.concat(optimistic) });
-      input.value = '';
-      setSending(true);
-
-      try {
-        await transport.sendMessage(session, 'educator', chatAtSend.phone, { type:'text', text:value });
-
-        // The server has now confirmed the write. From this point it is safe
-        // to send another message or leave the app. Everything below is UI refresh only.
-        setSending(false);
-        refreshThreadInBackground(chatAtSend);
-        loadChats(bucket, true);
-      } catch (error) {
-        setCachedThread(chatAtSend.phone, rowsBefore);
-        if (activeChat && phone10(activeChat.phone) === phone10(chatAtSend.phone)) renderThread({ messages: rowsBefore });
-        input.value = value;
-        overlay.showError((error && error.message) || 'Не удалось отправить сообщение.');
-        setSending(false);
-      }
-    });
-    input.addEventListener('keydown', event => {
-      const mobile = window.matchMedia('(max-width:560px),(hover:none) and (pointer:coarse)').matches;
-      if (!mobile && event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); composer.requestSubmit(); }
-    });
-    mobileBack.addEventListener('click', () => { shell.classList.remove('thread-open'); });
-    unreadBtn.addEventListener('click', () => loadChats('unread'));
-    readBtn.addEventListener('click', () => loadChats('read'));
-
-    loadChats('unread');
-    const timer = setInterval(() => {
-      if (disposed || !overlay.getState()) return;
-      loadChats(bucket, true);
-      if (activeChat) openChat(activeChat, true);
-    }, 9000);
-
-    return function cleanup() { disposed = true; clearInterval(timer); };
+    function mergeChats(unread,read){const map=new Map();(read||[]).forEach(c=>map.set(phone10(c.phone),Object.assign({},c,{hasUnread:false})));(unread||[]).forEach(c=>map.set(phone10(c.phone),Object.assign({},map.get(phone10(c.phone))||{},c,{hasUnread:true})));return Array.from(map.values()).sort((a,b)=>Number(b.lastTimestamp||b.timestamp||0)-Number(a.lastTimestamp||a.timestamp||0))}
+    function renderList(){list.replaceChildren();if(!chats.length){const n=document.createElement('div');n.className='overlay-chat-list__empty';n.textContent='Чатов пока нет.';list.appendChild(n);return}chats.forEach(c=>{const card=document.createElement('button');card.type='button';card.className='overlay-chat-card'+(c.hasUnread?' unread':'')+(activeChat&&phone10(activeChat.phone)===phone10(c.phone)?' active':'');const av=document.createElement('span');av.className='overlay-chat-card__avatar';av.textContent=initials(c);const name=document.createElement('strong');name.textContent=c.childName||c.parentName||displayPhone(c.phone)||'Родитель';const time=document.createElement('span');time.className='overlay-chat-card__time';time.textContent=formatTime(c.lastTimestamp||c.timestamp);const bottom=document.createElement('div');bottom.className='overlay-chat-card__bottom';const parent=document.createElement('span');parent.className='overlay-chat-card__parent';parent.textContent=c.parentName||displayPhone(c.phone)||'';const prev=document.createElement('span');prev.className='overlay-chat-card__preview';prev.textContent=preview(c);bottom.append(parent,prev);card.append(av,name,time,bottom);if(c.hasUnread){const badge=document.createElement('span');badge.className='overlay-chat-card__badge';badge.textContent='●';card.appendChild(badge)}card.onclick=()=>openChat(c);list.appendChild(card)})}
+    async function loadChats(silent){if(!silent&&list.childElementCount===0){const n=document.createElement('div');n.className='overlay-chat-list__loading';n.textContent='Загружаем чаты…';list.appendChild(n)}try{const [u,r]=await Promise.all([transport.chats(session,'unread'),transport.chats(session,'read')]);if(disposed)return;chats=mergeChats(u.chats,r.chats);renderList()}catch(err){if(!silent)overlay.showError((err&&err.message)||'Не удалось загрузить список чатов.')}}
+    async function openChat(c,silent){if(!c||!c.phone)return;activeChat=c;renderList();panel.classList.remove('empty');shell.classList.add('thread-open');title.textContent=c.childName||'Чат с родителем';subtitle.textContent=c.parentName||displayPhone(c.phone)||'';composer.classList.remove('hidden');const cached=getCachedThread(c.phone);if(cached&&!silent)renderThread(cached.rows);else if(!silent){messages.replaceChildren();const n=document.createElement('div');n.className='overlay-thread__loading';n.textContent='Загружаем сообщения…';messages.appendChild(n)}try{const res=await transport.thread(session,c.phone,'',100);if(disposed||!activeChat||phone10(activeChat.phone)!==phone10(c.phone))return;setCachedThread(c.phone,res.messages||[]);renderThread(res.messages||[]);transport.markRead(session,'educator',c.phone).catch(()=>{});c.hasUnread=false;renderList()}catch(err){if(!cached)overlay.showError((err&&err.message)||'Не удалось открыть чат.')}}
+    async function refreshThread(preserve){if(!activeChat)return;const gap=messages.scrollHeight-messages.scrollTop-messages.clientHeight;try{const res=await transport.thread(session,activeChat.phone,'',100);if(disposed)return;setCachedThread(activeChat.phone,res.messages||[]);renderThread(res.messages||[],!preserve||gap<80);if(preserve&&gap>80)messages.scrollTop=Math.max(0,messages.scrollHeight-messages.clientHeight-gap)}catch(_){}}
+    function setSending(v){sending=!!v;input.disabled=sending;send.disabled=sending;attach.disabled=sending;quick.disabled=sending}
+    composer.onsubmit=async e=>{e.preventDefault();if(!activeChat||sending)return;const value=String(input.value||'').trim();if(!value&&!pendingFile)return;setSending(true);try{if(editing){await transport.edit(session,'educator',editing.messageKey,value);setEditing(null);input.value='';await refreshThread(false)}else if(pendingFile){const up=await transport.upload(session,activeChat.phone,pendingFile);await transport.sendMessage(session,'educator',activeChat.phone,{type:up.type||(pendingFile.type.startsWith('video/')?'video':'image'),text:value,fileId:up.fileId,replyToKey:replyTo&&replyTo.messageKey||''});input.value='';setReply(null);clearPendingFile();await refreshThread(false);loadChats(true)}else{const before=getCachedThread(activeChat.phone);const rows=before&&Array.isArray(before.rows)?before.rows.slice():[];const optimistic={side:'educator',type:'text',text:value,timestamp:Date.now(),messageKey:'pending-'+Date.now().toString(36)};setCachedThread(activeChat.phone,rows.concat(optimistic));renderThread(rows.concat(optimistic));input.value='';await transport.sendMessage(session,'educator',activeChat.phone,{type:'text',text:value,replyToKey:replyTo&&replyTo.messageKey||''});setReply(null);setSending(false);refreshThread(false);loadChats(true);return}}catch(err){overlay.showError((err&&err.message)||'Не удалось отправить сообщение.')}finally{setSending(false);input.focus()}};
+    attach.onclick=()=>{if(!sending)fileInput.click()};quick.onclick=()=>quickMenu.classList.toggle('hidden');fileInput.onchange=()=>{const file=fileInput.files&&fileInput.files[0];fileInput.value='';if(!file)return;clearPendingFile();pendingFile=file;pendingPreviewUrl=URL.createObjectURL(file);uploadThumb.src=pendingPreviewUrl;uploadName.textContent=file.name||'Вложение';uploadKind.textContent=file.type.startsWith('video/')?'Видео — будет отправлено с обложкой':'Фотография';uploadPreview.classList.remove('hidden')};input.onkeydown=e=>{const mobile=matchMedia('(max-width:560px),(hover:none) and (pointer:coarse)').matches;if(!mobile&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();composer.requestSubmit()}};back.onclick=()=>shell.classList.remove('thread-open');
+    loadChats(false);const timer=setInterval(()=>{if(disposed||!overlay.getState())return;loadChats(true);refreshThread(true)},9000);
+    return()=>{disposed=true;clearInterval(timer);closeMenu();clearPendingFile();shade.remove();menu.remove()}
   }
-
-  window.MedsiEducatorOverlayChat = { mount };
+  window.MedsiEducatorOverlayChat={mount};
 })();
