@@ -78,6 +78,7 @@
       setVisible(false);
       state = null;
       clearError();
+      body.replaceChildren(status);
       if (frame && frame.contentWindow) {
         frame.contentWindow.postMessage({ type: MESSAGE_TYPE, action: 'closed' }, '*');
       }
@@ -91,8 +92,8 @@
         ? 'Чат с родителями'
         : 'Чат с воспитателями и психологами';
       subtitle.textContent = [state.parentName, state.childName].filter(Boolean).join(' · ');
-      statusTitle.textContent = 'Тестовый GitHub-чат';
-      statusText.textContent = 'Связь с Apps Script установлена. Следующий этап — подключение сообщений из Cloudflare D1.';
+      statusTitle.textContent = 'Подключаем чат…';
+      statusText.textContent = 'Загружаем сообщения из Cloudflare D1.';
       setVisible(true);
       if (typeof opts.onOpen === 'function') opts.onOpen(state, api);
     }
@@ -100,15 +101,19 @@
     function handleMessage(event) {
       if (!allowedAppsScriptOrigin(event.origin)) return;
       const data = event.data || {};
-      if (data.type !== MESSAGE_TYPE) return;
-      if (data.action === 'open') {
-        if (!data.role || !data.session || !data.session.token) {
-          setVisible(true);
-          showError('Apps Script не передал безопасную D1-сессию.');
-          return;
-        }
-        open(data);
+      if (data.type !== MESSAGE_TYPE || data.action !== 'open') return;
+      if (!data.role || !data.session || !data.session.token) {
+        state = null;
+        title.textContent = data.role === 'educator' ? 'Чат с родителями' : 'Чат';
+        subtitle.textContent = '';
+        body.replaceChildren(status);
+        statusTitle.textContent = 'Чат не открылся';
+        statusText.textContent = 'Не удалось получить безопасную сессию.';
+        setVisible(true);
+        showError(data.message || 'Apps Script не передал безопасную D1-сессию.');
+        return;
       }
+      open(data);
     }
 
     back.addEventListener('click', close);
