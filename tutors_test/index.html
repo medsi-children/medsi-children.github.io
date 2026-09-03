@@ -10,7 +10,7 @@
   <title>Медси Бот — тест чата воспитателей</title>
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
-  <link rel="stylesheet" href="/chat-overlay/overlay.css?v=5">
+  <link rel="stylesheet" href="/chat-overlay/overlay.css?v=6">
   <style>
     :root{--shell-viewport-height:100vh}@supports(height:100dvh){:root{--shell-viewport-height:100dvh}}
     html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#f7fbfc;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
@@ -44,9 +44,19 @@
     function buildUrl(){let url=APP_BASE_URL+'?view=tutors&build=overlay-test-3&shellMode=tutors_test';const token=savedSession();if(token)url+='#restoreTutor='+encodeURIComponent(token);return url}
     function reveal(){if(revealed)return;revealed=true;document.body.classList.add('app-ready');loader.classList.add('hidden');setTimeout(()=>loader.style.display='none',360)}
     function helloOverlay(){if(frame.contentWindow)frame.contentWindow.postMessage({type:'medsi:chat-overlay',action:'hello'},'*')}
+    function installQuickAction(){
+      const panel=document.querySelector('.overlay-educator-thread');
+      const composer=panel&&panel.querySelector('.overlay-composer');
+      const menu=panel&&panel.querySelector('.overlay-quick-menu');
+      if(!panel||!composer||!menu||panel.querySelector('.overlay-thread-actions'))return;
+      const actions=document.createElement('div');actions.className='overlay-thread-actions';
+      const button=document.createElement('button');button.type='button';button.className='overlay-composer__quick';button.textContent='Быстрые ответы';
+      button.addEventListener('click',()=>menu.classList.toggle('hidden'));
+      actions.appendChild(button);panel.insertBefore(actions,composer);
+    }
     syncViewport();requestAnimationFrame(syncViewport);setTimeout(syncViewport,120);window.addEventListener('orientationchange',()=>setTimeout(syncViewport,120));document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')return;syncViewport();replySession(frame.contentWindow);helloOverlay();setTimeout(helloOverlay,250)});window.addEventListener('pageshow',()=>{replySession(frame.contentWindow);helloOverlay()});
     window.addEventListener('message',event=>{const data=event.data||{};if(!allowed(event.origin))return;if(data.type==='medsi:chat-overlay'&&data.action==='preload'&&data.role==='educator'){if(window.MedsiOverlayPreload)MedsiOverlayPreload.educator(data);return}if(data.type===UI_MESSAGE_TYPE&&(data.action==='ready'||data.action==='auth')){reveal();return}if(data.type!==SESSION_MESSAGE_TYPE)return;if(data.action==='save')saveSession(data.token);else if(data.action==='clear')clearSession();else if(data.action==='get')replySession(event.source)});
-    const overlay=window.MedsiChatOverlay.create({frameId:'appFrame',onOpen:(state,api)=>{if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}if(state.role==='educator'&&window.MedsiEducatorOverlayChat){overlayCleanup=MedsiEducatorOverlayChat.mount(api,state)||null}},onClose:()=>{if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}}});
+    const overlay=window.MedsiChatOverlay.create({frameId:'appFrame',onOpen:(state,api)=>{if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}if(state.role==='educator'&&window.MedsiEducatorOverlayChat){overlayCleanup=MedsiEducatorOverlayChat.mount(api,state)||null;requestAnimationFrame(installQuickAction)}},onClose:()=>{if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}}});
     frame.addEventListener('load',()=>{syncViewport();replySession(frame.contentWindow);helloOverlay();setTimeout(helloOverlay,350);if(window.MedsiPush)MedsiPush.sendCurrentSubscription().catch(()=>{});setTimeout(reveal,2500)});frame.src=buildUrl();if(window.MedsiPush)MedsiPush.init({frameId:'appFrame',appEndpointUrl:APP_BASE_URL,pushServiceUrl:PUSH_SERVICE_URL,identity:{role:'educator'}});window.medsiOverlayTest=overlay;
   </script>
 </body>
