@@ -10,7 +10,7 @@
   <title>Медси Бот — тест чата</title>
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="/chat-overlay/overlay.css?v=4">
+  <link rel="stylesheet" href="/chat-overlay/overlay.css?v=5">
   <style>
     :root{--shell-viewport-height:100vh}
     @supports(height:100dvh){:root{--shell-viewport-height:100dvh}}
@@ -24,7 +24,7 @@
   <script src="/notify-client.js?v=20260830-lower-panel"></script>
   <script src="/chat-overlay/transport.js?v=2"></script>
   <script src="/chat-overlay/preload.js?v=2"></script>
-  <script src="/chat-overlay/parent-chat.js?v=5"></script>
+  <script src="/chat-overlay/parent-chat.js?v=6"></script>
   <script src="/chat-overlay/overlay-core.js?v=3"></script>
 </head>
 <body>
@@ -42,7 +42,6 @@
     const frame=document.getElementById('appFrame');
     const loader=document.getElementById('loader');
     let overlayCleanup=null;
-
     function onlyDigits(value){return String(value||'').replace(/\D+/g,'')}
     function savedPhone(){try{return onlyDigits(localStorage.getItem(PARENT_PHONE_KEY)||'')}catch(_){return ''}}
     function savePhone(phone){const value=onlyDigits(phone);if(!value)return;try{localStorage.setItem(PARENT_PHONE_KEY,value)}catch(_){};if(window.MedsiPush)MedsiPush.setIdentity({role:'parent',phone:value})}
@@ -53,50 +52,11 @@
     function buildUrl(){const phone=savedPhone();let url=APP_BASE_URL+'?ui=overlay-test-2&shellMode=parents_test';if(phone)url+='#restorePhone='+encodeURIComponent(phone);return url}
     function reveal(){document.body.classList.add('app-ready');loader.classList.add('hidden');setTimeout(()=>loader.style.display='none',360)}
     function helloOverlay(){if(frame.contentWindow)frame.contentWindow.postMessage({type:'medsi:chat-overlay',action:'hello'},'*')}
-
-    syncViewport();
-    window.addEventListener('orientationchange',()=>setTimeout(syncViewport,120));
-    document.addEventListener('visibilitychange',()=>{
-      if(document.visibilityState!=='visible')return;
-      syncViewport();
-      replyPhone(frame.contentWindow);
-      helloOverlay();
-      setTimeout(helloOverlay,250);
-    });
-    window.addEventListener('pageshow',()=>{
-      replyPhone(frame.contentWindow);
-      helloOverlay();
-    });
-    window.addEventListener('message',event=>{
-      const data=event.data||{};
-      if(!allowed(event.origin))return;
-      if(data.type==='medsi:chat-overlay'&&data.action==='preload'&&data.role==='parent'){
-        if(window.MedsiOverlayPreload)MedsiOverlayPreload.parent(data);
-        return;
-      }
-      if(data.type==='medsi:parent-screen'){if(window.MedsiPush)MedsiPush.setPanelVisible(data.screen==='screenChoose');return}
-      if(data.type!==SESSION_MESSAGE_TYPE)return;
-      if(data.action==='save')savePhone(data.phone);
-      else if(data.action==='clear')clearPhone();
-      else if(data.action==='get')replyPhone(event.source);
-    });
-
-    const overlay=window.MedsiChatOverlay.create({
-      frameId:'appFrame',
-      onOpen:(state,api)=>{
-        if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}
-        if(state.role==='parent'&&window.MedsiParentOverlayChat){overlayCleanup=MedsiParentOverlayChat.mount(api,state)||null}
-      },
-      onClose:()=>{if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}}
-    });
-    frame.addEventListener('load',()=>{syncViewport();reveal();replyPhone(frame.contentWindow);helloOverlay();setTimeout(helloOverlay,350);if(window.MedsiPush)MedsiPush.sendCurrentSubscription().catch(()=>{})});
-    frame.src=buildUrl();
-
-    if(window.MedsiPush){
-      const phone=savedPhone();
-      MedsiPush.init({frameId:'appFrame',appEndpointUrl:APP_BASE_URL,pushServiceUrl:PUSH_SERVICE_URL,identity:phone?{role:'parent',phone}:null});
-    }
-    window.medsiOverlayTest=overlay;
+    syncViewport();window.addEventListener('orientationchange',()=>setTimeout(syncViewport,120));document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')return;syncViewport();replyPhone(frame.contentWindow);helloOverlay();setTimeout(helloOverlay,250)});window.addEventListener('pageshow',()=>{replyPhone(frame.contentWindow);helloOverlay()});
+    window.addEventListener('message',event=>{const data=event.data||{};if(!allowed(event.origin))return;if(data.type==='medsi:chat-overlay'&&data.action==='preload'&&data.role==='parent'){if(window.MedsiOverlayPreload)MedsiOverlayPreload.parent(data);return}if(data.type==='medsi:parent-screen'){if(window.MedsiPush)MedsiPush.setPanelVisible(data.screen==='screenChoose');return}if(data.type!==SESSION_MESSAGE_TYPE)return;if(data.action==='save')savePhone(data.phone);else if(data.action==='clear')clearPhone();else if(data.action==='get')replyPhone(event.source)});
+    const overlay=window.MedsiChatOverlay.create({frameId:'appFrame',onOpen:(state,api)=>{if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}if(state.role==='parent'&&window.MedsiParentOverlayChat){overlayCleanup=MedsiParentOverlayChat.mount(api,state)||null}},onClose:()=>{if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}}});
+    frame.addEventListener('load',()=>{syncViewport();reveal();replyPhone(frame.contentWindow);helloOverlay();setTimeout(helloOverlay,350);if(window.MedsiPush)MedsiPush.sendCurrentSubscription().catch(()=>{})});frame.src=buildUrl();
+    if(window.MedsiPush){const phone=savedPhone();MedsiPush.init({frameId:'appFrame',appEndpointUrl:APP_BASE_URL,pushServiceUrl:PUSH_SERVICE_URL,identity:phone?{role:'parent',phone}:null})}window.medsiOverlayTest=overlay;
   </script>
 </body>
 </html>
