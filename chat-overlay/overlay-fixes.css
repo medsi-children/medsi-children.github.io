@@ -46,3 +46,32 @@
 /* Avoid old and new screen content painting during the same frame. */
 .educator-exact-clone #screenChats.hidden,
 .educator-exact-clone #screenChatThread.hidden{display:none !important;}
+
+/* Match the original compact "Open read chats" control: no divider and no full-width slab. */
+.educator-exact-clone #chatList > div[style*="border-top"]{
+  border-top:0 !important;
+  margin-top:10px !important;
+  padding:4px 0 2px !important;
+  text-align:center !important;
+}
+.educator-exact-clone #chatList > div[style*="border-top"] > .btn{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  width:auto !important;
+  max-width:min(100%, 390px) !important;
+  min-height:46px !important;
+  padding:10px 20px !important;
+  border-radius:12px !important;
+  line-height:1.2 !important;
+}
+
+@media (max-width:560px){
+  .educator-exact-clone #chatList > div[style*="border-top"] > .btn{
+    width:auto !important;
+    max-width:calc(100% - 24px) !important;
+    min-height:42px !important;
+    padding:8px 16px !important;
+    font-size:.9rem !important;
+  }
+}
