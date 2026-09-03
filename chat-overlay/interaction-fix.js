@@ -96,7 +96,26 @@
     const scope=root&&root.querySelectorAll?root:document;
     scope.querySelectorAll('.medsi-legacy-back,.overlay-parent-meta-back').forEach(b=>{
       if(b.textContent!=='‹')b.textContent='‹';
-      b.setAttribute('aria-label','Назад');
+      if(b.getAttribute('aria-label')!=='Назад')b.setAttribute('aria-label','Назад');
+    });
+  }
+  function hideTransientLoading(root){
+    const nodes=[];
+    if(root&&root.nodeType===1)nodes.push(root);
+    const scope=root&&root.querySelectorAll?root:document;
+    scope.querySelectorAll('.chat-empty,.overlay-thread__loading,.overlay-thread__empty').forEach(n=>nodes.push(n));
+    nodes.forEach(el=>{
+      if(!el||!el.classList)return;
+      const value=(el.textContent||'').trim().toLowerCase();
+      if(/загруз|загружа/.test(value)){
+        if(!el.classList.contains('overlay-transient-loading'))el.classList.add('overlay-transient-loading');
+      }else if(el.classList.contains('overlay-transient-loading')){
+        el.classList.remove('overlay-transient-loading');
+        if(!el.classList.contains('overlay-result-enter')){
+          el.classList.add('overlay-result-enter');
+          setTimeout(()=>el.classList.remove('overlay-result-enter'),220);
+        }
+      }
     });
   }
 
@@ -109,6 +128,7 @@
       fixBackGlyphs(document);
       fixReadMeta();
       fixContextMenu(document.getElementById('chatContextMenu'));
+      hideTransientLoading(document);
       fixAllTimestamps(document);
     });
   }
@@ -119,6 +139,6 @@
   },true);
 
   const mo=new MutationObserver(scheduleFix);
-  mo.observe(document.documentElement,{subtree:true,childList:true});
+  mo.observe(document.documentElement,{subtree:true,childList:true,characterData:true});
   scheduleFix();
 })();
