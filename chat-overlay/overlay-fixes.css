@@ -1,0 +1,48 @@
+/* Test-overlay polish: no one-frame leftovers during screen changes. */
+.medsi-chat-overlay.overlay-switch-snap *,
+.medsi-chat-overlay.overlay-switch-snap *::before,
+.medsi-chat-overlay.overlay-switch-snap *::after{
+  animation:none !important;
+  transition:none !important;
+}
+.overlay-transient-loading{visibility:hidden !important;}
+
+/* Keep the original refresh glyph optically centered on every viewport. */
+.educator-exact-clone #screenChats .refresh-btn{
+  display:grid !important;
+  place-items:center !important;
+  line-height:1 !important;
+}
+.educator-exact-clone #screenChats .refresh-btn .refresh-label{
+  display:block !important;
+  width:1em !important;
+  height:1em !important;
+  line-height:1 !important;
+  margin:0 !important;
+  padding:0 !important;
+  transform:none !important;
+}
+
+/* Parent back control: quiet chevron rather than a large arrow. */
+.parent-role .medsi-legacy-back{
+  font-size:0 !important;
+  line-height:1 !important;
+}
+.parent-role .medsi-legacy-back::before{
+  content:'‹';
+  display:block;
+  font-size:2rem;
+  font-weight:500;
+  line-height:1;
+  transform:translateY(-1px);
+}
+
+/* The message menu uses the exact source symbols, never emoji presentation. */
+.chat-context-action-icon{
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Helvetica Neue,Arial,sans-serif !important;
+  font-variant-emoji:text !important;
+}
+
+/* Avoid old and new screen content painting during the same frame. */
+.educator-exact-clone #screenChats.hidden,
+.educator-exact-clone #screenChatThread.hidden{display:none !important;}
