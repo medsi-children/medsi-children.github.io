@@ -1,5 +1,11 @@
 (function () {
   const REACTIONS = ['❤️','👍','👌','🙏','🥰','😁'];
+  const threadCache = new Map();
+
+  function cacheKey(phone) { return String(phone || '').replace(/\D+/g, '').slice(-10); }
+  function getCachedThread(phone) { return threadCache.get(cacheKey(phone)) || null; }
+  function setCachedThread(phone, rows) { threadCache.set(cacheKey(phone), { rows: Array.isArray(rows) ? rows : [], at: Date.now() }); }
+
   function formatTime(value) {
     const date = new Date(Number(value));
     if (Number.isNaN(date.getTime())) return '';
@@ -31,7 +37,11 @@
     overlay.body.replaceChildren();
     const shell = document.createElement('div'); shell.className = 'overlay-thread';
     const list = document.createElement('div'); list.className = 'overlay-thread__messages';
-    const loading = document.createElement('div'); loading.className = 'overlay-thread__loading'; loading.textContent = 'Загружаем сообщения…'; list.appendChild(loading);
+
+    const cached = getCachedThread(phone);
+    if (!cached) {
+      const loading = document.createElement('div'); loading.className = 'overlay-thread__loading'; loading.textContent = 'Загружаем сообщения…'; list.appendChild(loading);
+    }
 
     const replyBar = document.createElement('div'); replyBar.className = 'overlay-reply-bar hidden';
     const replyText = document.createElement('span');
@@ -51,7 +61,6 @@
     let replyTo = null;
     let disposed = false;
 
-    function findMessage(key) { return messages.find(item => String(item && item.messageKey || '') === String(key || '')) || null; }
     function setReply(message) {
       replyTo = message || null;
       replyBar.classList.toggle('hidden', !replyTo);
@@ -104,16 +113,22 @@
       requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
     }
 
+    if (cached) render(cached.rows);
+
     async function refresh(options) {
       const preserveScroll = options && options.preserveScroll;
       const oldBottomGap = list.scrollHeight - list.scrollTop - list.clientHeight;
       try {
         const result = await transport.thread(session, phone, '', 100);
         if (disposed) return;
-        render(result.messages || []);
+        const rows = result.messages || [];
+        setCachedThread(phone, rows);
+        render(rows);
         if (preserveScroll && oldBottomGap > 80) list.scrollTop = Math.max(0, list.scrollHeight - list.clientHeight - oldBottomGap);
         transport.markRead(session, 'parent', phone).catch(() => {});
-      } catch (error) { overlay.showError((error && error.message) || 'Не удалось загрузить чат.'); }
+      } catch (error) {
+        if (!cached && !messages.length) overlay.showError((error && error.message) || 'Не удалось загрузить чат.');
+      }
     }
 
     async function sendPayload(payload) {
@@ -148,7 +163,7 @@
       if (!mobile && event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); composer.requestSubmit(); }
     });
 
-    refresh();
+    refresh({preserveScroll:!!cached});
     const timer = setInterval(() => { if (!disposed && overlay.getState()) refresh({preserveScroll:true}); }, 8000);
     return function cleanup() { disposed = true; clearInterval(timer); };
   }
