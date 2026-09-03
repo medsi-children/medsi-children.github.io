@@ -1,6 +1,5 @@
 (function () {
   const REACTIONS = ['❤️','👍','👌','🙏','🥰','😁'];
-  const QUICK_REPLIES = ['Хорошо, спасибо','Понял(а), спасибо','Спасибо за информацию','Хорошо, передам'];
   const threadCache = new Map();
 
   function cacheKey(phone){ return String(phone||'').replace(/\D+/g,'').slice(-10); }
@@ -10,14 +9,77 @@
   function mediaUrl(message){ const fileId=String(message&&message.fileId||''); if(!fileId)return ''; if(fileId.startsWith('kv:')||fileId.startsWith('r2:'))return window.MedsiOverlayTransport.baseUrl+'/media/'+encodeURIComponent(fileId.slice(3)); return 'https://drive.google.com/thumbnail?id='+encodeURIComponent(fileId)+'&sz=w1200'; }
   function replyLabel(reply){ if(!reply)return ''; if(reply.text)return String(reply.text).slice(0,120); if(reply.type==='image')return 'Фотография'; if(reply.type==='video')return 'Видео'; return 'Сообщение'; }
 
+  function installParentSkin(){
+    if(document.getElementById('medsi-parent-overlay-skin')) return;
+    const style=document.createElement('style');
+    style.id='medsi-parent-overlay-skin';
+    style.textContent=`
+      .medsi-chat-overlay:has(.overlay-parent-chat){background:#dfecef}
+      .medsi-chat-overlay:has(.overlay-parent-chat) .medsi-chat-overlay__header{
+        background:rgba(255,255,255,.96);box-shadow:0 1px 0 rgba(20,76,83,.07);border-bottom:0
+      }
+      .medsi-chat-overlay:has(.overlay-parent-chat) .medsi-chat-overlay__back{
+        background:transparent;border-radius:50%;color:#1597a1;font-size:31px
+      }
+      .medsi-chat-overlay:has(.overlay-parent-chat) .medsi-chat-overlay__title{font-size:17px;font-weight:750;letter-spacing:-.015em}
+      .medsi-chat-overlay:has(.overlay-parent-chat) .medsi-chat-overlay__subtitle{font-size:12px;color:#78959a}
+      .overlay-parent-chat .overlay-thread__messages{
+        background-color:#e7f1f2;
+        background-image:linear-gradient(rgba(230,241,242,.80),rgba(230,241,242,.80)),url('/background.png');
+        background-size:420px auto;background-repeat:repeat;
+        padding:16px 11px 20px;gap:5px
+      }
+      .overlay-parent-chat .overlay-parent-notice{
+        width:min(520px,calc(100% - 22px));align-self:center;margin:10px auto 4px;padding:9px 13px;
+        border:0;border-radius:14px;background:rgba(255,255,255,.82);box-shadow:0 2px 10px rgba(20,71,78,.06);
+        color:#617d82;font-size:11.5px;line-height:1.38
+      }
+      .overlay-parent-chat .overlay-msg__bubble{
+        max-width:min(78%,560px);padding:7px 10px 5px;border-radius:16px;box-shadow:0 1px 2px rgba(19,62,68,.12)
+      }
+      .overlay-parent-chat .overlay-msg--own .overlay-msg__bubble{
+        background:#bfeff0;color:#153f46;border-bottom-right-radius:5px
+      }
+      .overlay-parent-chat .overlay-msg--other .overlay-msg__bubble{
+        background:#fff;color:#153f46;border-bottom-left-radius:5px
+      }
+      .overlay-parent-chat .overlay-msg__sender{font-size:11px;color:#13919a;margin-bottom:2px}
+      .overlay-parent-chat .overlay-msg__text{font-size:14.5px;line-height:1.36}
+      .overlay-parent-chat .overlay-msg__meta{font-size:9.5px;color:#6e8c91;opacity:.92;margin-top:2px}
+      .overlay-parent-chat .overlay-msg__reply{background:rgba(20,161,171,.08);border-left-color:#19a6af;border-radius:6px;padding:5px 7px}
+      .overlay-parent-chat .overlay-msg__media-wrap{margin:-1px -4px 6px;border-radius:12px}
+      .overlay-parent-chat .overlay-composer{
+        padding:7px 9px calc(7px + env(safe-area-inset-bottom));gap:6px;background:rgba(255,255,255,.97);border-top:0;
+        box-shadow:0 -1px 0 rgba(19,71,78,.07)
+      }
+      .overlay-parent-chat .overlay-composer__attach{
+        background:transparent;color:#1597a1;font-size:26px;box-shadow:none
+      }
+      .overlay-parent-chat .overlay-composer__input{
+        min-height:40px;border:1px solid rgba(25,117,125,.13);background:#f5f9f9;border-radius:20px;padding:9px 13px;
+        box-shadow:inset 0 1px 1px rgba(16,62,68,.03)
+      }
+      .overlay-parent-chat .overlay-composer__send{
+        background:#19b7c0;box-shadow:none;width:40px;height:40px;flex-basis:40px
+      }
+      @media(max-width:720px){
+        .overlay-parent-chat .overlay-thread__messages{padding:12px 7px 16px;background-size:350px auto}
+        .overlay-parent-chat .overlay-msg__bubble{max-width:88%}
+        .overlay-parent-chat .overlay-parent-notice{width:calc(100% - 14px);margin-top:7px}
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function mount(overlay,state){
+    installParentSkin();
     const transport=window.MedsiOverlayTransport;
     const phone=String(state&&state.phone||'');
     const session=state&&state.session;
     if(!overlay||!transport||!phone||!session||!session.token){ if(overlay)overlay.showError('Не удалось получить данные родительского чата.'); return; }
 
     overlay.body.replaceChildren();
-    const shell=document.createElement('div'); shell.className='overlay-thread';
+    const shell=document.createElement('div'); shell.className='overlay-thread overlay-parent-chat';
     const notice=document.createElement('div'); notice.className='overlay-parent-notice'; notice.textContent='Пожалуйста, пишите по делу. Воспитатели находятся с детьми и не всегда могут ответить сразу.';
     const list=document.createElement('div'); list.className='overlay-thread__messages';
     const cached=getCachedThread(phone); const cachedHasMessages=!!(cached&&Array.isArray(cached.rows)&&cached.rows.length);
@@ -36,18 +98,16 @@
 
     const composer=document.createElement('form'); composer.className='overlay-composer';
     const attach=document.createElement('button'); attach.type='button'; attach.className='overlay-composer__attach'; attach.textContent='＋'; attach.setAttribute('aria-label','Прикрепить фото или видео');
-    const quick=document.createElement('button'); quick.type='button'; quick.className='overlay-composer__quick'; quick.textContent='⚡'; quick.setAttribute('aria-label','Быстрые ответы');
     const fileInput=document.createElement('input'); fileInput.type='file'; fileInput.accept='image/*,video/*'; fileInput.hidden=true;
     const input=document.createElement('textarea'); input.className='overlay-composer__input'; input.rows=1; input.placeholder='Сообщение…'; input.maxLength=4000;
     const send=document.createElement('button'); send.type='submit'; send.className='overlay-composer__send'; send.textContent='➤'; send.setAttribute('aria-label','Отправить');
-    composer.append(attach,quick,fileInput,input,send);
-    const quickMenu=document.createElement('div'); quickMenu.className='overlay-quick-menu hidden'; QUICK_REPLIES.forEach(value=>{ const b=document.createElement('button'); b.type='button'; b.textContent=value; b.addEventListener('click',()=>{ input.value=value; quickMenu.classList.add('hidden'); input.focus(); }); quickMenu.appendChild(b); });
+    composer.append(attach,fileInput,input,send);
 
     const shade=document.createElement('div'); shade.className='overlay-context-shade hidden';
     const menu=document.createElement('div'); menu.className='overlay-context-menu hidden';
     document.body.append(shade,menu);
 
-    shell.append(notice,list,replyBar,editBar,uploadPreview,composer,quickMenu); overlay.body.appendChild(shell);
+    shell.append(notice,list,replyBar,editBar,uploadPreview,composer); overlay.body.appendChild(shell);
 
     let messages=[]; let sending=false; let replyTo=null; let editing=null; let pendingFile=null; let pendingPreviewUrl=''; let disposed=false;
 
@@ -88,7 +148,7 @@
 
     async function refresh(options){ const preserveScroll=options&&options.preserveScroll; const oldBottomGap=list.scrollHeight-list.scrollTop-list.clientHeight; try{ const result=await transport.thread(session,phone,'',100); if(disposed)return; const rows=result.messages||[]; setCachedThread(phone,rows); render(rows,!preserveScroll||oldBottomGap<80); if(preserveScroll&&oldBottomGap>80)list.scrollTop=Math.max(0,list.scrollHeight-list.clientHeight-oldBottomGap); transport.markRead(session,'parent',phone).catch(()=>{}); }catch(error){ if(!cachedHasMessages&&!messages.length)overlay.showError((error&&error.message)||'Не удалось загрузить чат.'); } }
 
-    function setSending(value){ sending=!!value; send.disabled=sending; input.disabled=sending; attach.disabled=sending; quick.disabled=sending; }
+    function setSending(value){ sending=!!value; send.disabled=sending; input.disabled=sending; attach.disabled=sending; }
     async function sendText(value){
       if(editing){ await transport.edit(session,'parent',editing.messageKey,value); setEditing(null); input.value=''; await refresh(); return; }
       await transport.sendMessage(session,'parent',phone,{type:'text',text:value,replyToKey:replyTo&&replyTo.messageKey||''}); setReply(null); input.value=''; await refresh();
@@ -97,7 +157,6 @@
 
     composer.addEventListener('submit',async event=>{ event.preventDefault(); if(sending)return; const value=String(input.value||'').trim(); if(!value&&!pendingFile)return; setSending(true); try{ if(pendingFile)await sendFile(pendingFile); else await sendText(value); }catch(error){ overlay.showError((error&&error.message)||'Не удалось отправить сообщение.'); }finally{ setSending(false); input.focus(); } });
     attach.addEventListener('click',()=>{ if(!sending)fileInput.click(); });
-    quick.addEventListener('click',()=>quickMenu.classList.toggle('hidden'));
     fileInput.addEventListener('change',()=>{ const file=fileInput.files&&fileInput.files[0]; fileInput.value=''; if(!file)return; clearPendingFile(); pendingFile=file; pendingPreviewUrl=URL.createObjectURL(file); uploadThumb.src=pendingPreviewUrl; uploadName.textContent=file.name||'Вложение'; uploadKind.textContent=file.type.startsWith('video/')?'Видео — будет отправлено с обложкой':'Фотография'; uploadPreview.classList.remove('hidden'); });
     input.addEventListener('keydown',event=>{ const mobile=window.matchMedia('(max-width:560px),(hover:none) and (pointer:coarse)').matches; if(!mobile&&event.key==='Enter'&&!event.shiftKey){ event.preventDefault(); composer.requestSubmit(); } });
 
