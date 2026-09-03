@@ -10,7 +10,7 @@
   <title>Медси Бот — тест чата</title>
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="/chat-overlay/overlay.css?v=1">
+  <link rel="stylesheet" href="/chat-overlay/overlay.css?v=2">
   <style>
     :root{--shell-viewport-height:100vh}
     @supports(height:100dvh){:root{--shell-viewport-height:100dvh}}
@@ -22,6 +22,8 @@
     #appFrame{position:fixed;inset:0;width:100vw;height:var(--shell-viewport-height);border:0;background:#f7fbfc;opacity:0;transition:opacity .35s ease}body.app-ready #appFrame{opacity:1}
   </style>
   <script src="/notify-client.js?v=20260830-lower-panel"></script>
+  <script src="/chat-overlay/transport.js?v=1"></script>
+  <script src="/chat-overlay/parent-chat.js?v=1"></script>
   <script src="/chat-overlay/overlay-core.js?v=1"></script>
 </head>
 <body>
@@ -38,6 +40,7 @@
     const SESSION_MESSAGE_TYPE='medsi:parent-session';
     const frame=document.getElementById('appFrame');
     const loader=document.getElementById('loader');
+    let overlayCleanup=null;
 
     function onlyDigits(value){return String(value||'').replace(/\D+/g,'')}
     function savedPhone(){try{return onlyDigits(localStorage.getItem(PARENT_PHONE_KEY)||'')}catch(_){return ''}}
@@ -61,7 +64,18 @@
       else if(data.action==='get')replyPhone(event.source);
     });
 
-    const overlay=window.MedsiChatOverlay.create({frameId:'appFrame'});
+    const overlay=window.MedsiChatOverlay.create({
+      frameId:'appFrame',
+      onOpen:(state,api)=>{
+        if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}
+        if(state.role==='parent'&&window.MedsiParentOverlayChat){
+          overlayCleanup=MedsiParentOverlayChat.mount(api,state)||null;
+        }
+      },
+      onClose:()=>{
+        if(overlayCleanup){try{overlayCleanup()}catch(_){};overlayCleanup=null}
+      }
+    });
     frame.addEventListener('load',()=>{syncViewport();reveal();replyPhone(frame.contentWindow);if(window.MedsiPush)MedsiPush.sendCurrentSubscription().catch(()=>{})});
     frame.src=buildUrl();
 
