@@ -4,6 +4,7 @@
 
   function text(value) { return String(value == null ? '' : value); }
   function phone10(value) { return String(value || '').replace(/\D+/g, '').slice(-10); }
+  function displayPhone(value) { const phone = phone10(value); return phone ? '8' + phone : ''; }
   function listKey(bucket) { return String(bucket || 'unread'); }
   function getCachedList(bucket) { return listCache.get(listKey(bucket)) || null; }
   function setCachedList(bucket, rows) { listCache.set(listKey(bucket), { rows: Array.isArray(rows) ? rows : [], at: Date.now() }); }
@@ -115,8 +116,8 @@
         const card = document.createElement('button');
         card.type = 'button'; card.className = 'overlay-chat-card';
         if (activeChat && phone10(activeChat.phone) === phone10(chat.phone)) card.classList.add('active');
-        const name = document.createElement('strong'); name.textContent = chat.childName || chat.parentName || chat.phone || 'Родитель';
-        const parent = document.createElement('span'); parent.className = 'overlay-chat-card__parent'; parent.textContent = chat.parentName || chat.phone || '';
+        const name = document.createElement('strong'); name.textContent = chat.childName || chat.parentName || displayPhone(chat.phone) || 'Родитель';
+        const parent = document.createElement('span'); parent.className = 'overlay-chat-card__parent'; parent.textContent = chat.parentName || displayPhone(chat.phone) || '';
         const last = document.createElement('span'); last.className = 'overlay-chat-card__preview'; last.textContent = preview(chat);
         card.append(name, parent, last);
         card.addEventListener('click', () => openChat(chat));
@@ -161,7 +162,7 @@
       threadPanel.classList.remove('empty');
       shell.classList.add('thread-open');
       threadTitle.textContent = chat.childName || 'Чат с родителем';
-      threadSubtitle.textContent = [chat.parentName, chat.phone].filter(Boolean).join(' · ');
+      threadSubtitle.textContent = [chat.parentName, displayPhone(chat.phone)].filter(Boolean).join(' · ');
       composer.classList.remove('hidden');
 
       const cached = getCachedThread(chat.phone);
