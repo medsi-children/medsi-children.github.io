@@ -17,32 +17,53 @@
   function saveAuth(token,session){tutorToken=String(token||'');if(tutorToken)safeSet(TUTOR_KEY,tutorToken);if(session&&session.token){d1Session=session;safeSet(D1_KEY,JSON.stringify(session))}}
   function clearAuth(){tutorToken='';d1Session=null;safeRemove(TUTOR_KEY);safeRemove(D1_KEY)}
 
+  function timeoutPromise(ms){return new Promise((_,reject)=>setTimeout(()=>reject(new Error('TIMEOUT')),ms))}
   async function callApi(method,args,timeoutMs){
-    const c=new AbortController();const timer=setTimeout(()=>c.abort(),timeoutMs||20000);let r;
-    try{r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),signal:c.signal,cache:'no-store'})}
-    finally{clearTimeout(timer)}
-    const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
-    if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));
-    return p.result;
+    const run=async()=>{
+      const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});
+      const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
+      if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));
+      return p.result;
+    };
+    return Promise.race([run(),timeoutPromise(timeoutMs||15000)]);
   }
 
   function setAuthError(text){const el=$('tutorAuthError');el.textContent=String(text||'');el.classList.toggle('hidden',!text)}
-  function showGate(checking){$('tutorAuthGate').classList.remove('hidden');$('authChecking').classList.toggle('hidden',!checking);$('authForm').classList.toggle('hidden',!!checking);if(!checking)setTimeout(()=>$('tutorLogin').focus(),30)}
-  function hideGate(){$('tutorAuthGate').classList.add('hidden')}
+  function showGate(checking){
+    const gate=$('tutorAuthGate');gate.classList.remove('hidden');gate.classList.toggle('checking',!!checking);
+    $('authChecking').classList.toggle('hidden',!checking);$('authForm').classList.toggle('hidden',!!checking);
+    if(!checking)setTimeout(()=>$('tutorLogin').focus(),30);
+  }
+  function hideGate(){$('tutorAuthGate').classList.add('hidden');$('tutorAuthGate').classList.remove('checking')}
+
+  async function refreshSavedSessionInBackground(){
+    try{
+      const res=await callApi('verifyTutorSession',[tutorToken],8000);
+      if(!res||!res.ok)return;
+      if(res.d1Session&&res.d1Session.token)saveAuth(tutorToken,res.d1Session);
+    }catch(_){}
+  }
 
   async function verifySaved(){
     tutorToken=String(safeGet(TUTOR_KEY)||'');d1Session=loadD1();
     if(!tutorToken){showGate(false);return}
+
+    /* If both saved credentials are still usable, do not hold the UI hostage to
+       Apps Script. Server-side methods still validate the tutor token on every
+       protected action, while the short-lived D1 token protects chat access. */
+    if(d1Session&&d1Session.token){
+      hideGate();startApp();refreshSavedSessionInBackground();return;
+    }
+
     showGate(true);
     try{
-      const res=await callApi('verifyTutorSession',[tutorToken],15000);
+      const res=await callApi('verifyTutorSession',[tutorToken],8000);
       if(!res||!res.ok){clearAuth();showGate(false);return}
       if(res.d1Session&&res.d1Session.token)saveAuth(tutorToken,res.d1Session);
-      else if(!d1Session){throw new Error('Не получена D1-сессия.')}
       hideGate();startApp();
     }catch(e){
-      if(d1Session&&d1Session.token){hideGate();startApp();return}
-      clearAuth();showGate(false);setAuthError(String(e&&e.message||e));
+      clearAuth();showGate(false);
+      if(String(e&&e.message||e)!=='TIMEOUT')setAuthError(String(e&&e.message||e));
     }
   }
 
@@ -51,13 +72,12 @@
     if(!login||!password){setAuthError('Введите логин и пароль.');return}
     authBusy=true;$('tutorLoginBtn').disabled=true;$('tutorLoginBtn').textContent='Проверяем…';setAuthError('');
     try{
-      const res=await callApi('verifyTutorAccess',[login,password],20000);
+      const res=await callApi('verifyTutorAccess',[login,password],15000);
       if(!res||!res.ok||!res.token)throw new Error((res&&res.message)||'Не удалось войти.');
       saveAuth(String(res.token),res.d1Session||null);$('tutorPassword').value='';
-      if(!d1Session){const vr=await callApi('verifyTutorSession',[tutorToken],15000);if(vr&&vr.d1Session)saveAuth(tutorToken,vr.d1Session)}
-      if(!d1Session)throw new Error('Вход выполнен, но D1-сессия не получена.');
+      if(!d1Session){const vr=await callApi('verifyTutorSession',[tutorToken],8000);if(vr&&vr.d1Session)saveAuth(tutorToken,vr.d1Session)}
       hideGate();startApp();
-    }catch(e){setAuthError(String(e&&e.message||e))}
+    }catch(e){setAuthError(String(e&&e.message||e)==='TIMEOUT'?'Сервер долго не отвечает. Попробуйте ещё раз.':String(e&&e.message||e))}
     finally{authBusy=false;$('tutorLoginBtn').disabled=false;$('tutorLoginBtn').textContent='Войти в систему'}
   }
 
@@ -112,7 +132,7 @@
 
   async function ensureD1Fresh(){
     if(d1Session&&Number(d1Session.expiresAt||0)>Date.now()+60000)return d1Session;
-    const res=await callApi('verifyTutorSession',[tutorToken],15000);if(!res||!res.ok||!res.d1Session)throw new Error('Не удалось обновить сессию чата.');saveAuth(tutorToken,res.d1Session);return d1Session;
+    const res=await callApi('verifyTutorSession',[tutorToken],8000);if(!res||!res.ok||!res.d1Session)throw new Error('Не удалось обновить сессию чата.');saveAuth(tutorToken,res.d1Session);return d1Session;
   }
   async function openChat(){
     try{const s=await ensureD1Fresh();overlay.open({type:'medsi:chat-overlay',action:'open',role:'educator',session:s});}
