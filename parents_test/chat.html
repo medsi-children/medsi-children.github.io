@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#0fc7ce">
+  <meta name="format-detection" content="telephone=no">
+  <title>Медси Бот — чат</title>
+  <link rel="stylesheet" href="/chat-overlay/overlay.css?v=8">
+  <link rel="stylesheet" href="/chat-overlay/parent-compat.css?v=3">
+  <link rel="stylesheet" href="/chat-overlay/overlay-fixes.css?v=7">
+  <style>
+    html,body{margin:0;min-height:100%;background:radial-gradient(circle at top left,rgba(15,199,206,.10),transparent 32%),radial-gradient(circle at bottom right,rgba(15,199,206,.08),transparent 28%),#f7fbfc;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#11424a}
+    *{box-sizing:border-box}
+    #shell{min-height:100dvh;padding:clamp(8px,2.5vmin,22px);display:flex;align-items:center;justify-content:center}
+    #chatHost{width:min(94vmin,860px);height:min(92dvh,860px);max-width:100%;position:relative}
+    #chatBody{width:100%;height:100%}
+    #chatBody>.medsi-legacy-wrap.parent-role{width:100%!important;height:100%!important;min-height:0!important;padding:0!important;display:flex!important;align-items:stretch!important;justify-content:center!important;background:transparent!important}
+    #chatBody .medsi-legacy-card{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;min-height:0!important}
+    #status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#5f7f86}
+    #status.hidden{display:none}
+    .loader{display:inline-flex;align-items:center;gap:10px;font-weight:700}.loader:before{content:"";width:18px;height:18px;border-radius:50%;border:3px solid rgba(15,199,206,.2);border-top-color:#16b8c0;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+    #error{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:20;width:min(560px,calc(100% - 28px));padding:10px 12px;border-radius:12px;background:#fff3f3;border:1px solid #efbaba;color:#a63e3e;text-align:center}.hidden{display:none!important}
+    @media(max-width:560px){#shell{padding:8px}#chatHost{width:100%;height:calc(100dvh - 16px)}}
+  </style>
+  <script src="/chat-overlay/transport.js?v=4"></script>
+  <script src="/parents_test/prewarm.js?v=1"></script>
+  <script src="/chat-overlay/parent-chat.js?v=8"></script>
+</head>
+<body>
+  <main id="shell"><section id="chatHost"><div id="status"><div class="loader">Открываем чат…</div></div><div id="error" class="hidden"></div><div id="chatBody"></div></section></main>
+<script>
+(function(){
+  const APP='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
+  const PHONE_KEY='medsi_parent_phone',LEGACY='medsi_phone',PARENT='medsi_parent',CHILD='medsi_child',D1='medsi_d1_parent_session_v1';
+  const get=k=>{try{return localStorage.getItem(k)||''}catch(_){return''}};
+  const set=(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}};
+  const digits=v=>String(v||'').replace(/\D+/g,'');
+  const status=document.getElementById('status'),error=document.getElementById('error'),body=document.getElementById('chatBody');
+  function showError(m){status.classList.add('hidden');error.textContent=String(m||'Не удалось открыть чат.');error.classList.remove('hidden')}
+  async function api(method,args){const r=await fetch(APP,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});const t=await r.text();let p;try{p=JSON.parse(t)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));return p.result}
+  function cached(phone){try{const x=JSON.parse(get(D1)||'null');if(!x||digits(x.phone).slice(-10)!==digits(phone).slice(-10))return null;const s=x.session||x;if(!s||!s.token||Number(s.expiresAt||0)<=Date.now()+30000)return null;return s}catch(_){return null}}
+  async function session(phone){const c=cached(phone);if(c)return c;const r=await api('getD1ChatSession',['parent',phone,'']);const s=r&&r.token?r:r&&r.session&&r.session.token?r.session:null;if(!s)throw new Error('Не удалось получить сессию чата.');set(D1,JSON.stringify({phone:digits(phone).slice(-10),session:s}));return s}
+  const overlay={body,showError,close(){location.href='/parents_test/?v=chat-radical1'}};
+  async function start(){const phone=digits(get(PHONE_KEY)||get(LEGACY));if(phone.length<10){location.href='/parents_test/?v=chat-radical1';return}try{const s=await session(phone);if(window.MedsiParentPrewarm){window.MedsiParentPrewarm.warm(s,phone).catch(()=>{});await window.MedsiParentPrewarm.ready(phone).catch(()=>{})}if(!window.MedsiParentOverlayChat)throw new Error('Компонент чата не загрузился.');status.classList.add('hidden');window.MedsiParentOverlayChat.mount(overlay,{role:'parent',phone,parentName:get(PARENT),childName:get(CHILD),session:s})}catch(e){showError((e&&e.message)||'Не удалось открыть чат.')}}
+  start();
+})();
+</script>
+</body></html>
