@@ -14,6 +14,7 @@
 
 /* Coordinated short transitions: content appears as one settled screen, not in pieces. */
 .educator-exact-clone #screenChats:not(.hidden),
+.educator-exact-clone #screenNewChat:not(.hidden),
 .educator-exact-clone #screenChatThread:not(.hidden),
 .parent-role .medsi-legacy-card{
   opacity:0;
@@ -22,11 +23,17 @@
   pointer-events:none;
 }
 .educator-exact-clone #screenChats.overlay-screen-ready,
+.educator-exact-clone #screenNewChat.overlay-screen-ready,
 .educator-exact-clone #screenChatThread.overlay-screen-ready,
 .parent-role .medsi-legacy-card.overlay-screen-ready{
   opacity:1;
   transform:none;
   pointer-events:auto;
+}
+.educator-exact-clone.educator-new-chat-bridging #screenChats{
+  opacity:0 !important;
+  visibility:hidden !important;
+  pointer-events:none !important;
 }
 .medsi-chat-overlay button,
 .medsi-chat-overlay .btn{
@@ -151,6 +158,7 @@
 
 /* Avoid old and new screen content painting during the same frame. */
 .educator-exact-clone #screenChats.hidden,
+.educator-exact-clone #screenNewChat.hidden,
 .educator-exact-clone #screenChatThread.hidden{display:none !important;}
 
 /* Educator bubbles: keep the timestamp comfortable without making short messages look huge. */
