@@ -41,8 +41,6 @@
       else if(!d1Session){throw new Error('Не получена D1-сессия.')}
       hideGate();startApp();
     }catch(e){
-      // During the first iframe-free test, an already-issued D1 session is enough
-      // to keep testing isolated from production while the auth API bridge is deployed.
       if(d1Session&&d1Session.token){hideGate();startApp();return}
       clearAuth();showGate(false);setAuthError(String(e&&e.message||e));
     }
@@ -131,7 +129,18 @@
     showMenu();
   }
 
-  $('btnParentChats').addEventListener('click',openChat);$('btnMorning').addEventListener('click',()=>openReport('morning'));$('btnEvening').addEventListener('click',()=>openReport('evening'));$('btnPsychology').addEventListener('click',()=>openReport('psychology'));$('btnParentPhones').addEventListener('click',openPhones);$('btnBack').addEventListener('click',showMenu);$('btnPhonesBack').addEventListener('click',showMenu);$('btnAgain').addEventListener('click',showMenu);$('btnSend').addEventListener('click',sendReport);$('tutorLoginBtn').addEventListener('click',submitLogin);$('tutorPassword').addEventListener('keydown',e=>{if(e.key==='Enter')submitLogin()});$('logoutBtn').addEventListener('click',()=>{clearAuth();location.reload()});
+  $('btnParentChats').addEventListener('click',openChat);
+  $('btnMorning').addEventListener('click',()=>openReport('morning'));
+  $('btnEvening').addEventListener('click',()=>openReport('evening'));
+  $('btnPsychology').addEventListener('click',()=>openReport('psychology'));
+  $('btnParentPhones').addEventListener('click',openPhones);
+  $('btnBack').addEventListener('click',showMenu);
+  $('btnPhonesBack').addEventListener('click',showMenu);
+  $('btnAgain').addEventListener('click',showMenu);
+  $('btnSend').addEventListener('click',sendReport);
+  $('tutorLoginBtn').addEventListener('click',submitLogin);
+  $('tutorPassword').addEventListener('keydown',e=>{if(e.key==='Enter')submitLogin()});
   window.medsiForgetCachedChatToken=()=>{safeRemove(D1_KEY);d1Session=null;return true};
+  window.medsiLogoutTutor=()=>{clearAuth();location.reload()};
   verifySaved();
 })();
