@@ -4,6 +4,7 @@
   const PHONE_KEY='medsi_parent_phone';
   const PARENT_KEY='medsi_parent';
   const CHILD_KEY='medsi_child';
+  const OVERLAY_ID='medsiParentChatOverlay';
   const $=id=>document.getElementById(id);
   const digits=v=>String(v||'').replace(/\D+/g,'');
   const get=k=>{try{return localStorage.getItem(k)||''}catch(_){return''}};
@@ -26,11 +27,11 @@
       .parent-boot-dot:nth-child(4){width:16px;height:16px;left:66px;top:5px;animation-delay:.3s}
       .parent-boot-dot:nth-child(5){width:12px;height:12px;left:84px;bottom:11px;animation-delay:.4s}
       @keyframes parentBootFloat{0%,100%{transform:translateY(0) scale(1);opacity:.95}50%{transform:translateY(-4px) scale(1.03);opacity:1}}
-      .medsi-chat-overlay.parent-original-active{background:radial-gradient(circle at top left,rgba(15,199,206,.10),transparent 32%),radial-gradient(circle at bottom right,rgba(15,199,206,.08),transparent 28%),#f7fbfc}
-      .medsi-chat-overlay.parent-original-active .medsi-chat-overlay__body{display:flex;align-items:center;justify-content:center;overflow:hidden;padding:clamp(8px,2vmin,18px)}
-      .medsi-chat-overlay.parent-original-active .medsi-legacy-wrap.parent-role{width:100%!important;height:100%!important;padding:0!important;align-items:center!important;justify-content:center!important;background:transparent!important}
-      .medsi-chat-overlay.parent-original-active .medsi-legacy-card{width:min(94vmin,860px)!important;max-width:100%!important;height:min(92dvh,860px)!important;max-height:calc(100dvh - 16px)!important}
-      @media(max-width:560px){.medsi-chat-overlay.parent-original-active .medsi-chat-overlay__body{padding:8px}.medsi-chat-overlay.parent-original-active .medsi-legacy-card{width:100%!important;height:calc(100dvh - 16px)!important}}
+      #${OVERLAY_ID}.parent-original-active{background:radial-gradient(circle at top left,rgba(15,199,206,.10),transparent 32%),radial-gradient(circle at bottom right,rgba(15,199,206,.08),transparent 28%),#f7fbfc}
+      #${OVERLAY_ID}.parent-original-active .medsi-chat-overlay__body{display:flex;align-items:center;justify-content:center;overflow:hidden;padding:clamp(8px,2vmin,18px)}
+      #${OVERLAY_ID}.parent-original-active .medsi-legacy-wrap.parent-role{width:100%!important;height:100%!important;padding:0!important;align-items:center!important;justify-content:center!important;background:transparent!important}
+      #${OVERLAY_ID}.parent-original-active .medsi-legacy-card{width:min(94vmin,860px)!important;max-width:100%!important;height:min(92dvh,860px)!important;max-height:calc(100dvh - 16px)!important}
+      @media(max-width:560px){#${OVERLAY_ID}.parent-original-active .medsi-chat-overlay__body{padding:8px}#${OVERLAY_ID}.parent-original-active .medsi-legacy-card{width:100%!important;height:calc(100dvh - 16px)!important}}
     `;
     document.head.appendChild(style);
   }
@@ -80,19 +81,21 @@
   }
 
   let overlay=null,cleanup=null;
+  const overlayRoot=()=>document.getElementById(OVERLAY_ID);
   function ensureOverlay(){
     if(overlay)return overlay;
     if(!window.MedsiChatOverlay||!window.MedsiParentOverlayChat)throw new Error('Компонент чата не загрузился.');
     overlay=MedsiChatOverlay.create({
+      overlayId:OVERLAY_ID,
       onOpen:(state,api)=>{
-        api.root.classList.add('parent-original-active');
+        const root=overlayRoot();if(root)root.classList.add('parent-original-active');
         if(cleanup){try{cleanup()}catch(_){}cleanup=null}
         try{cleanup=MedsiParentOverlayChat.mount(api,state)||null}
         catch(e){api.showError((e&&e.message)||'Не удалось отрисовать чат.');console.error('Parent chat mount failed',e)}
       },
       onClose:()=>{if(cleanup){try{cleanup()}catch(_){}cleanup=null}}
     });
-    overlay.root.classList.add('parent-original-active');
+    const root=overlayRoot();if(root)root.classList.add('parent-original-active');
     return overlay;
   }
 
@@ -102,24 +105,18 @@
     try{
       const session=await getSession(phone);
       if(window.MedsiParentPrewarm)await MedsiParentPrewarm.ready(phone).catch(()=>{});
-      const ov=ensureOverlay();
-      ov.open({role:'parent',phone,parentName:get(PARENT_KEY),childName:get(CHILD_KEY),session});
+      ensureOverlay().open({role:'parent',phone,parentName:get(PARENT_KEY),childName:get(CHILD_KEY),session});
     }catch(e){
       console.error('Parent chat open failed',e);
-      try{ensureOverlay().showError((e&&e.message)||'Не удалось открыть чат.')}catch(_){}
+      alert((e&&e.message)||'Не удалось открыть чат.');
     }
   }
 
-  function installChatOverride(){
-    const btn=$('btnChat');
-    if(!btn)return;
-    btn.onclick=openParentChat;
-  }
-
+  function installChatOverride(){const btn=$('btnChat');if(btn)btn.onclick=openParentChat}
   function loadOverlayCore(){
     if(window.MedsiChatOverlay){installChatOverride();return}
     const script=document.createElement('script');
-    script.src='/chat-overlay/overlay-core.js?v=3';
+    script.src='/chat-overlay/overlay-core.js?v=4';
     script.onload=installChatOverride;
     script.onerror=()=>console.error('Не удалось загрузить overlay-core.js');
     document.head.appendChild(script);
