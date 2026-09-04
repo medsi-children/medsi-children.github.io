@@ -40,6 +40,29 @@
   transform:translateY(1px) scale(.988);
 }
 
+/* Exact source placement for the standalone delete control in "Написать родителю". */
+.educator-exact-clone #screenNewChat .chat-card{
+  position:relative !important;
+  padding:16px 56px 16px 18px !important;
+  min-height:122px !important;
+}
+.educator-exact-clone #screenNewChat .chat-delete-toggle.solo{
+  position:absolute !important;
+  top:12px !important;
+  right:12px !important;
+  z-index:3 !important;
+  box-sizing:border-box !important;
+  width:34px !important;
+  min-width:34px !important;
+  max-width:34px !important;
+  height:34px !important;
+  min-height:34px !important;
+  max-height:34px !important;
+  padding:0 !important;
+  margin:0 !important;
+  line-height:1 !important;
+}
+
 /* Parent chat wait indicator. It appears only if opening takes longer than a blink. */
 .medsi-parent-chat-wait{
   position:fixed;
