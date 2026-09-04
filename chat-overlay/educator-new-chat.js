@@ -45,6 +45,7 @@
   api.mount=function(overlay,state){
     const originalCleanup=originalMount(overlay,state);
     let disposed=false,rowsCache=null,requestToken=0,bridgeTimer=null;
+    const session=state&&state.session;
     const root=overlay.root;
     const scene=root&&root.querySelector('.scene');
     const title=root&&root.querySelector('#title');
@@ -76,8 +77,17 @@
       screen.classList.add('hidden');screen.classList.remove('overlay-screen-ready');screenThread.classList.add('hidden');screenChats.classList.remove('hidden');
       requestAnimationFrame(()=>screenChats.classList.add('overlay-screen-ready'));
     }
+    function normalizeRows(rows){
+      const byPhone=new Map();
+      (Array.isArray(rows)?rows:[]).forEach(r=>{
+        const p=phone10(r&&r.phone);
+        if(!p)return;
+        if(!byPhone.has(p))byPhone.set(p,{phone:p,parentName:String(r&&r.parentName||''),childName:String(r&&r.childName||'')});
+      });
+      return [...byPhone.values()].sort((a,b)=>String(a.childName||'').localeCompare(String(b.childName||''),'ru'));
+    }
     function render(rows){
-      list.replaceChildren();rows=Array.isArray(rows)?rows:[];
+      list.replaceChildren();rows=normalizeRows(rows);
       if(!rows.length){list.innerHTML='<div class="chat-empty">Нет родителей.</div>';return}
       rows.forEach(r=>{
         const card=document.createElement('button');card.className='chat-card';card.type='button';card.dataset.phone=r.phone||'';
@@ -93,13 +103,23 @@
     async function loadParents(){
       const token=++requestToken;error.classList.add('hidden');
       if(rowsCache)render(rowsCache);else list.innerHTML=skeleton(4);
+      let appError=null;
       try{
         const res=await appApi('listAvailableParentsForChat',[tutorToken()]);
         if(disposed||token!==requestToken)return;
-        rowsCache=Array.isArray(res&&res.rows)?res.rows:[];render(rowsCache);
+        const appRows=normalizeRows(res&&res.rows);
+        if(appRows.length){rowsCache=appRows;render(rowsCache);return}
+      }catch(err){appError=err}
+      try{
+        if(!session||!session.token)throw appError||new Error('Нет активной D1-сессии воспитателя.');
+        const d1=await transport.chats(session,'all');
+        if(disposed||token!==requestToken)return;
+        const d1Rows=normalizeRows(d1&&d1.chats);
+        if(d1Rows.length){rowsCache=d1Rows;render(rowsCache);return}
+        throw appError||new Error('Apps Script и D1 вернули пустой список родителей.');
       }catch(err){
         if(disposed||token!==requestToken)return;
-        error.textContent=err.message||'Сервер недоступен.';error.classList.remove('hidden');
+        error.textContent=(err&&err.message)||'Сервер недоступен.';error.classList.remove('hidden');
         if(!rowsCache)list.innerHTML='';
       }
     }
