@@ -37,6 +37,33 @@
   transform:translateY(1px) scale(.988);
 }
 
+/* Parent chat wait indicator. It appears only if opening takes longer than a blink. */
+.medsi-parent-chat-wait{
+  position:fixed;
+  inset:0;
+  z-index:9998;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(247,251,252,.72);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .14s ease;
+  backdrop-filter:blur(1.5px);
+  -webkit-backdrop-filter:blur(1.5px);
+}
+.medsi-parent-chat-wait.hidden{display:none !important;}
+.medsi-parent-chat-wait.is-visible{opacity:1;pointer-events:auto;}
+.medsi-parent-chat-wait__spinner{
+  width:28px;
+  height:28px;
+  border:3px solid rgba(15,199,206,.18);
+  border-top-color:#0fc7ce;
+  border-radius:50%;
+  animation:medsiParentWaitSpin .72s linear infinite;
+}
+@keyframes medsiParentWaitSpin{to{transform:rotate(360deg)}}
+
 /* Fullscreen image viewer, matching the original chat behavior. */
 .overlay-image-viewer{
   position:fixed;
