@@ -5,6 +5,8 @@
   const $=id=>document.getElementById(id);
   let tutorToken='';
   let d1Session=null;
+  let d1RefreshPromise=null;
+  let d1WarmTimer=null;
   let overlay=null;
   let overlayCleanup=null;
   let parentsCache=[];
@@ -20,7 +22,7 @@
   function loadD1(){try{const s=JSON.parse(safeGet(D1_KEY)||'null');return s&&s.token&&Number(s.expiresAt||0)>Date.now()+30000?s:null}catch(_){return null}}
   function extractD1(res){if(!res)return null;if(res.d1Session&&res.d1Session.token)return res.d1Session;if(res.session&&res.session.token)return res.session;if(res.token)return res;return null}
   function saveAuth(token,session){tutorToken=String(token||'');if(tutorToken)safeSet(TUTOR_KEY,tutorToken);if(session&&session.token){d1Session=session;safeSet(D1_KEY,JSON.stringify(session))}}
-  function clearAuth(){tutorToken='';d1Session=null;safeRemove(TUTOR_KEY);safeRemove(D1_KEY)}
+  function clearAuth(){tutorToken='';d1Session=null;d1RefreshPromise=null;if(d1WarmTimer){clearTimeout(d1WarmTimer);d1WarmTimer=null}safeRemove(TUTOR_KEY);safeRemove(D1_KEY)}
   function phone10(v){return String(v||'').replace(/\D+/g,'').slice(-10)}
   function displayPhone(v){const p=phone10(v);return p?'8'+p:''}
   function parentSig(rows){return (rows||[]).map(r=>[phone10(r.phone),r.parentName||'',r.childName||''].join('|')).sort().join('~')}
@@ -46,18 +48,32 @@
   }
   function hideGate(){stopAuthLoader();$('tutorAuthGate').classList.add('hidden');$('tutorAuthGate').classList.remove('checking')}
 
-  async function requestFreshD1(){
-    let verify=null;
-    try{verify=await callApi('verifyTutorSession',[tutorToken],8000)}catch(_){}
-    let session=extractD1(verify);
-    if(!session){
-      try{session=extractD1(await callApi('getD1ChatSession',['educator','',tutorToken],10000))}catch(_){}
-    }
-    if(!session||!session.token)throw new Error('Не удалось обновить сессию чата.');
-    saveAuth(tutorToken,session);return session;
+  function requestFreshD1(){
+    if(d1RefreshPromise)return d1RefreshPromise;
+    d1RefreshPromise=(async()=>{
+      let verify=null;
+      try{verify=await callApi('verifyTutorSession',[tutorToken],8000)}catch(_){}
+      let session=extractD1(verify);
+      if(!session){
+        try{session=extractD1(await callApi('getD1ChatSession',['educator','',tutorToken],10000))}catch(_){}
+      }
+      if(!session||!session.token)throw new Error('Не удалось обновить сессию чата.');
+      saveAuth(tutorToken,session);return session;
+    })().finally(()=>{d1RefreshPromise=null});
+    return d1RefreshPromise;
+  }
+  function scheduleD1Warm(){
+    if(!tutorToken)return;
+    if(d1WarmTimer)clearTimeout(d1WarmTimer);
+    d1WarmTimer=setTimeout(()=>{
+      d1WarmTimer=null;
+      const expiry=Number(d1Session&&d1Session.expiresAt||0);
+      if(d1Session&&expiry>Date.now()+10*60*1000)return;
+      requestFreshD1().then(session=>{if(session){prewarmParents();refreshUnreadBadge()}}).catch(()=>{});
+    },80);
   }
   async function refreshSavedSessionInBackground(){
-    try{const session=await requestFreshD1();if(session)prewarmParents()}catch(_){}
+    try{const session=await requestFreshD1();if(session){prewarmParents();refreshUnreadBadge()}}catch(_){}
   }
   async function verifySaved(){
     tutorToken=String(safeGet(TUTOR_KEY)||'');d1Session=loadD1();
@@ -70,7 +86,7 @@
       const session=extractD1(res);
       if(session)saveAuth(tutorToken,session);
       hideGate();startApp();
-      if(!session)refreshSavedSessionInBackground();
+      if(!session)scheduleD1Warm();
     }catch(e){clearAuth();showGate(false);if(String(e&&e.message||e)!=='TIMEOUT')setAuthError(String(e&&e.message||e))}
   }
 
@@ -82,8 +98,7 @@
       const res=await callApi('verifyTutorAccess',[login,password],15000);
       if(!res||!res.ok||!res.token)throw new Error((res&&res.message)||'Не удалось войти.');
       saveAuth(String(res.token),extractD1(res));$('tutorPassword').value='';
-      if(!d1Session){try{await requestFreshD1()}catch(_){}}
-      hideGate();startApp();
+      hideGate();startApp();scheduleD1Warm();
     }catch(e){setAuthError(String(e&&e.message||e)==='TIMEOUT'?'Сервер долго не отвечает. Попробуйте ещё раз.':String(e&&e.message||e))}
     finally{authBusy=false;$('tutorLoginBtn').disabled=false;$('tutorLoginBtn').textContent='Войти в систему'}
   }
@@ -94,7 +109,7 @@
     document.body.dataset.screen=name==='screenForm'?'report-'+($('btnSend').dataset.type||''):name;
     $('title').textContent=title||'Медси Бот';$('meta').textContent=meta||'Что хотите сделать?';animateScreen($(name));window.scrollTo(0,0)
   }
-  function showMenu(){setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge()}
+  function showMenu(){setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge();scheduleD1Warm()}
   function openReport(type){$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Психотерапия','Вставьте отчёт по психотерапии.'];setScreen('screenForm',spec[0],spec[1])}
   async function sendReport(){
     const type=$('btnSend').dataset.type,text=$('text').value,btn=$('btnSend');$('reportError').classList.add('hidden');if(!text.trim()){showReportError('Пустой текст отчёта.');return}
