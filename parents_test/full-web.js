@@ -2,7 +2,7 @@
   const APP_BASE_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
   const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',D1_KEY='medsi_d1_parent_session_v1';
   const $=id=>document.getElementById(id);
-  const reportCache={};let currentPhone='',parentName='',childName='',regParentName='',regChildName='',justRegistered=false,chatCleanup=null,d1Session=null,sessionBridge=null,sessionBridgePromise=null;
+  const reportCache={};let currentPhone='',parentName='',childName='',regParentName='',regChildName='',justRegistered=false,chatCleanup=null,d1Session=null;
   const onlyDigits=v=>String(v||'').replace(/\D+/g,'');const validPhone=v=>onlyDigits(v).length>=10;
   const safeGet=k=>{try{return localStorage.getItem(k)||''}catch(_){return''}};
   const safeSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}};const safeRemove=k=>{try{localStorage.removeItem(k)}catch(_){}};
@@ -20,34 +20,14 @@
   function showAuth(){setHeader('Авторизация','Введите номер телефона, который вы указывали при регистрации.');show('screenAuth')}
   function applyBootstrap(res){if(!res||!res.ok)return false;currentPhone=onlyDigits(res.phone||currentPhone);parentName=String(res.parentName||parentName||'').trim();childName=String(res.childName||childName||'').trim();safeSet(PHONE_KEY,currentPhone);safeSet(LEGACY_PHONE_KEY,currentPhone);safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);applyUnread(res);return true}
   function showChoose(){setHeader('Медси Бот','Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями и психологами.');$('waitNote').classList.toggle('hidden',!justRegistered);show('screenChoose');prewarmAll()}
-  function clearSession(){currentPhone='';parentName='';childName='';d1Session=null;safeRemove(PHONE_KEY);safeRemove(LEGACY_PHONE_KEY);safeRemove(PARENT_KEY);safeRemove(CHILD_KEY);safeRemove(D1_KEY);Object.keys(reportCache).forEach(k=>delete reportCache[k]);if(window.MedsiParentPrewarm)MedsiParentPrewarm.clear();destroySessionBridge()}
+  function clearSession(){currentPhone='';parentName='';childName='';d1Session=null;safeRemove(PHONE_KEY);safeRemove(LEGACY_PHONE_KEY);safeRemove(PARENT_KEY);safeRemove(CHILD_KEY);safeRemove(D1_KEY);Object.keys(reportCache).forEach(k=>delete reportCache[k]);if(window.MedsiParentPrewarm)MedsiParentPrewarm.clear()}
   async function restoreSaved(){const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));if(!validPhone(ph)){showStart();$('boot').classList.add('hidden');return}try{const res=await callApi('getParentBootstrap',[ph],12000);if(!applyBootstrap(res)){clearSession();showStart();return}showChoose()}catch(_){clearSession();showStart()}finally{$('boot').classList.add('hidden')}}
   function isSingleWord(v){return !/\s/.test(String(v||'').trim())}
   async function register(){const digits=onlyDigits($('phoneInputReg').value);const err=$('phoneErrorReg'),info=$('alreadyRegistered'),btn=$('registerBtn');err.classList.add('hidden');info.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}btn.disabled=true;try{const res=await callApi('registerParent',[regParentName,regChildName,digits],20000);if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось выполнить регистрацию.');if(res.duplicate){info.textContent='Похоже, вы уже зарегистрированы в системе. Пожалуйста, используйте кнопку «Авторизация», чтобы войти и посмотреть отчёты.';info.classList.remove('hidden');justRegistered=false;return}currentPhone=digits;parentName=regParentName;childName=regChildName;justRegistered=true;safeSet(PHONE_KEY,currentPhone);safeSet(LEGACY_PHONE_KEY,currentPhone);safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);showChoose();callApi('getParentBootstrap',[currentPhone],12000).then(r=>{applyBootstrap(r);setChips();prewarmAll()}).catch(()=>{})}catch(e){err.textContent=String(e&&e.message||e)==='TIMEOUT'?'Сервер долго не отвечает. Попробуйте ещё раз.':String(e&&e.message||e);err.classList.remove('hidden')}finally{btn.disabled=false}}
   async function auth(){const digits=onlyDigits($('phoneInputAuth').value);const err=$('phoneErrorAuth'),btn=$('authBtn');err.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}btn.disabled=true;try{const res=await callApi('getParentBootstrap',[digits],15000);if(!res||!res.ok){err.textContent='Ваш номер не найден в системе. Если вы поступаете повторно, пожалуйста, нажмите «Назад» и пройдите регистрацию еще раз!';err.classList.remove('hidden');return}currentPhone=digits;justRegistered=false;applyBootstrap(res);showChoose()}catch(e){err.textContent=String(e&&e.message||e)==='TIMEOUT'?'Сервер долго не отвечает. Попробуйте ещё раз.':'Сервер недоступен.';err.classList.remove('hidden')}finally{btn.disabled=false}}
   function extractSession(res){if(res&&res.token)return res;if(res&&res.session&&res.session.token)return res.session;return null}
   function saveD1Session(session){if(!session||!session.token)return null;d1Session=session;safeSet(D1_KEY,JSON.stringify({phone:onlyDigits(currentPhone).slice(-10),session}));return session}
-  function destroySessionBridge(){if(sessionBridge){try{sessionBridge.remove()}catch(_){}sessionBridge=null}sessionBridgePromise=null}
-  function getSessionViaBridge(){
-    if(sessionBridgePromise)return sessionBridgePromise;
-    sessionBridgePromise=new Promise((resolve,reject)=>{
-      let settled=false,timer=null,helloTimer=null;
-      const finish=(value,error)=>{if(settled)return;settled=true;if(timer)clearTimeout(timer);if(helloTimer)clearInterval(helloTimer);window.removeEventListener('message',onMessage);const frame=sessionBridge;sessionBridge=null;setTimeout(()=>{try{frame&&frame.remove()}catch(_){}},50);sessionBridgePromise=null;if(error)reject(error);else resolve(value)};
-      const onMessage=event=>{const frame=sessionBridge;if(!frame||event.source!==frame.contentWindow)return;const data=event.data||{};if(data.type!=='medsi:chat-overlay'||data.role!=='parent')return;const session=extractSession(data.session||data);if(session&&session.token)finish(saveD1Session(session))};
-      window.addEventListener('message',onMessage);
-      const frame=document.createElement('iframe');sessionBridge=frame;frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;frame.style.cssText='position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;border:0;left:-9999px;top:-9999px';
-      const ping=()=>{try{if(!frame.contentWindow)return;frame.contentWindow.postMessage({type:'medsi:parent-session',action:'restore',phone:currentPhone},'*');frame.contentWindow.postMessage({type:'medsi:chat-overlay',action:'hello',role:'parent',phone:currentPhone,cachedSession:null},'*')}catch(_){}};
-      frame.onload=()=>{ping();helloTimer=setInterval(ping,350)};
-      frame.src=APP_BASE_URL+'?ui=github-parent-session&shellMode=parents_test#restorePhone='+encodeURIComponent(currentPhone);
-      document.body.appendChild(frame);
-      timer=setTimeout(()=>finish(null,new Error('SESSION_BRIDGE_TIMEOUT')),12000);
-    });
-    return sessionBridgePromise;
-  }
-  async function warmD1(){if(!currentPhone)return null;try{const saved=JSON.parse(safeGet(D1_KEY)||'null');const s=extractSession(saved);const phone=onlyDigits(saved&&saved.phone||currentPhone).slice(-10);if(s&&Number(s.expiresAt||0)>Date.now()+30000&&phone===onlyDigits(currentPhone).slice(-10))return saveD1Session(s)}catch(_){}
-    try{const res=await callApi('getD1ChatSession',['parent',currentPhone,''],7000);const s=extractSession(res);if(s)return saveD1Session(s)}catch(_){}
-    try{return await getSessionViaBridge()}catch(_){return null}
-  }
+  async function warmD1(){if(!currentPhone)return null;try{const saved=JSON.parse(safeGet(D1_KEY)||'null');const s=extractSession(saved);const phone=onlyDigits(saved&&saved.phone||currentPhone).slice(-10);if(s&&Number(s.expiresAt||0)>Date.now()+30000&&phone===onlyDigits(currentPhone).slice(-10))return saveD1Session(s)}catch(_){}try{const res=await callApi('getD1ChatSession',['parent',currentPhone,''],10000);const s=extractSession(res);return s?saveD1Session(s):null}catch(_){return null}}
   async function warmReport(kind){if(reportCache[kind]||!currentPhone)return;try{const res=kind==='psychology'?await callApi('getPsychologyReportFor',[currentPhone],15000):await callApi('getReportFor',[currentPhone,kind],15000);if(res&&res.ok)reportCache[kind]=res}catch(_){}}
   function prewarmAll(){if(!currentPhone)return;warmD1().then(session=>{if(session&&window.MedsiOverlayTransport&&window.MedsiParentPrewarm)MedsiParentPrewarm.warm(session,currentPhone)});warmReport('morning');setTimeout(()=>warmReport('evening'),120);setTimeout(()=>warmReport('psychology'),240)}
   function reportTitle(kind){return kind==='morning'?'Утренний отчёт':kind==='evening'?'Вечерний отчёт':'Групповая психотерапия'}
