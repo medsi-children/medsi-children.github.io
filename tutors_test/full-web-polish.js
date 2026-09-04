@@ -52,29 +52,19 @@
   }
 
   async function deleteParent(row,card){
-    const child=row.childName||'ребёнка';
-    if(!confirm('Удалить «'+child+'» из активной базы? Архив DATABASE останется.'))return;
+    const child=String(row.childName||'ребёнка').trim();
+    if(!confirm('Удалить ребёнка '+child+' из бота?\n\nВся история сообщений будет удалена.'))return;
+
+    // The request starts immediately after the single deliberate confirmation.
+    // The card disappears optimistically while the server completes deletion.
+    const deletePromise=appApi('deleteReportChildByPhone',[row.phone,tutorToken()]);
+    const snapshot=removePhoneCardOptimistically(row,card);
+
     try{
-      if(card)card.classList.add('phone-card-checking');
-      const preview=await appApi('getReportChildDeletionPreview',[row.phone,tutorToken()]);
-      if(card)card.classList.remove('phone-card-checking');
-      if(!preview||!preview.ok)throw new Error(preview&&preview.message||'Удаление недоступно.');
-      if(!confirm('Подтвердите удаление: '+(preview.childName||child)+'. Чат и активные данные будут очищены.'))return;
-
-      // appApi() immediately starts fetch. Once this promise exists the delete
-      // request has already left the UI, so the card can disappear optimistically.
-      const deletePromise=appApi('deleteReportChildByPhone',[row.phone,tutorToken()]);
-      const snapshot=removePhoneCardOptimistically(row,card);
-
-      try{
-        const res=await deletePromise;
-        if(!res||!res.ok)throw new Error(res&&res.message||'Не удалось удалить.');
-      }catch(e){
-        restorePhoneAfterFailedDelete(snapshot,e&&e.message||e);
-      }
+      const res=await deletePromise;
+      if(!res||!res.ok)throw new Error(res&&res.message||'Не удалось удалить.');
     }catch(e){
-      if(card)card.classList.remove('phone-card-checking');
-      alert(String(e&&e.message||e));
+      restorePhoneAfterFailedDelete(snapshot,e&&e.message||e);
     }
   }
 
