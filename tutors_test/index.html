@@ -42,7 +42,11 @@
 
     .educator-exact-clone .msg-image-wrap::before{display:none!important}
     .educator-exact-clone .msg-image-wrap img,
-    .educator-exact-clone .msg-image-wrap video{opacity:1!important;transform:none!important}
+    .educator-exact-clone .msg-image-wrap video{opacity:0!important;transform:none!important;transition:opacity .38s ease!important}
+    .educator-exact-clone .msg-image-wrap.loaded img,
+    .educator-exact-clone .msg-image-wrap.loaded video,
+    .educator-exact-clone .msg-image-wrap img.loaded,
+    .educator-exact-clone .msg-image-wrap video.loaded{opacity:1!important}
   </style>
   <script src="/chat-overlay/transport.js?v=4"></script>
   <script src="/tutors_test/chat-prewarm.js?v=1"></script>
@@ -62,7 +66,7 @@
         <p class="auth-subtitle">Войдите, чтобы работать с отчётами, чатами и телефонами родителей.</p>
       </div>
       <div id="authChecking" class="hidden">
-        <p class="tutor-boot-text">Подключаемся…</p>
+        <p id="tutorBootText" class="tutor-boot-text">Подключаемся…</p>
         <div class="tutor-boot-logo" aria-hidden="true"><span class="tutor-boot-dot"></span><span class="tutor-boot-dot"></span><span class="tutor-boot-dot"></span><span class="tutor-boot-dot"></span><span class="tutor-boot-dot"></span></div>
       </div>
       <div id="authForm" class="hidden">
@@ -147,7 +151,7 @@
     </article>
   </div>
 
-  <script src="/tutors_test/full-web.js?v=4"></script>
+  <script src="/tutors_test/full-web.js?v=5"></script>
   <script src="/tutors_test/full-web-polish.js?v=5"></script>
 </body>
 </html>
