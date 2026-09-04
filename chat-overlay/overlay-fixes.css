@@ -12,6 +12,31 @@
   to{opacity:1;transform:none}
 }
 
+/* Coordinated short transitions: content appears as one settled screen, not in pieces. */
+.educator-exact-clone #screenChats:not(.hidden),
+.educator-exact-clone #screenChatThread:not(.hidden),
+.parent-role .medsi-legacy-card{
+  opacity:0;
+  transform:translateY(3px) scale(.997);
+  transition:opacity .18s ease,transform .18s ease;
+  pointer-events:none;
+}
+.educator-exact-clone #screenChats.overlay-screen-ready,
+.educator-exact-clone #screenChatThread.overlay-screen-ready,
+.parent-role .medsi-legacy-card.overlay-screen-ready{
+  opacity:1;
+  transform:none;
+  pointer-events:auto;
+}
+.medsi-chat-overlay button,
+.medsi-chat-overlay .btn{
+  transition:transform .12s ease,filter .12s ease,opacity .12s ease,box-shadow .12s ease;
+}
+.medsi-chat-overlay button:active,
+.medsi-chat-overlay .btn:active{
+  transform:translateY(1px) scale(.988);
+}
+
 /* Keep the original refresh glyph optically centered on every viewport. */
 .educator-exact-clone #screenChats .refresh-btn{
   display:grid !important;
