@@ -2,7 +2,7 @@
 
 /* Phones screen copied from the current production educator UI. */
 #screenPhones .phones-list{display:flex;flex-direction:column;gap:10px;width:100%}
-#screenPhones .phone-card{display:block;position:relative;width:100%;text-align:left;background:#fdfefe;border:1.5px solid rgba(36,211,218,.22);border-radius:14px;padding:14px 56px 14px 16px;color:var(--fg);box-shadow:0 4px 14px rgba(36,211,218,.04);transition:opacity .28s ease,transform .28s ease,box-shadow .28s ease,border-color .28s ease}
+#screenPhones .phone-card{display:block;position:relative;width:100%;text-align:left;background:#fdfefe;border:1.5px solid rgba(36,211,218,.22);border-radius:14px;padding:14px 56px 14px 16px;color:var(--fg);box-shadow:0 4px 14px rgba(36,211,218,.04);transition:opacity .28s ease,transform .28s ease,box-shadow .28s ease,border-color .28s ease,filter .28s ease}
 #screenPhones .phone-card-title{font-weight:800;margin-bottom:6px;color:var(--fg)}
 #screenPhones .phone-card-meta{color:var(--muted);font-size:.95rem;line-height:1.45;white-space:pre-line;margin-bottom:12px}
 #screenPhones .phone-number-strong{font-weight:800;color:var(--medsi-dark)}
@@ -10,6 +10,9 @@
 #screenPhones .phone-action-btn{width:auto!important;min-height:44px!important;padding:8px 14px!important;font-size:.95rem!important;border-radius:12px!important;text-decoration:none;display:inline-flex;align-items:center;justify-content:flex-start}
 #screenPhones .phone-delete{position:absolute;top:12px;right:12px;width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important;padding:0!important;border-radius:999px!important;display:inline-flex;align-items:center;justify-content:center;color:#dc3348;background:rgba(255,245,246,.96);border:1.5px solid rgba(244,63,94,.28);font-size:20px;line-height:1;cursor:pointer}
 #screenPhones .phone-card.card-enter{animation:fullWebCardEnter .42s cubic-bezier(.2,.85,.25,1) both}
+#screenPhones .phone-card.phone-card-checking{opacity:.72;filter:saturate(.75)}
+#screenPhones .phone-card.phone-card-deleting{pointer-events:none;transition:opacity .22s ease,transform .22s ease,filter .22s ease}
+#screenPhones .phone-card.phone-card-deleting-go{opacity:0;transform:translateY(-6px) scale(.985);filter:saturate(.55)}
 @keyframes fullWebCardEnter{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
 .phone-mini-loader{width:24px;height:24px;margin:18px auto;border:3px solid rgba(36,211,218,.18);border-top-color:#16b8c0;border-radius:50%;animation:phoneMiniSpin .7s linear infinite}
 @keyframes phoneMiniSpin{to{transform:rotate(360deg)}}
