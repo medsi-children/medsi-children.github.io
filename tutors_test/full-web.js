@@ -47,14 +47,7 @@
   async function verifySaved(){
     tutorToken=String(safeGet(TUTOR_KEY)||'');d1Session=loadD1();
     if(!tutorToken){showGate(false);return}
-
-    /* If both saved credentials are still usable, do not hold the UI hostage to
-       Apps Script. Server-side methods still validate the tutor token on every
-       protected action, while the short-lived D1 token protects chat access. */
-    if(d1Session&&d1Session.token){
-      hideGate();startApp();refreshSavedSessionInBackground();return;
-    }
-
+    if(d1Session&&d1Session.token){hideGate();startApp();refreshSavedSessionInBackground();return}
     showGate(true);
     try{
       const res=await callApi('verifyTutorSession',[tutorToken],8000);
@@ -81,10 +74,18 @@
     finally{authBusy=false;$('tutorLoginBtn').disabled=false;$('tutorLoginBtn').textContent='Войти в систему'}
   }
 
+  function animateScreen(el){
+    if(!el)return;
+    el.classList.remove('web-screen-enter');
+    void el.offsetWidth;
+    el.classList.add('web-screen-enter');
+    setTimeout(()=>el.classList.remove('web-screen-enter'),340);
+  }
   function setScreen(name,title,meta){
     ['screenChoose','screenForm','screenDone','screenPhones'].forEach(id=>$(id).classList.toggle('hidden',id!==name));
     document.body.dataset.screen=name==='screenForm'?'report-'+($('btnSend').dataset.type||''):name;
-    $('title').textContent=title||'Медси Бот';$('meta').textContent=meta||'Что хотите сделать?';window.scrollTo(0,0);
+    $('title').textContent=title||'Медси Бот';$('meta').textContent=meta||'Что хотите сделать?';
+    animateScreen($(name));window.scrollTo(0,0);
   }
   function showMenu(){setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge();}
   function openReport(type){
@@ -105,23 +106,40 @@
   }
   function showReportError(text){const el=$('reportError');el.textContent=text;el.classList.remove('hidden')}
 
+  function makePhonesSkeleton(count){
+    return '<div class="list-skeleton">'+Array.from({length:count||4}).map(()=>'<div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line wide"></div><div class="skeleton-line mid"></div><div class="skeleton-actions"><div class="skeleton-btn"></div><div class="skeleton-btn"></div></div></div>').join('')+'</div>';
+  }
   async function loadParents(){
-    $('phonesError').classList.add('hidden');$('phonesList').innerHTML='<div class="boot-spinner" aria-label="Загрузка"></div>';
+    $('phonesError').classList.add('hidden');
+    if(parentsCache.length)renderPhones(parentsCache);else $('phonesList').innerHTML=makePhonesSkeleton(4);
     try{const res=await callApi('listAvailableParentsForChat',[tutorToken],20000);if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось загрузить родителей.');parentsCache=Array.isArray(res.rows)?res.rows:[];renderPhones(parentsCache)}
     catch(e){$('phonesList').innerHTML='';$('phonesError').textContent=String(e&&e.message||e);$('phonesError').classList.remove('hidden')}
   }
   function phone10(v){return String(v||'').replace(/\D+/g,'').slice(-10)}
   function displayPhone(v){const p=phone10(v);return p?'8'+p:''}
+  async function copyPhone(text,btn){
+    text=String(text||'').trim();if(!text)return;
+    const old=btn.textContent;
+    try{
+      if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(text);
+      else{const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}
+      btn.textContent='Скопировано';setTimeout(()=>{btn.textContent=old},900);
+    }catch(_){btn.textContent='Не скопировано';setTimeout(()=>{btn.textContent=old},1100)}
+  }
   function renderPhones(rows){
     const box=$('phonesList');box.replaceChildren();
-    if(!rows.length){box.textContent='Список родителей пуст.';return}
-    rows.forEach(r=>{
-      const card=document.createElement('div');card.className='phone-card';
-      const child=document.createElement('div');child.className='phone-child';child.textContent=r.childName||'Без имени ребёнка';
-      const parent=document.createElement('div');parent.className='phone-parent';parent.textContent=r.parentName||'Родитель';
-      const tel=document.createElement('a');tel.className='phone-number';tel.href='tel:'+displayPhone(r.phone);tel.textContent=displayPhone(r.phone);
+    if(!rows.length){box.innerHTML='<div class="chat-empty">Нет родителей.</div>';return}
+    rows.forEach((r,index)=>{
+      const card=document.createElement('div');card.className='phone-card card-enter';card.style.animationDelay=Math.min(index*35,180)+'ms';
+      const title=document.createElement('div');title.className='phone-card-title';title.textContent=r.childName||'Без имени ребёнка';
+      const meta=document.createElement('div');meta.className='phone-card-meta';
+      meta.append(document.createTextNode('Родитель: '+(r.parentName||'—')));meta.appendChild(document.createElement('br'));meta.append(document.createTextNode('Номер телефона: '));
+      const strong=document.createElement('span');strong.className='phone-number-strong';strong.textContent=displayPhone(r.phone)||'—';meta.appendChild(strong);
+      const actions=document.createElement('div');actions.className='phone-card-actions';
+      const copy=document.createElement('button');copy.className='btn btn-teal phone-action-btn';copy.type='button';copy.textContent='Скопировать';copy.addEventListener('click',()=>copyPhone(displayPhone(r.phone),copy));
+      const call=document.createElement('a');call.className='btn btn-mint phone-action-btn';call.href='tel:'+String(r.phone||'').replace(/\D+/g,'');call.textContent='Позвонить';
       const del=document.createElement('button');del.className='phone-delete';del.type='button';del.setAttribute('aria-label','Удалить ребёнка');del.textContent='×';del.addEventListener('click',()=>deleteParent(r));
-      card.append(child,parent,tel,del);box.appendChild(card);
+      actions.append(copy,call);card.append(title,del,meta,actions);box.appendChild(card);
     });
   }
   async function deleteParent(row){
