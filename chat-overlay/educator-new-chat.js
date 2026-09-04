@@ -71,7 +71,7 @@
       rows.forEach(r=>{
         const card=document.createElement('button');card.className='chat-card';card.type='button';card.dataset.phone=r.phone||'';
         const name=document.createElement('div');name.className='chat-card-title';name.textContent=r.childName||'Без имени ребёнка';
-        const del=document.createElement('span');del.className='chat-delete-toggle';del.setAttribute('role','button');del.setAttribute('tabindex','0');del.title='Удалить ребёнка';del.innerHTML=deleteIcon();
+        const del=document.createElement('span');del.className='chat-delete-toggle solo';del.setAttribute('role','button');del.setAttribute('tabindex','0');del.setAttribute('aria-label','Удалить ребёнка');del.title='Удалить ребёнка';del.innerHTML=deleteIcon();
         const info=document.createElement('div');info.className='chat-card-meta';info.textContent='Родитель: '+(r.parentName||'—')+'\nНомер телефона: '+(r.phone?displayPhone(r.phone):'—');
         del.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();bridgeToCard(r,'delete')});
         card.append(name,del,info);
