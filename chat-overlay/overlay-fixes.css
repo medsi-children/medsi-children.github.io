@@ -37,6 +37,54 @@
   transform:translateY(1px) scale(.988);
 }
 
+/* Fullscreen image viewer, matching the original chat behavior. */
+.overlay-image-viewer{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:rgba(8,25,29,.76);
+  opacity:0;
+  transition:opacity .16s ease;
+  backdrop-filter:blur(2px);
+  -webkit-backdrop-filter:blur(2px);
+}
+.overlay-image-viewer.hidden{display:none !important;}
+.overlay-image-viewer.is-open{opacity:1;}
+.overlay-image-viewer__img{
+  display:block;
+  max-width:min(96vw,1200px);
+  max-height:92vh;
+  object-fit:contain;
+  border-radius:14px;
+  box-shadow:0 24px 70px rgba(0,0,0,.34);
+  transform:scale(.988);
+  transition:transform .16s ease;
+}
+.overlay-image-viewer.is-open .overlay-image-viewer__img{transform:none;}
+.overlay-image-viewer__close{
+  position:fixed;
+  top:max(14px,env(safe-area-inset-top));
+  right:max(14px,env(safe-area-inset-right));
+  width:44px;
+  height:44px;
+  min-height:44px;
+  padding:0;
+  border:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.94);
+  color:#18474e;
+  font-size:29px;
+  line-height:1;
+  font-weight:400;
+  box-shadow:0 8px 24px rgba(0,0,0,.20);
+  cursor:pointer;
+}
+.msg-image-wrap img{cursor:zoom-in;}
+
 /* Keep the original refresh glyph optically centered on every viewport. */
 .educator-exact-clone #screenChats .refresh-btn{
   display:grid !important;
@@ -110,6 +158,8 @@
 }
 
 @media (max-width:560px){
+  .overlay-image-viewer{padding:10px;}
+  .overlay-image-viewer__img{max-width:100%;max-height:90vh;border-radius:11px;}
   .educator-exact-clone .chat-box .msg{min-width:145px;}
   .educator-exact-clone #chatList > div[style*="border-top"] > .btn{
     width:auto !important;
