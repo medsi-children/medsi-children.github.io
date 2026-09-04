@@ -12,10 +12,10 @@
   <title>Медси Бот — тестовая веб-панель</title>
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
-  <link rel="stylesheet" href="/tutors_test/full-web.css?v=1">
   <link rel="stylesheet" href="/chat-overlay/overlay.css?v=7">
   <link rel="stylesheet" href="/chat-overlay/educator-exact.css?v=1">
   <link rel="stylesheet" href="/chat-overlay/overlay-fixes.css?v=8">
+  <link rel="stylesheet" href="/tutors_test/full-web.css?v=2">
   <script src="/chat-overlay/transport.js?v=4"></script>
   <script src="/chat-overlay/interaction-fix.js?v=5"></script>
   <script src="/chat-overlay/educator-chat.js?v=9"></script>
@@ -50,10 +50,9 @@
   </div>
 
   <div class="wrap">
-    <article class="frame" id="frame">
+    <article class="frame choose-mode" id="frame">
       <div id="rim" class="rim"></div>
       <div class="scene">
-        <div class="toolbar"><button id="logoutBtn" class="btn" type="button">Выйти</button></div>
         <h1 id="title" class="title">Медси Бот</h1>
         <p id="meta" class="meta">Что хотите сделать?</p>
 
@@ -65,27 +64,27 @@
           </div>
           <div class="educator-dashboard">
             <div class="educator-actions">
-              <button id="btnParentChats" class="btn menu-card menu-card-chat">
+              <button id="btnParentChats" class="btn menu-card menu-card-chat block start-cascade start-cascade-1">
                 <span class="menu-card-title">💬 Чат с родителями</span>
                 <span class="menu-card-text">Написать родителю и ответить на вопросы.</span>
                 <span id="newParentMsgBanner" class="chat-newmsg hidden">✦ Новое сообщение</span>
               </button>
               <div class="grid2 educator-report-grid">
-                <button id="btnMorning" class="btn menu-card menu-card-morning">
+                <button id="btnMorning" class="btn menu-card menu-card-morning block start-cascade start-cascade-2">
                   <span class="menu-card-title">☀️ Утренний отчёт</span>
                   <span class="menu-card-text">Отправить утренний отчёт.</span>
                 </button>
-                <button id="btnEvening" class="btn menu-card menu-card-evening">
+                <button id="btnEvening" class="btn menu-card menu-card-evening block start-cascade start-cascade-2">
                   <span class="menu-card-title">🌙 Вечерний отчёт</span>
                   <span class="menu-card-text">Отправить вечерний отчёт.</span>
                 </button>
               </div>
               <div class="grid2 educator-secondary-grid">
-                <button id="btnPsychology" class="btn menu-card menu-card-therapy">
+                <button id="btnPsychology" class="btn menu-card menu-card-therapy block start-cascade start-cascade-3">
                   <span class="menu-card-title">🧠 Психотерапия</span>
                   <span class="menu-card-text">Отправить отчёт по психотерапии.</span>
                 </button>
-                <button id="btnParentPhones" class="btn menu-card menu-card-phones">
+                <button id="btnParentPhones" class="btn menu-card menu-card-phones block start-cascade start-cascade-3">
                   <span class="menu-card-title">📞 Телефоны</span>
                   <span class="menu-card-text">Дать ребёнку позвонить родителю.</span>
                 </button>
@@ -118,6 +117,6 @@
     </article>
   </div>
 
-  <script src="/tutors_test/full-web.js?v=1"></script>
+  <script src="/tutors_test/full-web.js?v=2"></script>
 </body>
 </html>
