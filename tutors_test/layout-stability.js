@@ -61,26 +61,8 @@
     if(list.lastElementChild!==wrap)list.appendChild(wrap);
   }
 
-  function stabilizeMedia(root){
-    root.querySelectorAll('.msg-image-wrap').forEach(wrap=>{
-      const media=wrap.querySelector('img,video');
-      if(!media)return;
-      media.classList.add('msg-image');
-      const finish=()=>{media.classList.add('loaded');wrap.classList.add('loaded')};
-      if(media.tagName==='IMG'){
-        if(media.complete&&media.naturalWidth>0)finish();
-        else if(!media.dataset.medsiLoadBound){media.dataset.medsiLoadBound='1';media.addEventListener('load',finish,{once:true});media.addEventListener('error',()=>wrap.classList.add('loaded'),{once:true})}
-      }else{
-        if(media.readyState>=1)finish();
-        else if(!media.dataset.medsiLoadBound){media.dataset.medsiLoadBound='1';media.addEventListener('loadedmetadata',finish,{once:true});media.addEventListener('error',()=>wrap.classList.add('loaded'),{once:true})}
-      }
-    });
-  }
-
   function stabilize(root){
     if(!root)return;
-
-    stabilizeMedia(root);
 
     const screenChats=root.querySelector('#screenChats');
     if(screenChats)ensureReadProxy(screenChats);
