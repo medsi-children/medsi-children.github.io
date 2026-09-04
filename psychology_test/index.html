@@ -12,30 +12,10 @@
   <title>Групповая психотерапия — Медси Бот</title>
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
-  <link rel="stylesheet" href="/psychology_test/style.css?v=1">
+  <link rel="stylesheet" href="/psychology_test/style.css?v=2">
 </head>
 <body>
-  <div id="authGate" class="auth-gate">
-    <div id="authChecking" class="auth-checking" aria-hidden="true"></div>
-    <div id="authCard" class="auth-card hidden">
-      <div class="brand">
-        <div class="medsi-logo" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
-        <h1>Групповая психотерапия</h1>
-        <p>Войдите, чтобы отправить отчёт.</p>
-      </div>
-      <div class="auth-fields">
-        <label for="login">Логин</label>
-        <input id="login" type="text" autocomplete="username" spellcheck="false">
-        <label for="password">Пароль</label>
-        <input id="password" type="password" autocomplete="current-password">
-      </div>
-      <p id="authError" class="status error hidden" role="alert"></p>
-      <button id="loginBtn" class="btn btn-teal" type="button">Войти в систему</button>
-      <p class="auth-note">На этом устройстве вход сохранится.</p>
-    </div>
-  </div>
-
-  <main id="app" class="page hidden">
+  <main id="app" class="page">
     <article class="frame">
       <div class="rim"></div>
       <div class="scene">
@@ -58,12 +38,10 @@
           <p class="status success">Готово. Отчёт по психотерапии отправлен.</p>
           <button id="againBtn" class="btn" type="button">Отправить ещё один</button>
         </section>
-
-        <button id="logoutBtn" class="logout" type="button">Выйти</button>
       </div>
     </article>
   </main>
 
-  <script src="/psychology_test/app.js?v=1"></script>
+  <script src="/psychology_test/app.js?v=2"></script>
 </body>
 </html>
