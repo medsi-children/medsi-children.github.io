@@ -2,7 +2,14 @@
 .educator-exact-clone #screenChats #chatList{
   min-height:58px;
 }
-.educator-exact-clone #screenChats #chatList > .chat-empty{
+/* In the usual empty-unread state the "Open read chats" control is appended
+   asynchronously after the empty label. Reserve its final height from frame 1
+   so the main action row below never jumps when that control appears. */
+.educator-exact-clone #screenChats #chatList:not(:has(.chat-card)){
+  min-height:118px;
+}
+.educator-exact-clone #screenChats #chatList > .chat-empty,
+.educator-exact-clone #screenChats #chatList > div:not(.chat-empty):not(.list-skeleton){
   animation:medsiQuietReveal .20s ease both;
 }
 .educator-exact-clone #screenNewChat{
