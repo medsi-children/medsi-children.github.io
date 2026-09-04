@@ -4,18 +4,29 @@
   if(!t)return;
   const p10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
   const fmt=v=>{const d=new Date(Number(v));return Number.isNaN(d.getTime())?'':d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})};
-  let state=null,rows=[],busy=false,dead=false;
+  let state=null,rows=[],busy=false,dead=false,lightbox=null;
 
   function mediaUrl(m){
     const id=String(m&&m.fileId||'');if(!id)return'';
     if(id.startsWith('kv:')||id.startsWith('r2:'))return t.baseUrl+'/media/'+encodeURIComponent(id.slice(3));
-    return 'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1200';
+    return 'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1600';
   }
   function nearBottom(){const box=$('parentChatMessages');return !box||box.scrollHeight-box.scrollTop-box.clientHeight<90}
   function scrollBottom(smooth){const box=$('parentChatMessages');if(!box)return;requestAnimationFrame(()=>box.scrollTo({top:box.scrollHeight,behavior:smooth?'smooth':'auto'}))}
   function showError(msg){const e=$('parentChatError');if(!e)return;e.textContent=String(msg||'Не удалось открыть чат.');e.classList.remove('hidden')}
   function clearError(){const e=$('parentChatError');if(!e)return;e.textContent='';e.classList.add('hidden')}
   function setBusy(v){busy=!!v;$('parentChatInput').disabled=busy;$('parentChatSend').disabled=busy;$('parentChatAttach').disabled=busy}
+
+  function closeLightbox(){if(!lightbox)return;lightbox.remove();lightbox=null}
+  function openLightbox(src,alt){
+    closeLightbox();
+    const root=document.createElement('div');root.className='parent-chat-lightbox';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','Просмотр фотографии');
+    const img=document.createElement('img');img.src=src;img.alt=alt||'Фотография из чата';
+    const close=document.createElement('button');close.type='button';close.className='parent-chat-lightbox-close';close.setAttribute('aria-label','Закрыть фотографию');close.textContent='×';
+    close.onclick=closeLightbox;root.onclick=e=>{if(e.target===root)closeLightbox()};
+    root.append(img,close);document.body.appendChild(root);lightbox=root;
+  }
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLightbox()});
 
   function render(list,opts){
     const box=$('parentChatMessages');if(!box)return;
@@ -30,8 +41,13 @@
       if(u){
         const frame=document.createElement('div');frame.className='parent-chat-media-frame';
         const md=document.createElement(m.type==='video'?'video':'img');md.className='parent-chat-media';md.src=u;
-        if(m.type==='video'){md.controls=true;md.preload='metadata';md.onloadedmetadata=()=>{md.classList.add('is-loaded');if(stick)scrollBottom(false)}}
-        else md.onload=()=>{md.classList.add('is-loaded');if(stick)scrollBottom(false)};
+        if(m.type==='video'){
+          frame.style.cursor='default';md.controls=true;md.preload='metadata';md.onloadedmetadata=()=>{md.classList.add('is-loaded');if(stick)scrollBottom(false)}
+        } else {
+          md.alt='Фотография из чата';
+          md.onload=()=>{md.classList.add('is-loaded');if(stick)scrollBottom(false)};
+          frame.onclick=e=>{e.preventDefault();e.stopPropagation();openLightbox(u,md.alt)};
+        }
         frame.appendChild(md);el.appendChild(frame)
       }
       if(m.text){const b=document.createElement('div');b.textContent=String(m.text);el.appendChild(b)}
@@ -61,7 +77,7 @@
     else $('parentChatMessages').innerHTML='<div class="parent-chat-empty">Загружаем сообщения…</div>';
     try{await refresh({stick:true})}catch(e){showError(e&&e.message||'Не удалось загрузить сообщения.')}
   }
-  function close(){dead=true;state=null;rows=[];setBusy(false);clearError()}
+  function close(){dead=true;state=null;rows=[];setBusy(false);clearError();closeLightbox()}
 
   $('parentChatBack').onclick=()=>{if(state&&typeof state.onBack==='function')state.onBack()};
   $('parentChatCompose').onsubmit=async e=>{
