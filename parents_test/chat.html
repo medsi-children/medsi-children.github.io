@@ -6,44 +6,47 @@
   <meta name="theme-color" content="#0fc7ce">
   <meta name="format-detection" content="telephone=no">
   <title>Медси Бот — чат</title>
-  <link rel="stylesheet" href="/chat-overlay/overlay.css?v=8">
-  <link rel="stylesheet" href="/chat-overlay/parent-compat.css?v=3">
-  <link rel="stylesheet" href="/chat-overlay/overlay-fixes.css?v=7">
   <style>
-    html,body{margin:0;min-height:100%;background:radial-gradient(circle at top left,rgba(15,199,206,.10),transparent 32%),radial-gradient(circle at bottom right,rgba(15,199,206,.08),transparent 28%),#f7fbfc;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#11424a}
-    *{box-sizing:border-box}
-    #shell{min-height:100dvh;padding:clamp(8px,2.5vmin,22px);display:flex;align-items:center;justify-content:center}
-    #chatHost{width:min(94vmin,860px);height:min(92dvh,860px);max-width:100%;position:relative}
-    #chatBody{width:100%;height:100%}
-    #chatBody>.medsi-legacy-wrap.parent-role{width:100%!important;height:100%!important;min-height:0!important;padding:0!important;display:flex!important;align-items:stretch!important;justify-content:center!important;background:transparent!important}
-    #chatBody .medsi-legacy-card{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;min-height:0!important}
-    #status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#5f7f86}
-    #status.hidden{display:none}
-    .loader{display:inline-flex;align-items:center;gap:10px;font-weight:700}.loader:before{content:"";width:18px;height:18px;border-radius:50%;border:3px solid rgba(15,199,206,.2);border-top-color:#16b8c0;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-    #error{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:20;width:min(560px,calc(100% - 28px));padding:10px 12px;border-radius:12px;background:#fff3f3;border:1px solid #efbaba;color:#a63e3e;text-align:center}.hidden{display:none!important}
-    @media(max-width:560px){#shell{padding:8px}#chatHost{width:100%;height:calc(100dvh - 16px)}}
+    *{box-sizing:border-box}html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#11424a;background:radial-gradient(circle at top left,rgba(15,199,206,.10),transparent 32%),radial-gradient(circle at bottom right,rgba(15,199,206,.08),transparent 28%),#f7fbfc;overflow:hidden}
+    #shell{height:100dvh;display:flex;align-items:center;justify-content:center;padding:8px}
+    #card{width:min(94vmin,860px);height:min(92dvh,860px);max-width:100%;background:#fff;border:1px solid rgba(15,199,206,.18);border-radius:20px;box-shadow:0 12px 34px rgba(15,199,206,.10);padding:10px;display:flex;flex-direction:column;overflow:hidden}
+    #top{display:grid;grid-template-columns:48px 1fr 48px;align-items:center;gap:8px;margin-bottom:8px}.back{width:48px;height:48px;border-radius:999px;border:1.5px solid rgba(22,184,192,.30);background:#fff;color:#16b8c0;font-size:25px;font-weight:800}.chips{display:flex;justify-content:center;gap:8px;min-width:0}.chip{padding:7px 14px;border-radius:999px;background:#f2fcfd;border:1px solid rgba(36,211,218,.28);color:#21aeb7;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:48%}
+    #note{background:linear-gradient(135deg,#37d2d5,#18b7c5 52%,#0fa6b7);color:#fff;border-radius:16px;padding:12px 14px;margin-bottom:8px;font-size:.84rem;line-height:1.42;box-shadow:0 12px 28px rgba(20,136,152,.22)}#note strong{display:block;margin-bottom:5px}
+    #messages{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:9px;padding:10px;background:linear-gradient(rgba(255,255,255,.72),rgba(255,255,255,.72)),url('/background.png');background-size:cover;background-position:center;border:1px solid rgba(15,199,206,.24);border-radius:14px;margin-bottom:8px}.empty{margin:auto;color:#6f8d92;text-align:center}.msg{max-width:85%;min-width:120px;padding:9px 11px 24px;border-radius:14px;position:relative;white-space:pre-wrap;word-break:break-word;line-height:1.4}.msg.parent{align-self:flex-end;background:#eefcfd;border:1px solid rgba(36,211,218,.18);color:#4e9fa6}.msg.educator{align-self:flex-start;background:linear-gradient(135deg,#0fc7ce,#44dbe1);color:#fff}.author{font-size:11px;font-weight:700;opacity:.75;margin-bottom:3px}.time{position:absolute;right:9px;bottom:6px;font-size:10px;opacity:.72}.media{display:block;width:min(260px,62vw);max-height:45vh;object-fit:cover;border-radius:10px;margin-bottom:6px}
+    #compose{display:grid;grid-template-columns:48px 1fr;grid-template-areas:'attach text' 'send send';gap:7px}.btn{border:0;border-radius:12px;font:inherit}.attach{grid-area:attach;background:#f2fcfd;border:1.5px solid rgba(15,199,206,.30);font-size:20px}.text{grid-area:text;height:64px;resize:none;border:1.5px solid rgba(15,199,206,.30);border-radius:12px;padding:10px 12px;font:inherit;outline:none}.send{grid-area:send;min-height:48px;background:linear-gradient(135deg,#4dd4e6,#1bb8c9);color:white;font-weight:800}.send:disabled,.attach:disabled,.text:disabled{opacity:.55}
+    #status,#error{position:absolute;z-index:20;left:50%;transform:translateX(-50%);top:18px;width:min(560px,calc(100% - 32px));padding:11px 13px;border-radius:13px;text-align:center}#status{background:#eefcfd;color:#4f7f85;border:1px solid rgba(15,199,206,.18)}#error{background:#fff1f1;color:#a63f45;border:1px solid #efbaba}.hidden{display:none!important}
+    @media(max-width:560px){#shell{padding:6px}#card{width:100%;height:calc(100dvh - 12px);border-radius:18px}.chip{font-size:.82rem;padding:6px 10px}#note{font-size:.78rem}.msg{max-width:88%}}
   </style>
   <script src="/chat-overlay/transport.js?v=4"></script>
-  <script src="/parents_test/prewarm.js?v=1"></script>
-  <script src="/chat-overlay/parent-chat.js?v=8"></script>
 </head>
 <body>
-  <main id="shell"><section id="chatHost"><div id="status"><div class="loader">Открываем чат…</div></div><div id="error" class="hidden"></div><div id="chatBody"></div></section></main>
+<div id="status">Подключаем чат…</div><div id="error" class="hidden"></div>
+<main id="shell"><section id="card">
+  <div id="top"><button id="back" class="back" type="button">←</button><div class="chips"><span id="child" class="chip"></span><span id="phone" class="chip"></span></div><span></span></div>
+  <div id="note"><strong>Пожалуйста, пишите только по делу. Воспитатели и психологи работают с детьми и не могут отвечать круглосуточно.</strong>Здесь можно оставить пожелания по отчётам и вопросы. Ответы на них придут в составе следующего отчёта.</div>
+  <div id="messages"><div class="empty">Загружаем сообщения…</div></div>
+  <form id="compose"><button id="attach" class="btn attach" type="button">📎</button><input id="file" type="file" accept="image/*,video/*" hidden><textarea id="text" class="text" placeholder="Напишите сообщение…" maxlength="4000"></textarea><button id="send" class="btn send" type="submit">Отправить</button></form>
+</section></main>
 <script>
 (function(){
-  const APP='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
-  const PHONE_KEY='medsi_parent_phone',LEGACY='medsi_phone',PARENT='medsi_parent',CHILD='medsi_child',D1='medsi_d1_parent_session_v1';
-  const get=k=>{try{return localStorage.getItem(k)||''}catch(_){return''}};
-  const set=(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}};
-  const digits=v=>String(v||'').replace(/\D+/g,'');
-  const status=document.getElementById('status'),error=document.getElementById('error'),body=document.getElementById('chatBody');
-  function showError(m){status.classList.add('hidden');error.textContent=String(m||'Не удалось открыть чат.');error.classList.remove('hidden')}
-  async function api(method,args){const r=await fetch(APP,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});const t=await r.text();let p;try{p=JSON.parse(t)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));return p.result}
-  function cached(phone){try{const x=JSON.parse(get(D1)||'null');if(!x||digits(x.phone).slice(-10)!==digits(phone).slice(-10))return null;const s=x.session||x;if(!s||!s.token||Number(s.expiresAt||0)<=Date.now()+30000)return null;return s}catch(_){return null}}
-  async function session(phone){const c=cached(phone);if(c)return c;const r=await api('getD1ChatSession',['parent',phone,'']);const s=r&&r.token?r:r&&r.session&&r.session.token?r.session:null;if(!s)throw new Error('Не удалось получить сессию чата.');set(D1,JSON.stringify({phone:digits(phone).slice(-10),session:s}));return s}
-  const overlay={body,showError,close(){location.href='/parents_test/?v=chat-radical1'}};
-  async function start(){const phone=digits(get(PHONE_KEY)||get(LEGACY));if(phone.length<10){location.href='/parents_test/?v=chat-radical1';return}try{const s=await session(phone);if(window.MedsiParentPrewarm){window.MedsiParentPrewarm.warm(s,phone).catch(()=>{});await window.MedsiParentPrewarm.ready(phone).catch(()=>{})}if(!window.MedsiParentOverlayChat)throw new Error('Компонент чата не загрузился.');status.classList.add('hidden');window.MedsiParentOverlayChat.mount(overlay,{role:'parent',phone,parentName:get(PARENT),childName:get(CHILD),session:s})}catch(e){showError((e&&e.message)||'Не удалось открыть чат.')}}
-  start();
+ const APP='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
+ const PHONE_KEY='medsi_parent_phone',LEGACY='medsi_phone',PARENT='medsi_parent',CHILD='medsi_child',D1='medsi_d1_parent_session_v1';
+ const $=id=>document.getElementById(id),get=k=>{try{return localStorage.getItem(k)||''}catch(_){return''}},set=(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}};
+ const digits=v=>String(v||'').replace(/\D+/g,''),p10=v=>digits(v).slice(-10),fmt=v=>{const d=new Date(Number(v));return isNaN(d)?'':d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})};
+ let session=null,phone=p10(get(PHONE_KEY)||get(LEGACY)),rows=[],busy=false;
+ $('child').textContent=get(CHILD)||get(PARENT)||'Ребёнок';$('phone').textContent=phone?'8'+phone:'';$('back').onclick=()=>location.href='/parents_test/?v=chat-standalone2';
+ function showStatus(t){$('status').textContent=t;$('status').classList.remove('hidden')}function hideStatus(){$('status').classList.add('hidden')}function showError(t){$('error').textContent=String(t||'Не удалось открыть чат.');$('error').classList.remove('hidden');setTimeout(()=>$('error').classList.add('hidden'),5000)}
+ async function api(method,args){const r=await fetch(APP,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));return p.result}
+ function cached(){try{const x=JSON.parse(get(D1)||'null');if(!x||p10(x.phone)!==phone)return null;const s=x.session||x;if(!s||!s.token||Number(s.expiresAt||0)<=Date.now()+30000)return null;return s}catch(_){return null}}
+ async function getSession(){const c=cached();if(c)return c;const r=await api('getD1ChatSession',['parent',phone,'']);const s=r&&r.token?r:r&&r.session&&r.session.token?r.session:null;if(!s)throw new Error('Не удалось получить сессию чата.');set(D1,JSON.stringify({phone,session:s}));return s}
+ function mediaUrl(m){const id=String(m&&m.fileId||'');if(!id)return'';if(id.startsWith('kv:')||id.startsWith('r2:'))return MedsiOverlayTransport.baseUrl+'/media/'+encodeURIComponent(id.slice(3));return'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1200'}
+ function render(){const box=$('messages');box.replaceChildren();if(!rows.length){const e=document.createElement('div');e.className='empty';e.textContent='Сообщений пока нет.';box.appendChild(e);return}rows.forEach(m=>{const el=document.createElement('article');el.className='msg '+(m.side==='parent'?'parent':'educator');if(m.side!=='parent'){const a=document.createElement('div');a.className='author';a.textContent='Воспитатель';el.appendChild(a)}const u=mediaUrl(m);if(u){const md=document.createElement(m.type==='video'?'video':'img');md.className='media';md.src=u;if(m.type==='video'){md.controls=true;md.preload='metadata'}el.appendChild(md)}if(m.text){const b=document.createElement('div');b.textContent=String(m.text);el.appendChild(b)}const tm=document.createElement('span');tm.className='time';tm.textContent=fmt(m.timestamp);el.appendChild(tm);box.appendChild(el)});requestAnimationFrame(()=>box.scrollTop=box.scrollHeight)}
+ async function refresh(){const r=await MedsiOverlayTransport.thread(session,phone,'',100);rows=Array.isArray(r.messages)?r.messages:[];render();MedsiOverlayTransport.markRead(session,'parent',phone).catch(()=>{})}
+ function setBusy(v){busy=v;$('text').disabled=v;$('send').disabled=v;$('attach').disabled=v}
+ $('compose').onsubmit=async e=>{e.preventDefault();if(busy)return;const text=$('text').value.trim();if(!text)return;setBusy(true);try{await MedsiOverlayTransport.sendMessage(session,'parent',phone,{type:'text',text});$('text').value='';await refresh()}catch(x){showError(x.message)}finally{setBusy(false);$('text').focus()}};
+ $('text').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('compose').requestSubmit()}};
+ $('attach').onclick=()=>$('file').click();$('file').onchange=async()=>{const f=$('file').files&&$('file').files[0];$('file').value='';if(!f)return;if(f.size>20*1024*1024){showError('Размер файла не должен превышать 20 МБ.');return}setBusy(true);try{showStatus('Загружаем файл…');const up=await MedsiOverlayTransport.upload(session,phone,f);await MedsiOverlayTransport.sendMessage(session,'parent',phone,{type:up.type||(f.type.startsWith('video/')?'video':'image'),text:'',fileId:up.fileId});hideStatus();await refresh()}catch(x){hideStatus();showError(x.message)}finally{setBusy(false)}};
+ async function start(){if(phone.length<10){location.href='/parents_test/?v=chat-standalone2';return}try{showStatus('Получаем доступ к чату…');session=await getSession();showStatus('Загружаем сообщения…');await refresh();hideStatus()}catch(e){hideStatus();showError(e.message||'Чат недоступен.')}}start();
 })();
 </script>
 </body></html>
