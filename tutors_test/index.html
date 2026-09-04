@@ -25,9 +25,13 @@
     .educator-logo span:nth-child(3){width:19px!important;height:19px!important;left:45px!important;top:20px!important;bottom:auto!important}
     .educator-logo span:nth-child(4){width:16px!important;height:16px!important;left:66px!important;top:4px!important;bottom:auto!important}
     .educator-logo span:nth-child(5){width:12px!important;height:12px!important;left:84px!important;top:24px!important;bottom:auto!important}
+
+    /* Fast saved sessions should simply appear. Only reveal the loader if
+       verification actually takes long enough for feedback to be useful. */
     .auth-gate.checking .auth-card{width:auto!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
     .auth-gate.checking .educator-start-brand,.auth-gate.checking #authForm{display:none!important}
-    .auth-gate.checking #authChecking{display:flex!important;flex-direction:column;align-items:center;justify-content:center}
+    .auth-gate.checking #authChecking{display:flex!important;flex-direction:column;align-items:center;justify-content:center;opacity:0;visibility:hidden;animation:tutorLoaderReveal 0s linear .65s forwards}
+    @keyframes tutorLoaderReveal{to{opacity:1;visibility:visible}}
     .tutor-boot-text{font-size:15px;color:#5f7f86;margin:0 0 22px;min-height:20px;text-align:center}
     .tutor-boot-logo{position:relative;width:104px;height:48px}
     .tutor-boot-dot{position:absolute;border-radius:50%;background:#0fc7ce;box-shadow:0 3px 10px rgba(15,199,206,.10);animation:tutorBootFloat 1.8s infinite ease-in-out}
@@ -37,6 +41,14 @@
     .tutor-boot-dot:nth-child(4){width:16px;height:16px;left:66px;top:5px;animation-delay:.3s}
     .tutor-boot-dot:nth-child(5){width:12px;height:12px;left:84px;bottom:11px;animation-delay:.4s}
     @keyframes tutorBootFloat{0%,100%{transform:translateY(0) scale(1);opacity:.95}50%{transform:translateY(-4px) scale(1.03);opacity:1}}
+
+    /* Stable square previews. The old shimmer depended on a loaded class that
+       the current chat renderer does not own reliably, so do not gate media
+       visibility on it. Browser decoding is less distracting than an endless
+       placeholder animation. */
+    .educator-exact-clone .msg-image-wrap::before{display:none!important}
+    .educator-exact-clone .msg-image-wrap img,
+    .educator-exact-clone .msg-image-wrap video{opacity:1!important;transform:none!important}
   </style>
   <script src="/chat-overlay/transport.js?v=4"></script>
   <script src="/tutors_test/chat-prewarm.js?v=1"></script>
