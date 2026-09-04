@@ -16,13 +16,19 @@ body[data-screen="screenChat"] #chips{display:none!important}
 .parent-chat-msg.educator{align-self:flex-start;background:linear-gradient(135deg,#0fc7ce,#44dbe1);border:1px solid rgba(15,199,206,.32);color:#fff}
 .parent-chat-author{font-size:12px;font-weight:700;opacity:.76;margin-bottom:4px}
 .parent-chat-time{position:absolute;right:12px;bottom:8px;font-size:11px;opacity:.72;line-height:1;white-space:nowrap}
-.parent-chat-media-frame{width:min(280px,64vw);aspect-ratio:4/3;border-radius:10px;overflow:hidden;margin-bottom:7px;background:rgba(255,255,255,.34)}
-.parent-chat-media{display:block;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .26s ease}
+.parent-chat-media-frame{width:min(300px,68vw);aspect-ratio:4/5;border-radius:11px;overflow:hidden;margin-bottom:7px;background:rgba(255,255,255,.34);cursor:zoom-in}
+.parent-chat-media{display:block;width:100%;height:100%;object-fit:cover;object-position:center 35%;opacity:0;transition:opacity .26s ease,transform .2s ease}
 .parent-chat-media.is-loaded{opacity:1}
+.parent-chat-media-frame:active .parent-chat-media{transform:scale(.992)}
 .parent-chat-compose{display:grid;grid-template-columns:56px 1fr;grid-template-areas:'attach text' 'send send';gap:8px}
 .parent-chat-attach{grid-area:attach;width:56px!important;min-width:56px!important;height:72px!important;min-height:72px!important;padding:0!important;border:1.5px solid rgba(15,199,206,.32)!important;border-radius:12px!important;background:#f2fcfd!important;color:#16b8c0!important;font-size:1.25rem!important}
 .parent-chat-input{grid-area:text;width:100%;height:72px;min-height:72px;max-height:150px;border:1.5px solid rgba(15,199,206,.32);border-radius:12px;padding:12px 14px;resize:none;font-size:1rem;outline:none;font-family:inherit}
 .parent-chat-send{grid-area:send;width:100%!important;min-height:52px!important;border:0!important;border-radius:12px!important;background:linear-gradient(135deg,#4dd4e6,#1bb8c9)!important;color:#fff!important;font-weight:800!important}
 .parent-chat-error{margin:0 0 8px;padding:9px 11px;border-radius:12px;background:#fff1f1;border:1px solid #efbaba;color:#a63f45;font-size:.9rem;text-align:center}
 .parent-chat-error.hidden{display:none!important}
-@media(max-width:560px){#screenChat{height:calc(100dvh - 56px);min-height:0}.parent-chat-note{padding:13px 14px;font-size:.82rem}.parent-chat-note strong{font-size:.88rem}.parent-chat-chip{font-size:.82rem;padding:6px 10px}.parent-chat-msg{max-width:88%;min-width:130px}}
+.parent-chat-lightbox{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(8,23,27,.88);backdrop-filter:blur(8px);animation:parentChatLightboxIn .18s ease both}
+.parent-chat-lightbox.hidden{display:none!important}
+.parent-chat-lightbox img{display:block;max-width:min(96vw,1100px);max-height:92dvh;width:auto;height:auto;object-fit:contain;border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.35)}
+.parent-chat-lightbox-close{position:fixed;right:max(14px,env(safe-area-inset-right));top:max(14px,env(safe-area-inset-top));width:44px;height:44px;border:0;border-radius:999px;background:rgba(255,255,255,.94);color:#244f56;font-size:28px;line-height:1;box-shadow:0 10px 30px rgba(0,0,0,.18);cursor:pointer}
+@keyframes parentChatLightboxIn{from{opacity:0}to{opacity:1}}
+@media(max-width:560px){#screenChat{height:calc(100dvh - 56px);min-height:0}.parent-chat-note{padding:13px 14px;font-size:.82rem}.parent-chat-note strong{font-size:.88rem}.parent-chat-chip{font-size:.82rem;padding:6px 10px}.parent-chat-msg{max-width:88%;min-width:130px}.parent-chat-media-frame{width:min(310px,72vw);aspect-ratio:4/5}}
