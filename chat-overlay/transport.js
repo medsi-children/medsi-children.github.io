@@ -69,6 +69,10 @@
     return request(session, path, { method: 'POST' });
   }
 
+  function markUnread(session, phone) {
+    return request(session, '/lab/unread/' + encodeURIComponent(String(phone || '')), { method: 'POST' });
+  }
+
   function react(session, key, reaction) {
     return request(session, '/lab/reaction/' + encodeURIComponent(String(key || '')), {
       method: 'POST',
@@ -165,6 +169,7 @@
     chats,
     sendMessage,
     markRead,
+    markUnread,
     react,
     edit,
     remove,
