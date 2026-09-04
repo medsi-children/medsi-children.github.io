@@ -55,10 +55,8 @@
   async function deleteParent(row,card){
     const child=String(row.childName||'ребёнка').trim();
     if(!confirm('Удалить ребёнка '+child+' из бота?\n\nВся история сообщений будет удалена.'))return;
-
     const deletePromise=appApi('deleteReportChildByPhone',[row.phone,tutorToken()]);
     const snapshot=removePhoneCardOptimistically(row,card);
-
     try{
       const res=await deletePromise;
       if(!res||!res.ok)throw new Error(res&&res.message||'Не удалось удалить.');
@@ -111,17 +109,8 @@
     if(document.body.dataset.screen==='screenPhones')renderPhones(rows);
   }
 
-  function fixImage(img){
-    if(!img||img.dataset.medsiLoadBound==='1')return;img.dataset.medsiLoadBound='1';
-    const wrap=img.closest('.msg-image-wrap');if(!wrap)return;
-    const reveal=()=>{wrap.classList.add('loaded');img.classList.add('loaded')};
-    if(img.complete&&img.naturalWidth>0){reveal();return}
-    img.addEventListener('load',reveal,{once:true});img.addEventListener('error',reveal,{once:true});
-  }
-
   function patchOverlay(root){
     if(!root)return;
-    root.querySelectorAll('.msg-image-wrap img').forEach(fixImage);
     const back=root.querySelector('#btnThreadBack');
     if(back&&!back.dataset.medsiBackPatched){
       back.dataset.medsiBackPatched='1';
@@ -139,11 +128,10 @@
     });
   }
 
-  const observer=new MutationObserver(()=>{
-    document.querySelectorAll('.educator-exact-clone').forEach(patchOverlay);
-    document.querySelectorAll('.educator-exact-clone .msg-image-wrap img').forEach(fixImage);
-  });
-  observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','src']});
+  const patchAll=()=>document.querySelectorAll('.educator-exact-clone').forEach(patchOverlay);
+  const observer=new MutationObserver(patchAll);
+  observer.observe(document.documentElement,{subtree:true,childList:true});
+  patchAll();
 
   document.addEventListener('click',e=>{if(e.target&&e.target.closest&&e.target.closest('#btnParentPhones'))openPhonesFast(e)},true);
   refreshPhonesFromD1();
