@@ -99,15 +99,15 @@
   async function openParentChat(){
     const phone=digits(get(PHONE_KEY)||get('medsi_phone'));
     if(phone.length<10)return;
-    let ov;
-    try{ov=ensureOverlay()}catch(e){console.error(e);return}
-    ov.open({role:'parent',phone,parentName:get(PARENT_KEY),childName:get(CHILD_KEY),session:{token:'loading',expiresAt:Date.now()+60000}});
-    ov.body.innerHTML='<div class="medsi-chat-overlay__status"><h2 class="medsi-chat-overlay__status-title">Подключаем чат…</h2><p class="medsi-chat-overlay__status-text">Получаем сообщения.</p></div>';
     try{
       const session=await getSession(phone);
       if(window.MedsiParentPrewarm)await MedsiParentPrewarm.ready(phone).catch(()=>{});
+      const ov=ensureOverlay();
       ov.open({role:'parent',phone,parentName:get(PARENT_KEY),childName:get(CHILD_KEY),session});
-    }catch(e){ov.showError((e&&e.message)||'Не удалось открыть чат.')}
+    }catch(e){
+      console.error('Parent chat open failed',e);
+      try{ensureOverlay().showError((e&&e.message)||'Не удалось открыть чат.')}catch(_){}
+    }
   }
 
   function installChatOverride(){
