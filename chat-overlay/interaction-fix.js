@@ -3,6 +3,7 @@
   let lastMessage=null,lastThreadRows=[];
   let settleTimer=null;
   let bgPending=2;
+  let parentWaitTimer=null;
 
   function preloadBackground(src){
     const img=new Image();
@@ -170,6 +171,35 @@
     if(parentCard)revealWhenReady(parentCard,true);
   }
 
+  function ensureParentWait(){
+    let wait=document.getElementById('medsiParentChatWait');
+    if(wait)return wait;
+    wait=document.createElement('div');
+    wait.id='medsiParentChatWait';
+    wait.className='medsi-parent-chat-wait hidden';
+    wait.setAttribute('aria-hidden','true');
+    wait.innerHTML='<div class="medsi-parent-chat-wait__spinner" aria-label="Загрузка чата"></div>';
+    document.body.appendChild(wait);
+    return wait;
+  }
+  function beginParentWait(){
+    clearTimeout(parentWaitTimer);
+    const wait=ensureParentWait();
+    wait.classList.remove('is-visible');
+    wait.classList.add('hidden');
+    parentWaitTimer=setTimeout(()=>{
+      wait.classList.remove('hidden');
+      requestAnimationFrame(()=>wait.classList.add('is-visible'));
+    },140);
+  }
+  function endParentWait(){
+    clearTimeout(parentWaitTimer);parentWaitTimer=null;
+    const wait=document.getElementById('medsiParentChatWait');
+    if(!wait)return;
+    wait.classList.remove('is-visible');
+    setTimeout(()=>{if(!wait.classList.contains('is-visible'))wait.classList.add('hidden')},150);
+  }
+
   function ensureImageViewer(){
     let viewer=document.getElementById('overlayImageViewer');
     if(viewer)return viewer;
@@ -204,6 +234,13 @@
     },160);
   }
 
+  window.addEventListener('message',e=>{
+    const data=e.data||{};
+    if(data.type!=='medsi:chat-overlay'||data.role!=='parent')return;
+    if(data.action==='opening'){beginParentWait();return}
+    if(data.action==='open'||data.action==='session'||data.action==='error'){endParentWait()}
+  });
+
   let scheduled=false;
   function scheduleFix(){
     if(scheduled)return;
@@ -216,6 +253,7 @@
       hideTransientLoading(document);
       fixAllTimestamps(document);
       settleOverlayScreens();
+      if(document.querySelector('.parent-role .medsi-legacy-card'))endParentWait();
     });
   }
 
