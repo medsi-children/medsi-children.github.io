@@ -11,6 +11,8 @@
 #screenPhones .phone-delete{position:absolute;top:12px;right:12px;width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important;padding:0!important;border-radius:999px!important;display:inline-flex;align-items:center;justify-content:center;color:#dc3348;background:rgba(255,245,246,.96);border:1.5px solid rgba(244,63,94,.28);font-size:20px;line-height:1;cursor:pointer}
 #screenPhones .phone-card.card-enter{animation:fullWebCardEnter .42s cubic-bezier(.2,.85,.25,1) both}
 @keyframes fullWebCardEnter{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+.phone-mini-loader{width:24px;height:24px;margin:18px auto;border:3px solid rgba(36,211,218,.18);border-top-color:#16b8c0;border-radius:50%;animation:phoneMiniSpin .7s linear infinite}
+@keyframes phoneMiniSpin{to{transform:rotate(360deg)}}
 
 /* The full-web stylesheet is loaded after the chat clone. Reassert the original
    chat controls so generic shell .btn/.row rules never restyle the overlay. */
@@ -27,27 +29,38 @@
 .educator-exact-clone #screenChats .row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 72px;gap:10px;flex-wrap:nowrap;align-items:stretch}
 .educator-exact-clone #screenChats .row>.btn{width:100%;min-width:0}
 
+/* Exact production thread action row: compact controls, left aligned, never stretched. */
+.educator-exact-clone #screenChatThread>.row{display:flex!important;justify-content:flex-start!important;align-items:center!important;gap:8px!important;flex-wrap:wrap!important;margin-top:14px!important}
+.educator-exact-clone #screenChatThread>.row>.btn{flex:0 0 auto!important;width:auto!important;min-width:0!important}
+.educator-exact-clone #btnThreadBack,
+.educator-exact-clone #btnVideo{min-height:46px!important;padding:8px 12px!important;font-size:.95rem!important;border-radius:12px!important;width:auto!important}
+.educator-exact-clone #btnQuickReplies{min-height:46px!important;padding:8px 12px!important;font-size:.95rem!important;border-radius:12px!important;width:auto!important;background:var(--btn-mint)!important;color:#fff!important;border:none!important}
+.educator-exact-clone #btnVideo{background:var(--btn-sky)!important;color:#fff!important;border:none!important}
+.educator-exact-clone #chatReplySendBtn{background:var(--btn-mint)!important;color:#fff!important;border:none!important}
+
 /* Restore the exact production image placeholder: fixed media rectangle with
    a shimmer until the image has fully loaded, then a short fade/scale reveal. */
 .educator-exact-clone .msg-image-wrap{position:relative;display:block;width:min(280px,64vw);max-width:280px;aspect-ratio:3/4;border-radius:10px;overflow:hidden;margin-bottom:4px;background:rgba(255,255,255,.42);border:1px solid rgba(36,211,218,.14);contain:layout style paint}
 .educator-exact-clone .msg-image-wrap::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,255,255,.14) 0%,rgba(36,211,218,.11) 44%,rgba(255,255,255,.42) 50%,rgba(36,211,218,.11) 56%,rgba(255,255,255,.14) 100%);transform:translateX(-100%);animation:fullWebMsgImageShimmer 1.15s infinite;z-index:1;pointer-events:none}
-.educator-exact-clone .msg-image-wrap.loaded::before{display:none}
+.educator-exact-clone .msg-image-wrap.loaded::before{display:none!important}
 .educator-exact-clone .msg-image{display:block;width:100%;height:100%;object-fit:cover;border-radius:10px;cursor:pointer;opacity:0;transform:scale(1.02);transition:opacity .24s ease,transform .24s ease}
 .educator-exact-clone .msg-image.loaded,.educator-exact-clone .msg-image-wrap.loaded .msg-image{opacity:1;transform:scale(1)}
 @keyframes fullWebMsgImageShimmer{to{transform:translateX(100%)}}
 
-/* Slightly calmer screen changes than the first full-web build. */
-.web-screen-enter{animation:webScreenEnter .30s cubic-bezier(.2,.82,.24,1) both}
-@keyframes webScreenEnter{from{opacity:0;transform:translateY(7px) scale(.994)}to{opacity:1;transform:none}}
-.medsi-chat-overlay .educator-exact-clone #screenChats:not(.hidden),
-.medsi-chat-overlay .educator-exact-clone #screenNewChat:not(.hidden),
-.medsi-chat-overlay .educator-exact-clone #screenChatThread:not(.hidden){transition-duration:.28s!important}
+/* One restrained motion language for every test screen. */
+.web-screen-enter,.web-polish-enter{animation:webScreenEnter .28s cubic-bezier(.2,.82,.24,1) both}
+@keyframes webScreenEnter{from{opacity:0;transform:translateY(5px) scale(.996)}to{opacity:1;transform:none}}
+#screenForm:not(.hidden),#screenPhones:not(.hidden),#screenDone:not(.hidden){animation:webScreenEnter .28s cubic-bezier(.2,.82,.24,1) both}
+.educator-exact-clone #screenChats:not(.hidden),
+.educator-exact-clone #screenNewChat:not(.hidden),
+.educator-exact-clone #screenChatThread:not(.hidden){animation:webScreenEnter .26s cubic-bezier(.2,.82,.24,1) both}
 
 @media(max-width:560px){
   #screenPhones .phone-card-actions{flex-direction:column;align-items:stretch}
   #screenPhones .phone-action-btn{width:100%!important;justify-content:center}
   .educator-exact-clone .chat-nav-btn{min-height:38px!important;padding:6px 9px!important;font-size:.84rem!important;width:auto!important;flex:0 0 auto}
   .educator-exact-clone .quick-toggle{min-height:38px!important;padding:6px 9px!important;font-size:.84rem!important;width:auto!important}
+  .educator-exact-clone #btnThreadBack,.educator-exact-clone #btnVideo,.educator-exact-clone #btnQuickReplies{min-height:38px!important;height:38px!important;padding:6px 9px!important;font-size:.84rem!important;line-height:1.1!important;width:auto!important;flex:0 0 auto!important}
   .educator-exact-clone .chat-send-btn{grid-area:send;min-width:0;height:54px!important;min-height:54px!important;padding:10px 12px!important;font-size:1rem!important;line-height:1.15!important;border-radius:12px!important}
   .educator-exact-clone .msg-image-wrap,.educator-exact-clone .msg-video-wrap{width:min(190px,50vw);max-width:190px}
 }
