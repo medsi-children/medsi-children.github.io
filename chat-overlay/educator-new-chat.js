@@ -7,6 +7,7 @@
   const phone10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
   const displayPhone=v=>{const p=phone10(v);return p?'8'+p:''};
   const deleteIcon=()=>'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
+  const rowsSignature=rows=>(Array.isArray(rows)?rows:[]).map(r=>[phone10(r&&r.phone),String(r&&r.parentName||''),String(r&&r.childName||'')].join('|')).sort().join('||');
 
   if(!transport.__medsiForcedParentWrapped){
     transport.__medsiForcedParentWrapped=true;
@@ -33,7 +34,7 @@
   const originalMount=api.mount.bind(api);
   api.mount=function(overlay,state){
     const originalCleanup=originalMount(overlay,state);
-    let disposed=false,rowsCache=null,requestToken=0,bridgeTimer=null;
+    let disposed=false,rowsCache=null,renderedSignature='',requestToken=0,bridgeTimer=null;
     const root=overlay.root;
     const scene=root&&root.querySelector('.scene');
     const title=root&&root.querySelector('#title');
@@ -49,9 +50,9 @@
     screen.id='screenNewChat';screen.className='hidden';
     const list=document.createElement('div');list.id='parentsList';list.className='chat-list';
     const error=document.createElement('p');error.id='parentsError';error.className='error hidden';
-    const row=document.createElement('div');row.className='row';row.style.marginTop='14px';
+    const row=document.createElement('div');row.className='row new-chat-back-row';row.style.marginBottom='14px';
     const back=document.createElement('button');back.id='btnParentsBack';back.className='btn soft-back-btn';back.textContent='← Назад в меню';
-    row.appendChild(back);screen.append(list,error,row);scene.insertBefore(screen,screenThread);
+    row.appendChild(back);screen.append(row,list,error);scene.insertBefore(screen,screenThread);
 
     function showNew(){
       document.body.dataset.screen='screenNewChat';
@@ -67,6 +68,7 @@
     }
     function render(rows){
       list.replaceChildren();rows=Array.isArray(rows)?rows:[];
+      renderedSignature=rowsSignature(rows);
       if(!rows.length){list.innerHTML='<div class="chat-empty">Нет родителей.</div>';return}
       rows.forEach(r=>{
         const card=document.createElement('button');card.className='chat-card';card.type='button';card.dataset.phone=r.phone||'';
@@ -81,15 +83,22 @@
     }
     async function loadParents(){
       const token=++requestToken;error.classList.add('hidden');
-      if(rowsCache)render(rowsCache);else list.innerHTML=skeleton(4);
+      if(rowsCache){
+        if(renderedSignature!==rowsSignature(rowsCache))render(rowsCache);
+      }else{
+        list.innerHTML=skeleton(4);
+        renderedSignature='';
+      }
       try{
         const res=await transport.parents(state.session);
         if(disposed||token!==requestToken)return;
-        rowsCache=Array.isArray(res&&res.parents)?res.parents:[];
-        render(rowsCache);
+        const nextRows=Array.isArray(res&&res.parents)?res.parents:[];
+        const nextSignature=rowsSignature(nextRows);
+        rowsCache=nextRows;
+        if(nextSignature!==renderedSignature)render(rowsCache);
       }catch(err){
         if(disposed||token!==requestToken)return;
-        list.replaceChildren();
+        list.replaceChildren();renderedSignature='';
         error.textContent=(err&&err.message)||'Не удалось загрузить список родителей.';
         error.classList.remove('hidden');
       }
@@ -113,7 +122,7 @@
             root.classList.remove('educator-new-chat-bridging');
             if(deleteModal){
               const observer=new MutationObserver(()=>{
-                if(deleteModal.classList.contains('hidden')){observer.disconnect();setTimeout(()=>{if(!disposed){rowsCache=null;showNew();loadParents()}},120)}
+                if(deleteModal.classList.contains('hidden')){observer.disconnect();setTimeout(()=>{if(!disposed){rowsCache=null;renderedSignature='';showNew();loadParents()}},120)}
               });
               observer.observe(deleteModal,{attributes:true,attributeFilter:['class']});
             }
