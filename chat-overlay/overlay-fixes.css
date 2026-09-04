@@ -30,11 +30,7 @@
   transform:none;
   pointer-events:auto;
 }
-.educator-exact-clone.educator-new-chat-bridging #screenChats{
-  opacity:0 !important;
-  visibility:hidden !important;
-  pointer-events:none !important;
-}
+.educator-exact-clone.educator-new-chat-bridging #screenChats{display:none !important;}
 .medsi-chat-overlay button,
 .medsi-chat-overlay .btn{
   transition:transform .12s ease,filter .12s ease,opacity .12s ease,box-shadow .12s ease;
