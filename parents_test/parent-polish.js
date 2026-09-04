@@ -55,7 +55,7 @@
 
   function installChatRoute(){
     const btn=$('btnChat');
-    if(btn)btn.onclick=()=>{location.href='/parents_test/chat.html?v=standalone2'};
+    if(btn)btn.onclick=()=>{location.href='/parents_test/chat.html?v=chat-polish1'};
   }
 
   function install(){
