@@ -33,7 +33,9 @@
     const res=await fetch(endpoint,{method:'POST',headers:{'content-type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'api',method,args:args||[]})});
     const payload=await res.json();
     if(!payload||!payload.ok)throw new Error(payload&&payload.message||'Ошибка Apps Script API.');
-    return payload;
+    const result=payload.result;
+    if(result&&typeof result==='object'&&result.ok===false)throw new Error(result.message||'Apps Script вернул ошибку.');
+    return result;
   }
   function skeleton(count=4){
     return '<div class="list-skeleton">'+Array.from({length:count}).map(()=>'<div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line wide"></div><div class="skeleton-line mid"></div><div class="skeleton-line short"></div><div class="skeleton-line wide" style="margin-top:16px;"></div><div class="skeleton-line mid"></div></div>').join('')+'</div>';
@@ -94,7 +96,7 @@
       try{
         const res=await appApi('listAvailableParentsForChat',[tutorToken()]);
         if(disposed||token!==requestToken)return;
-        rowsCache=Array.isArray(res.rows)?res.rows:[];render(rowsCache);
+        rowsCache=Array.isArray(res&&res.rows)?res.rows:[];render(rowsCache);
       }catch(err){
         if(disposed||token!==requestToken)return;
         error.textContent=err.message||'Сервер недоступен.';error.classList.remove('hidden');
