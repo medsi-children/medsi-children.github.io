@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#0fc7ce">
+  <meta name="format-detection" content="telephone=no">
+  <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+  <title>Групповая психотерапия — Медси Бот</title>
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
+  <link rel="stylesheet" href="/psychology_test/style.css?v=1">
+</head>
+<body>
+  <div id="authGate" class="auth-gate">
+    <div id="authChecking" class="auth-checking" aria-hidden="true"></div>
+    <div id="authCard" class="auth-card hidden">
+      <div class="brand">
+        <div class="medsi-logo" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+        <h1>Групповая психотерапия</h1>
+        <p>Войдите, чтобы отправить отчёт.</p>
+      </div>
+      <div class="auth-fields">
+        <label for="login">Логин</label>
+        <input id="login" type="text" autocomplete="username" spellcheck="false">
+        <label for="password">Пароль</label>
+        <input id="password" type="password" autocomplete="current-password">
+      </div>
+      <p id="authError" class="status error hidden" role="alert"></p>
+      <button id="loginBtn" class="btn btn-teal" type="button">Войти в систему</button>
+      <p class="auth-note">На этом устройстве вход сохранится.</p>
+    </div>
+  </div>
+
+  <main id="app" class="page hidden">
+    <article class="frame">
+      <div class="rim"></div>
+      <div class="scene">
+        <div class="brand compact">
+          <div class="medsi-logo" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+          <h1>Групповая психотерапия</h1>
+          <p>Отправка отчёта для родителей.</p>
+        </div>
+
+        <section id="formScreen">
+          <p class="report-hint">После имени ребёнка обязательно ставьте “:” или “-”. Блок для врачей и общий комментарий перед отправкой лучше удалить.</p>
+          <textarea id="text" class="report-area" placeholder="Вставьте весь текст отчёта сюда…"></textarea>
+          <p id="reportError" class="status error hidden" role="alert"></p>
+          <div class="actions">
+            <button id="sendBtn" class="btn btn-teal" type="button">Отправить</button>
+          </div>
+        </section>
+
+        <section id="doneScreen" class="done hidden">
+          <p class="status success">Готово. Отчёт по психотерапии отправлен.</p>
+          <button id="againBtn" class="btn" type="button">Отправить ещё один</button>
+        </section>
+
+        <button id="logoutBtn" class="logout" type="button">Выйти</button>
+      </div>
+    </article>
+  </main>
+
+  <script src="/psychology_test/app.js?v=1"></script>
+</body>
+</html>
