@@ -24,7 +24,24 @@
   function applyBootstrap(res){if(!res||!res.ok)return false;currentPhone=onlyDigits(res.phone||currentPhone);parentName=String(res.parentName||parentName||'').trim();childName=String(res.childName||childName||'').trim();safeSet(PHONE_KEY,currentPhone);safeSet(LEGACY_PHONE_KEY,currentPhone);safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);applyUnread(res);syncPushIdentity();return true}
   function showChoose(){if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();setHeader('Медси Бот','Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями и психологами.');$('waitNote').classList.toggle('hidden',!justRegistered);show('screenChoose');prewarmAll()}
   function clearSession(){currentPhone='';parentName='';childName='';d1Session=null;safeRemove(PHONE_KEY);safeRemove(LEGACY_PHONE_KEY);safeRemove(PARENT_KEY);safeRemove(CHILD_KEY);safeRemove(D1_KEY);Object.keys(reportCache).forEach(k=>delete reportCache[k]);Object.keys(reportPending).forEach(k=>delete reportPending[k]);if(window.MedsiParentPrewarm)MedsiParentPrewarm.clear();if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();syncPushIdentity()}
-  async function restoreSaved(){const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));if(!validPhone(ph)){showStart();$('boot').classList.add('hidden');return}currentPhone=ph;syncPushIdentity();prewarmAll();try{const res=await callApi('getParentBootstrap',[ph],12000);if(!applyBootstrap(res)){clearSession();showStart();return}showChoose()}catch(_){clearSession();showStart()}finally{$('boot').classList.add('hidden')}}
+  async function restoreSaved(){
+    const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));
+    if(!validPhone(ph)){showStart();return}
+    currentPhone=ph;
+    parentName=String(safeGet(PARENT_KEY)||'').trim();
+    childName=String(safeGet(CHILD_KEY)||'').trim();
+    syncPushIdentity();
+    showChoose();
+    try{
+      const res=await callApi('getParentBootstrap',[ph],12000);
+      if(!applyBootstrap(res)){clearSession();showStart();return}
+      setChips();
+      prewarmAll();
+    }catch(_){
+      // A temporary network failure must not kick an already saved parent out.
+      // The visible menu stays available and background prewarm can recover later.
+    }
+  }
   function isSingleWord(v){return !/\s/.test(String(v||'').trim())}
   async function register(){const digits=onlyDigits($('phoneInputReg').value);const err=$('phoneErrorReg'),info=$('alreadyRegistered'),btn=$('registerBtn');err.classList.add('hidden');info.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}btn.disabled=true;try{const res=await callApi('registerParent',[regParentName,regChildName,digits],20000);if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось выполнить регистрацию.');if(res.duplicate){info.textContent='Похоже, вы уже зарегистрированы в системе. Пожалуйста, используйте кнопку «Авторизация», чтобы войти и посмотреть отчёты.';info.classList.remove('hidden');justRegistered=false;return}currentPhone=digits;parentName=regParentName;childName=regChildName;justRegistered=true;safeSet(PHONE_KEY,currentPhone);safeSet(LEGACY_PHONE_KEY,currentPhone);safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);syncPushIdentity();prewarmAll();showChoose();callApi('getParentBootstrap',[currentPhone],12000).then(r=>{applyBootstrap(r);setChips();prewarmAll()}).catch(()=>{})}catch(e){err.textContent=String(e&&e.message||e)==='TIMEOUT'?'Сервер долго не отвечает. Попробуйте ещё раз.':String(e&&e.message||e);err.classList.remove('hidden')}finally{btn.disabled=false}}
   async function auth(){const digits=onlyDigits($('phoneInputAuth').value);const err=$('phoneErrorAuth'),btn=$('authBtn');err.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}btn.disabled=true;try{const res=await callApi('getParentBootstrap',[digits],15000);if(!res||!res.ok){err.textContent='Ваш номер не найден в системе. Если вы поступаете повторно, пожалуйста, нажмите «Назад» и пройдите регистрацию еще раз!';err.classList.remove('hidden');return}currentPhone=digits;justRegistered=false;applyBootstrap(res);prewarmAll();showChoose()}catch(e){err.textContent=String(e&&e.message||e)==='TIMEOUT'?'Сервер долго не отвечает. Попробуйте ещё раз.':'Сервер недоступен.';err.classList.remove('hidden')}finally{btn.disabled=false}}
