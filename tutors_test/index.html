@@ -26,8 +26,6 @@
     .educator-logo span:nth-child(4){width:16px!important;height:16px!important;left:66px!important;top:4px!important;bottom:auto!important}
     .educator-logo span:nth-child(5){width:12px!important;height:12px!important;left:84px!important;top:24px!important;bottom:auto!important}
 
-    /* Fast saved sessions should simply appear. Only reveal the loader if
-       verification actually takes long enough for feedback to be useful. */
     .auth-gate.checking .auth-card{width:auto!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
     .auth-gate.checking .educator-start-brand,.auth-gate.checking #authForm{display:none!important}
     .auth-gate.checking #authChecking{display:flex!important;flex-direction:column;align-items:center;justify-content:center;opacity:0;visibility:hidden;animation:tutorLoaderReveal 0s linear .65s forwards}
@@ -42,10 +40,6 @@
     .tutor-boot-dot:nth-child(5){width:12px;height:12px;left:84px;bottom:11px;animation-delay:.4s}
     @keyframes tutorBootFloat{0%,100%{transform:translateY(0) scale(1);opacity:.95}50%{transform:translateY(-4px) scale(1.03);opacity:1}}
 
-    /* Stable square previews. The old shimmer depended on a loaded class that
-       the current chat renderer does not own reliably, so do not gate media
-       visibility on it. Browser decoding is less distracting than an endless
-       placeholder animation. */
     .educator-exact-clone .msg-image-wrap::before{display:none!important}
     .educator-exact-clone .msg-image-wrap img,
     .educator-exact-clone .msg-image-wrap video{opacity:1!important;transform:none!important}
@@ -57,7 +51,7 @@
   <script src="/chat-overlay/educator-unread-fix.js?v=1"></script>
   <script src="/chat-overlay/educator-new-chat.js?v=7"></script>
   <script src="/chat-overlay/overlay-core.js?v=3"></script>
-  <script src="/tutors_test/layout-stability.js?v=3"></script>
+  <script src="/tutors_test/layout-stability.js?v=4"></script>
 </head>
 <body data-screen="screenChoose">
   <div id="tutorAuthGate" class="auth-gate">
