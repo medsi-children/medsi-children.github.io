@@ -54,6 +54,10 @@
     return request(session, '/lab/chats?bucket=' + encodeURIComponent(String(bucket || 'all')));
   }
 
+  function parents(session) {
+    return request(session, '/lab/parents');
+  }
+
   function sendMessage(session, role, phone, message) {
     return request(session, '/lab/messages', {
       method: 'POST',
@@ -167,6 +171,7 @@
     request,
     thread,
     chats,
+    parents,
     sendMessage,
     markRead,
     markUnread,
