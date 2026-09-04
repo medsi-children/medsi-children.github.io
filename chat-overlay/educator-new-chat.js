@@ -26,17 +26,6 @@
     };
   }
 
-  function tutorToken(){try{return String(localStorage.getItem('medsi_tutor_session_v1')||'')}catch(_){return''}}
-  async function appApi(method,args){
-    const endpoint=window.MEDSI_APP_BASE_URL||'';
-    if(!endpoint)throw new Error('Серверное действие недоступно.');
-    const res=await fetch(endpoint,{method:'POST',headers:{'content-type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'api',method,args:args||[]})});
-    const payload=await res.json();
-    if(!payload||!payload.ok)throw new Error(payload&&payload.message||'Ошибка Apps Script API.');
-    const result=payload.result;
-    if(result&&typeof result==='object'&&result.ok===false)throw new Error(result.message||'Apps Script вернул ошибку.');
-    return result;
-  }
   function skeleton(count=4){
     return '<div class="list-skeleton">'+Array.from({length:count}).map(()=>'<div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line wide"></div><div class="skeleton-line mid"></div><div class="skeleton-line short"></div><div class="skeleton-line wide" style="margin-top:16px;"></div><div class="skeleton-line mid"></div></div>').join('')+'</div>';
   }
@@ -45,7 +34,6 @@
   api.mount=function(overlay,state){
     const originalCleanup=originalMount(overlay,state);
     let disposed=false,rowsCache=null,requestToken=0,bridgeTimer=null;
-    const session=state&&state.session;
     const root=overlay.root;
     const scene=root&&root.querySelector('.scene');
     const title=root&&root.querySelector('#title');
@@ -77,17 +65,8 @@
       screen.classList.add('hidden');screen.classList.remove('overlay-screen-ready');screenThread.classList.add('hidden');screenChats.classList.remove('hidden');
       requestAnimationFrame(()=>screenChats.classList.add('overlay-screen-ready'));
     }
-    function normalizeRows(rows){
-      const byPhone=new Map();
-      (Array.isArray(rows)?rows:[]).forEach(r=>{
-        const p=phone10(r&&r.phone);
-        if(!p)return;
-        if(!byPhone.has(p))byPhone.set(p,{phone:p,parentName:String(r&&r.parentName||''),childName:String(r&&r.childName||'')});
-      });
-      return [...byPhone.values()].sort((a,b)=>String(a.childName||'').localeCompare(String(b.childName||''),'ru'));
-    }
     function render(rows){
-      list.replaceChildren();rows=normalizeRows(rows);
+      list.replaceChildren();rows=Array.isArray(rows)?rows:[];
       if(!rows.length){list.innerHTML='<div class="chat-empty">Нет родителей.</div>';return}
       rows.forEach(r=>{
         const card=document.createElement('button');card.className='chat-card';card.type='button';card.dataset.phone=r.phone||'';
@@ -103,24 +82,16 @@
     async function loadParents(){
       const token=++requestToken;error.classList.add('hidden');
       if(rowsCache)render(rowsCache);else list.innerHTML=skeleton(4);
-      let appError=null;
       try{
-        const res=await appApi('listAvailableParentsForChat',[tutorToken()]);
+        const res=await transport.parents(state.session);
         if(disposed||token!==requestToken)return;
-        const appRows=normalizeRows(res&&res.rows);
-        if(appRows.length){rowsCache=appRows;render(rowsCache);return}
-      }catch(err){appError=err}
-      try{
-        if(!session||!session.token)throw appError||new Error('Нет активной D1-сессии воспитателя.');
-        const d1=await transport.chats(session,'all');
-        if(disposed||token!==requestToken)return;
-        const d1Rows=normalizeRows(d1&&d1.chats);
-        if(d1Rows.length){rowsCache=d1Rows;render(rowsCache);return}
-        throw appError||new Error('Apps Script и D1 вернули пустой список родителей.');
+        rowsCache=Array.isArray(res&&res.parents)?res.parents:[];
+        render(rowsCache);
       }catch(err){
         if(disposed||token!==requestToken)return;
-        error.textContent=(err&&err.message)||'Сервер недоступен.';error.classList.remove('hidden');
-        if(!rowsCache)list.innerHTML='';
+        list.replaceChildren();
+        error.textContent=(err&&err.message)||'Не удалось загрузить список родителей.';
+        error.classList.remove('hidden');
       }
     }
     function findChatCard(phone){return [...screenChats.querySelectorAll('.chat-card')].find(el=>phone10(el.dataset.phone)===phone10(phone))||null}
