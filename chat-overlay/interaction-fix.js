@@ -170,6 +170,40 @@
     if(parentCard)revealWhenReady(parentCard,true);
   }
 
+  function ensureImageViewer(){
+    let viewer=document.getElementById('overlayImageViewer');
+    if(viewer)return viewer;
+    viewer=document.createElement('div');
+    viewer.id='overlayImageViewer';
+    viewer.className='overlay-image-viewer hidden';
+    viewer.setAttribute('role','dialog');
+    viewer.setAttribute('aria-modal','true');
+    viewer.innerHTML='<button type="button" class="overlay-image-viewer__close" aria-label="Закрыть">×</button><img class="overlay-image-viewer__img" alt="Изображение из чата">';
+    viewer.addEventListener('click',e=>{if(e.target===viewer)closeImageViewer()});
+    viewer.querySelector('.overlay-image-viewer__close').addEventListener('click',e=>{e.stopPropagation();closeImageViewer()});
+    document.body.appendChild(viewer);
+    return viewer;
+  }
+  function openImageViewer(src){
+    if(!src)return;
+    const viewer=ensureImageViewer();
+    const img=viewer.querySelector('.overlay-image-viewer__img');
+    img.src=src;
+    viewer.classList.remove('hidden');
+    requestAnimationFrame(()=>viewer.classList.add('is-open'));
+  }
+  function closeImageViewer(){
+    const viewer=document.getElementById('overlayImageViewer');
+    if(!viewer)return;
+    viewer.classList.remove('is-open');
+    setTimeout(()=>{
+      if(viewer.classList.contains('is-open'))return;
+      viewer.classList.add('hidden');
+      const img=viewer.querySelector('.overlay-image-viewer__img');
+      if(img)img.removeAttribute('src');
+    },160);
+  }
+
   let scheduled=false;
   function scheduleFix(){
     if(scheduled)return;
@@ -189,6 +223,25 @@
     const msg=e.target&&e.target.closest&&e.target.closest('.msg');
     if(msg)lastMessage=msg;
   },true);
+
+  document.addEventListener('click',e=>{
+    const target=e.target;
+    const image=target&&target.closest&&target.closest('.msg-image-wrap img');
+    if(image){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      openImageViewer(image.currentSrc||image.src);
+      return;
+    }
+    const video=target&&target.closest&&target.closest('.msg-image-wrap video,.msg-video-wrap video');
+    if(video){
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    }
+  },true);
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeImageViewer()});
 
   const mo=new MutationObserver(scheduleFix);
   mo.observe(document.documentElement,{subtree:true,childList:true,characterData:true});
