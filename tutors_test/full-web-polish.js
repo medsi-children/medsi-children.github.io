@@ -34,18 +34,48 @@
     catch(_){const ta=document.createElement('textarea');ta.value=value;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();const old=btn.textContent;btn.textContent='Скопировано';setTimeout(()=>btn.textContent=old,1000)}
   }
 
+  function removePhoneCardOptimistically(row,card){
+    const snapshot=phonesCache.slice();
+    phonesCache=phonesCache.filter(x=>phone10(x.phone)!==phone10(row.phone));
+    if(card){
+      card.classList.add('phone-card-deleting');
+      requestAnimationFrame(()=>card.classList.add('phone-card-deleting-go'));
+      setTimeout(()=>{if(card.isConnected)card.remove()},230);
+    }
+    return snapshot;
+  }
+
+  function restorePhoneAfterFailedDelete(snapshot,message){
+    phonesCache=snapshot;
+    if(document.body.dataset.screen==='screenPhones')renderPhones(phonesCache);
+    alert(String(message||'Не удалось удалить ребёнка.'));
+  }
+
   async function deleteParent(row,card){
     const child=row.childName||'ребёнка';
     if(!confirm('Удалить «'+child+'» из активной базы? Архив DATABASE останется.'))return;
     try{
+      if(card)card.classList.add('phone-card-checking');
       const preview=await appApi('getReportChildDeletionPreview',[row.phone,tutorToken()]);
+      if(card)card.classList.remove('phone-card-checking');
       if(!preview||!preview.ok)throw new Error(preview&&preview.message||'Удаление недоступно.');
       if(!confirm('Подтвердите удаление: '+(preview.childName||child)+'. Чат и активные данные будут очищены.'))return;
-      const res=await appApi('deleteReportChildByPhone',[row.phone,tutorToken()]);
-      if(!res||!res.ok)throw new Error(res&&res.message||'Не удалось удалить.');
-      phonesCache=phonesCache.filter(x=>phone10(x.phone)!==phone10(row.phone));
-      card.style.opacity='0';card.style.transform='translateY(-4px) scale(.99)';setTimeout(()=>card.remove(),180);
-    }catch(e){alert(String(e&&e.message||e))}
+
+      // appApi() immediately starts fetch. Once this promise exists the delete
+      // request has already left the UI, so the card can disappear optimistically.
+      const deletePromise=appApi('deleteReportChildByPhone',[row.phone,tutorToken()]);
+      const snapshot=removePhoneCardOptimistically(row,card);
+
+      try{
+        const res=await deletePromise;
+        if(!res||!res.ok)throw new Error(res&&res.message||'Не удалось удалить.');
+      }catch(e){
+        restorePhoneAfterFailedDelete(snapshot,e&&e.message||e);
+      }
+    }catch(e){
+      if(card)card.classList.remove('phone-card-checking');
+      alert(String(e&&e.message||e));
+    }
   }
 
   function renderPhones(rows){
