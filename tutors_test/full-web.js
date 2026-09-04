@@ -12,9 +12,6 @@
   let parentsCache=[];
   let parentsSignature='';
   let authBusy=false;
-  let authLoaderTimer=null;
-  let authLoaderIndex=0;
-  const AUTH_LOADER_PHRASES=['Подключаемся…','Загружаем интерфейс…','Почти готово…','Ещё секундочку…'];
 
   function safeGet(key){try{return localStorage.getItem(key)||''}catch(_){return''}}
   function safeSet(key,val){try{localStorage.setItem(key,val)}catch(_){}}
@@ -38,15 +35,13 @@
     return Promise.race([run(),timeoutPromise(timeoutMs||15000)]);
   }
 
-  function stopAuthLoader(){if(authLoaderTimer){clearInterval(authLoaderTimer);authLoaderTimer=null}authLoaderIndex=0;const el=$('tutorBootText');if(el)el.textContent=AUTH_LOADER_PHRASES[0]}
-  function startAuthLoader(){stopAuthLoader();const el=$('tutorBootText');if(!el)return;authLoaderTimer=setInterval(()=>{authLoaderIndex=(authLoaderIndex+1)%AUTH_LOADER_PHRASES.length;el.textContent=AUTH_LOADER_PHRASES[authLoaderIndex]},850)}
   function setAuthError(text){const el=$('tutorAuthError');el.textContent=String(text||'');el.classList.toggle('hidden',!text)}
   function showGate(checking){
     const gate=$('tutorAuthGate');gate.classList.remove('hidden');gate.classList.toggle('checking',!!checking);
     $('authChecking').classList.toggle('hidden',!checking);$('authForm').classList.toggle('hidden',!!checking);
-    if(checking)startAuthLoader();else{stopAuthLoader();setTimeout(()=>$('tutorLogin').focus(),30)}
+    if(!checking)setTimeout(()=>$('tutorLogin').focus(),30);
   }
-  function hideGate(){stopAuthLoader();$('tutorAuthGate').classList.add('hidden');$('tutorAuthGate').classList.remove('checking')}
+  function hideGate(){$('tutorAuthGate').classList.add('hidden');$('tutorAuthGate').classList.remove('checking')}
 
   function requestFreshD1(){
     if(d1RefreshPromise)return d1RefreshPromise;
@@ -119,53 +114,81 @@
   }
   function showReportError(text){const el=$('reportError');el.textContent=text;el.classList.remove('hidden')}
 
-  function makePhonesSkeleton(count){return '<div class="list-skeleton">'+Array.from({length:count||4}).map(()=>'<div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line wide"></div><div class="skeleton-line mid"></div><div class="skeleton-actions"><div class="skeleton-btn"></div><div class="skeleton-btn"></div></div></div>').join('')+'</div>'}
   async function prewarmParents(){
     if(!d1Session||!window.MedsiOverlayTransport)return;
-    try{const res=await MedsiOverlayTransport.parents(d1Session);const rows=Array.isArray(res&&res.parents)?res.parents:(Array.isArray(res&&res.rows)?res.rows:[]);if(rows.length||res){parentsCache=rows;parentsSignature=parentSig(rows)}}catch(_){}
+    try{
+      const res=await MedsiOverlayTransport.parents(d1Session);
+      const rows=Array.isArray(res&&res.parents)?res.parents:(Array.isArray(res&&res.rows)?res.rows:[]);
+      if(rows.length||res){parentsCache=rows;parentsSignature=parentSig(rows)}
+    }catch(_){}
   }
-  async function loadParents(){
-    $('phonesError').classList.add('hidden');
-    const hadCache=parentsCache.length>0;
-    if(hadCache)renderPhones(parentsCache,false);else $('phonesList').innerHTML=makePhonesSkeleton(4);
+  async function refreshPhones(){
     try{
       let rows=[];
-      if(d1Session&&window.MedsiOverlayTransport){const res=await MedsiOverlayTransport.parents(d1Session);rows=Array.isArray(res&&res.parents)?res.parents:(Array.isArray(res&&res.rows)?res.rows:[])}
-      else{const res=await callApi('listAvailableParentsForChat',[tutorToken],20000);if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось загрузить родителей.');rows=Array.isArray(res.rows)?res.rows:[]}
-      const nextSig=parentSig(rows);const changed=nextSig!==parentsSignature;parentsCache=rows;parentsSignature=nextSig;
-      if(!hadCache||changed)renderPhones(rows,!hadCache);
-    }catch(e){if(!hadCache){$('phonesList').innerHTML='';$('phonesError').textContent=String(e&&e.message||e);$('phonesError').classList.remove('hidden')}}
+      if(d1Session&&window.MedsiOverlayTransport){
+        const res=await MedsiOverlayTransport.parents(d1Session);
+        rows=Array.isArray(res&&res.parents)?res.parents:(Array.isArray(res&&res.rows)?res.rows:[]);
+      }else{
+        const res=await callApi('listAvailableParentsForChat',[tutorToken],20000);
+        if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось загрузить родителей.');
+        rows=Array.isArray(res.rows)?res.rows:[];
+      }
+      parentsCache=rows.map(r=>({phone:r.phone||r.phone10||'',parentName:r.parentName||r.parent_name||'',childName:r.childName||r.child_name||''}));
+      parentsSignature=parentSig(parentsCache);return parentsCache;
+    }catch(e){throw e}
   }
-  async function copyPhone(text,btn){
-    text=String(text||'').trim();if(!text)return;const old=btn.textContent;
-    try{if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(text);else{const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}btn.textContent='Скопировано';setTimeout(()=>{btn.textContent=old},900)}
-    catch(_){btn.textContent='Не скопировано';setTimeout(()=>{btn.textContent=old},1100)}
+  async function copyPhone(phone,btn){
+    const value=String(phone||'').trim();if(!value)return;
+    try{await navigator.clipboard.writeText(value);const old=btn.textContent;btn.textContent='Скопировано';setTimeout(()=>btn.textContent=old,1000)}
+    catch(_){const ta=document.createElement('textarea');ta.value=value;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();const old=btn.textContent;btn.textContent='Скопировано';setTimeout(()=>btn.textContent=old,1000)}
   }
-  function renderPhones(rows,animate){
-    const box=$('phonesList');box.replaceChildren();if(!rows.length){box.innerHTML='<div class="chat-empty">Нет родителей.</div>';return}
+  function renderPhones(rows){
+    const box=$('phonesList');if(!box)return;box.replaceChildren();
+    if(!rows||!rows.length){const empty=document.createElement('div');empty.className='chat-empty';empty.textContent='Нет родителей.';box.appendChild(empty);return}
     rows.forEach((r,index)=>{
-      const card=document.createElement('div');card.className='phone-card'+(animate?' card-enter':'');card.dataset.phone=phone10(r.phone);if(animate)card.style.animationDelay=Math.min(index*25,120)+'ms';
+      const card=document.createElement('div');card.className='phone-card card-enter';card.style.animationDelay=Math.min(index*24,160)+'ms';
       const title=document.createElement('div');title.className='phone-card-title';title.textContent=r.childName||'Без имени ребёнка';
-      const meta=document.createElement('div');meta.className='phone-card-meta';meta.append(document.createTextNode('Родитель: '+(r.parentName||'—')));meta.appendChild(document.createElement('br'));meta.append(document.createTextNode('Номер телефона: '));
-      const strong=document.createElement('span');strong.className='phone-number-strong';strong.textContent=displayPhone(r.phone)||'—';meta.appendChild(strong);
+      const meta=document.createElement('div');meta.className='phone-card-meta';
+      const parentLine=document.createElement('div');parentLine.textContent='Родитель: '+(r.parentName||'—');
+      const phoneLine=document.createElement('div');phoneLine.append('Номер телефона: ');const strong=document.createElement('span');strong.className='phone-number-strong';strong.textContent=displayPhone(r.phone)||'—';phoneLine.appendChild(strong);meta.append(parentLine,phoneLine);
       const actions=document.createElement('div');actions.className='phone-card-actions';
-      const copy=document.createElement('button');copy.className='btn btn-teal phone-action-btn';copy.type='button';copy.textContent='Скопировать';copy.addEventListener('click',()=>copyPhone(displayPhone(r.phone),copy));
+      const copy=document.createElement('button');copy.type='button';copy.className='btn btn-teal phone-action-btn';copy.textContent='Скопировать';copy.onclick=()=>copyPhone(displayPhone(r.phone),copy);
       const call=document.createElement('a');call.className='btn btn-mint phone-action-btn';call.href='tel:'+String(r.phone||'').replace(/\D+/g,'');call.textContent='Позвонить';
-      const del=document.createElement('button');del.className='phone-delete';del.type='button';del.setAttribute('aria-label','Удалить ребёнка');del.textContent='×';del.addEventListener('click',()=>deleteParent(r,card));
-      actions.append(copy,call);card.append(title,del,meta,actions);box.appendChild(card)
-    })
+      const del=document.createElement('button');del.type='button';del.className='phone-delete';del.setAttribute('aria-label','Удалить ребёнка');del.textContent='×';del.onclick=()=>deleteParent(r,card);
+      actions.append(copy,call);card.append(title,del,meta,actions);box.appendChild(card);
+    });
+  }
+  function removePhoneCardOptimistically(row,card){
+    const snapshot=parentsCache.slice();
+    parentsCache=parentsCache.filter(x=>phone10(x.phone)!==phone10(row.phone));
+    parentsSignature=parentSig(parentsCache);
+    if(card){card.classList.add('phone-card-deleting');requestAnimationFrame(()=>card.classList.add('phone-card-deleting-go'));setTimeout(()=>{if(card.isConnected)card.remove()},230)}
+    return snapshot;
+  }
+  function restorePhoneAfterFailedDelete(snapshot,message){
+    parentsCache=snapshot;parentsSignature=parentSig(parentsCache);
+    if(document.body.dataset.screen==='screenPhones')renderPhones(parentsCache);
+    alert(String(message||'Не удалось удалить ребёнка.'));
   }
   async function deleteParent(row,card){
-    const child=row.childName||'ребёнка';if(!confirm('Удалить «'+child+'» из активной базы? Архив DATABASE останется.'))return;
-    try{
-      const preview=await callApi('getReportChildDeletionPreview',[row.phone,tutorToken],15000);if(!preview||!preview.ok)throw new Error((preview&&preview.message)||'Удаление недоступно.');
-      if(!confirm('Подтвердите удаление: '+(preview.childName||child)+'. Чат и активные данные будут очищены.'))return;
-      parentsCache=parentsCache.filter(x=>phone10(x.phone)!==phone10(row.phone));parentsSignature=parentSig(parentsCache);
-      if(card){card.classList.add('is-deleting');setTimeout(()=>{if(card.isConnected)card.remove()},230)}else renderPhones(parentsCache,false);
-      const res=await callApi('deleteReportChildByPhone',[row.phone,tutorToken],30000);if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось удалить.');
-    }catch(e){parentsCache=parentsCache.some(x=>phone10(x.phone)===phone10(row.phone))?parentsCache:parentsCache.concat([row]);parentsSignature=parentSig(parentsCache);renderPhones(parentsCache,true);alert(String(e&&e.message||e))}
+    const child=String(row.childName||'ребёнка').trim();
+    if(!confirm('Удалить ребёнка '+child+' из бота?\n\nВся история сообщений будет удалена.'))return;
+    const request=callApi('deleteReportChildByPhone',[row.phone,tutorToken],30000);
+    const snapshot=removePhoneCardOptimistically(row,card);
+    try{const res=await request;if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось удалить.')}catch(e){restorePhoneAfterFailedDelete(snapshot,e&&e.message||e)}
   }
-  function openPhones(){setScreen('screenPhones','Телефоны родителей','Здесь можно быстро скопировать номер или позвонить.');loadParents()}
+  async function openPhones(){
+    setScreen('screenPhones','Телефоны родителей','Здесь можно быстро скопировать номер или позвонить.');
+    const box=$('phonesList');const err=$('phonesError');err.classList.add('hidden');
+    if(parentsCache.length){
+      renderPhones(parentsCache);
+      const shownSignature=parentsSignature||parentSig(parentsCache);
+      refreshPhones().then(rows=>{if(document.body.dataset.screen==='screenPhones'&&parentSig(rows)!==shownSignature)renderPhones(rows)}).catch(()=>{});
+      return;
+    }
+    box.innerHTML='<div class="phone-mini-loader" aria-label="Загрузка"></div>';
+    try{const rows=await refreshPhones();if(document.body.dataset.screen==='screenPhones')renderPhones(rows)}catch(e){if(document.body.dataset.screen==='screenPhones'){box.replaceChildren();err.textContent=String(e&&e.message||e);err.classList.remove('hidden')}}
+  }
 
   async function ensureD1Fresh(){if(d1Session&&Number(d1Session.expiresAt||0)>Date.now()+60000)return d1Session;return requestFreshD1()}
   async function openChat(){try{const s=await ensureD1Fresh();overlay.open({type:'medsi:chat-overlay',action:'open',role:'educator',session:s})}catch(e){alert(String(e&&e.message||e))}}
