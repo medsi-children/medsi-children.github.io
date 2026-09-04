@@ -41,13 +41,13 @@
 .educator-exact-clone #btnVideo{background:var(--btn-sky)!important;color:#fff!important;border:none!important}
 .educator-exact-clone #chatReplySendBtn{background:var(--btn-mint)!important;color:#fff!important;border:none!important}
 
-/* Restore the exact production image placeholder: fixed media rectangle with
-   a shimmer until the image has fully loaded, then a short fade/scale reveal. */
-.educator-exact-clone .msg-image-wrap{position:relative;display:block;width:min(280px,64vw);max-width:280px;aspect-ratio:3/4;border-radius:10px;overflow:hidden;margin-bottom:4px;background:rgba(255,255,255,.42);border:1px solid rgba(36,211,218,.14);contain:layout style paint}
+/* Test-only stable media tile: every image/video gets the same square preview,
+   filled edge-to-edge regardless of the source aspect ratio. */
+.educator-exact-clone .msg-image-wrap{position:relative;display:block;width:min(280px,64vw);max-width:280px;aspect-ratio:1/1;border-radius:10px;overflow:hidden;margin-bottom:4px;background:rgba(255,255,255,.42);border:1px solid rgba(36,211,218,.14);contain:layout style paint}
 .educator-exact-clone .msg-image-wrap::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,255,255,.14) 0%,rgba(36,211,218,.11) 44%,rgba(255,255,255,.42) 50%,rgba(36,211,218,.11) 56%,rgba(255,255,255,.14) 100%);transform:translateX(-100%);animation:fullWebMsgImageShimmer 1.15s infinite;z-index:1;pointer-events:none}
-.educator-exact-clone .msg-image-wrap.loaded::before{display:none!important}
-.educator-exact-clone .msg-image{display:block;width:100%;height:100%;object-fit:cover;border-radius:10px;cursor:pointer;opacity:0;transform:scale(1.02);transition:opacity .24s ease,transform .24s ease}
-.educator-exact-clone .msg-image.loaded,.educator-exact-clone .msg-image-wrap.loaded .msg-image{opacity:1;transform:scale(1)}
+.educator-exact-clone .msg-image-wrap:has(img[complete])::before{display:none}
+.educator-exact-clone .msg-image-wrap>img,.educator-exact-clone .msg-image-wrap>video{display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;object-fit:cover!important;object-position:center!important;border-radius:0!important}
+.educator-exact-clone .msg-image-wrap>img{cursor:pointer}
 @keyframes fullWebMsgImageShimmer{to{transform:translateX(100%)}}
 
 /* One restrained motion language for every test screen. */
