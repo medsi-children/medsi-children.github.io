@@ -1,5 +1,13 @@
 /* tutors_test only: preserve the production visual language while the full GitHub UI is built. */
 
+/* Safari paint fallback: keep dashboard cards colored even while a transformed
+   gradient layer is being composited during the first entrance animation. */
+#screenChoose .menu-card-chat{background-color:#38cda8!important}
+#screenChoose .menu-card-morning{background-color:#ffbf3a!important}
+#screenChoose .menu-card-evening{background-color:#5fa8f0!important}
+#screenChoose .menu-card-therapy{background-color:#e98ba7!important}
+#screenChoose .menu-card-phones{background-color:#d77ed2!important}
+
 /* Phones screen copied from the current production educator UI. */
 #screenPhones .phones-list{display:flex;flex-direction:column;gap:10px;width:100%}
 #screenPhones .phone-card{display:block;position:relative;width:100%;text-align:left;background:#fdfefe;border:1.5px solid rgba(36,211,218,.22);border-radius:14px;padding:14px 56px 14px 16px;color:var(--fg);box-shadow:0 4px 14px rgba(36,211,218,.04);transition:opacity .28s ease,transform .28s ease,box-shadow .28s ease,border-color .28s ease,filter .28s ease}
@@ -41,14 +49,13 @@
 .educator-exact-clone #btnVideo{background:var(--btn-sky)!important;color:#fff!important;border:none!important}
 .educator-exact-clone #chatReplySendBtn{background:var(--btn-mint)!important;color:#fff!important;border:none!important}
 
-/* Test-only stable media tile: every image/video gets the same square preview,
-   filled edge-to-edge regardless of the source aspect ratio. */
+/* Stable square media tile. No shimmer: fast media should simply decode and
+   fade in quickly instead of deliberately extending a loading state. */
 .educator-exact-clone .msg-image-wrap{position:relative;display:block;width:min(280px,64vw);max-width:280px;aspect-ratio:1/1;border-radius:10px;overflow:hidden;margin-bottom:4px;background:rgba(255,255,255,.42);border:1px solid rgba(36,211,218,.14);contain:layout style paint}
-.educator-exact-clone .msg-image-wrap::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,255,255,.14) 0%,rgba(36,211,218,.11) 44%,rgba(255,255,255,.42) 50%,rgba(36,211,218,.11) 56%,rgba(255,255,255,.14) 100%);transform:translateX(-100%);animation:fullWebMsgImageShimmer 1.15s infinite;z-index:1;pointer-events:none}
-.educator-exact-clone .msg-image-wrap:has(img[complete])::before{display:none}
-.educator-exact-clone .msg-image-wrap>img,.educator-exact-clone .msg-image-wrap>video{display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;object-fit:cover!important;object-position:center!important;border-radius:0!important}
+.educator-exact-clone .msg-image-wrap::before{display:none!important}
+.educator-exact-clone .msg-image-wrap>img,.educator-exact-clone .msg-image-wrap>video{display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;object-fit:cover!important;object-position:center!important;border-radius:0!important;opacity:0;transition:opacity .14s ease}
+.educator-exact-clone .msg-image-wrap.loaded>img,.educator-exact-clone .msg-image-wrap.loaded>video,.educator-exact-clone .msg-image-wrap>img.loaded,.educator-exact-clone .msg-image-wrap>video.loaded{opacity:1}
 .educator-exact-clone .msg-image-wrap>img{cursor:pointer}
-@keyframes fullWebMsgImageShimmer{to{transform:translateX(100%)}}
 
 /* One restrained motion language for every test screen. */
 .web-screen-enter,.web-polish-enter{animation:webScreenEnter .28s cubic-bezier(.2,.82,.24,1) both}
