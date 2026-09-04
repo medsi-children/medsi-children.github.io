@@ -13,7 +13,8 @@
       body[data-screen="screenNames"] #headerBlock,
       body[data-screen="screenPhoneReg"] #headerBlock,
       body[data-screen="screenAuth"] #headerBlock,
-      body[data-screen="screenChoose"] #headerBlock{display:none!important}
+      body[data-screen="screenChoose"] #headerBlock,
+      body[data-screen="screenChat"] #headerBlock{display:none!important}
       #boot{padding:24px;flex-direction:column;color:#11424a;background:radial-gradient(circle at top left,rgba(15,199,206,.12),transparent 32%),radial-gradient(circle at bottom right,rgba(15,199,206,.08),transparent 28%),#f7fbfc;transition:opacity .35s ease}
       #boot.hidden{display:flex!important;opacity:0;pointer-events:none}
       #boot.medsi-boot-gone{display:none!important}
@@ -32,43 +33,15 @@
   }
 
   function installBoot(){
-    const boot=$('boot');
-    if(!boot)return;
+    const boot=$('boot');if(!boot)return;
     boot.innerHTML='<h1 class="parent-boot-title">Медси Бот</h1><p id="parentBootText" class="parent-boot-text">Подключаемся…</p><div class="parent-boot-logo"><span class="parent-boot-dot"></span><span class="parent-boot-dot"></span><span class="parent-boot-dot"></span><span class="parent-boot-dot"></span><span class="parent-boot-dot"></span></div>';
-    const phrases=['Подключаемся…','Загружаем интерфейс…','Почти готово…','Ещё секундочку…'];
-    let i=0;
+    const phrases=['Подключаемся…','Загружаем интерфейс…','Почти готово…','Ещё секундочку…'];let i=0;
     const timer=setInterval(()=>{const el=$('parentBootText');if(!el){clearInterval(timer);return}i=(i+1)%phrases.length;el.textContent=phrases[i]},850);
-    const observer=new MutationObserver(()=>{
-      if(!boot.classList.contains('hidden'))return;
-      clearInterval(timer);observer.disconnect();
-      setTimeout(()=>boot.classList.add('medsi-boot-gone'),350);
-    });
+    const observer=new MutationObserver(()=>{if(!boot.classList.contains('hidden'))return;clearInterval(timer);observer.disconnect();setTimeout(()=>boot.classList.add('medsi-boot-gone'),350)});
     observer.observe(boot,{attributes:true,attributeFilter:['class']});
     if(boot.classList.contains('hidden')){clearInterval(timer);setTimeout(()=>boot.classList.add('medsi-boot-gone'),350)}
   }
 
-  function enforceLogoutLabel(){
-    const btn=$('logoutBtn');
-    if(!btn)return;
-    if(btn.textContent!=='Выйти в меню')btn.textContent='Выйти в меню';
-  }
-
-  function installChatRoute(){
-    const btn=$('btnChat');
-    if(btn)btn.onclick=()=>{location.href='/parents_test/chat.html?v=chat-polish1'};
-  }
-
-  function install(){
-    enforceLogoutLabel();
-    installChatRoute();
-    const logout=$('logoutBtn');
-    if(logout)new MutationObserver(enforceLogoutLabel).observe(logout,{childList:true,characterData:true,subtree:true});
-  }
-
   installStyle();
   installBoot();
-  install();
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});
-  setTimeout(install,100);
-  setTimeout(install,500);
 })();
