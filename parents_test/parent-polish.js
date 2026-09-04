@@ -42,6 +42,16 @@
     if(boot.classList.contains('hidden')){clearInterval(timer);setTimeout(()=>boot.classList.add('medsi-boot-gone'),350)}
   }
 
+  function installPsychologyFormatter(){
+    if(!document.querySelector('link[data-medsi-psych-format]')){
+      const link=document.createElement('link');link.rel='stylesheet';link.href='/parents_test/psychology-format.css?v=1';link.dataset.medsiPsychFormat='1';document.head.appendChild(link);
+    }
+    if(!window.MedsiPsychologyFormatter&&!document.querySelector('script[data-medsi-psych-format]')){
+      const script=document.createElement('script');script.src='/parents_test/psychology-format.js?v=1';script.defer=true;script.dataset.medsiPsychFormat='1';document.head.appendChild(script);
+    }
+  }
+
   installStyle();
   installBoot();
+  installPsychologyFormatter();
 })();
