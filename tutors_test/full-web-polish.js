@@ -9,6 +9,7 @@
   const displayPhone=v=>{const p=phone10(v);return p?'8'+p:''};
   const tutorToken=()=>{try{return String(localStorage.getItem(TUTOR_KEY)||'')}catch(_){return''}};
   const d1Session=()=>{try{const s=JSON.parse(localStorage.getItem(D1_KEY)||'null');return s&&s.token?s:null}catch(_){return null}};
+  const phonesSignature=rows=>(rows||[]).map(r=>[phone10(r.phone),String(r.parentName||''),String(r.childName||'')].join('|')).sort().join('\n');
 
   async function appApi(method,args){
     const res=await fetch(APP_BASE,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});
@@ -55,8 +56,6 @@
     const child=String(row.childName||'ребёнка').trim();
     if(!confirm('Удалить ребёнка '+child+' из бота?\n\nВся история сообщений будет удалена.'))return;
 
-    // The request starts immediately after the single deliberate confirmation.
-    // The card disappears optimistically while the server completes deletion.
     const deletePromise=appApi('deleteReportChildByPhone',[row.phone,tutorToken()]);
     const snapshot=removePhoneCardOptimistically(row,card);
 
@@ -99,7 +98,14 @@
   async function openPhonesFast(e){
     e.preventDefault();e.stopImmediatePropagation();showPhonesScreen();
     const box=$('phonesList');if(!box)return;
-    if(phonesCache.length){renderPhones(phonesCache);refreshPhonesFromD1().then(rows=>{if(document.body.dataset.screen==='screenPhones'&&rows.length)renderPhones(rows)});return}
+    if(phonesCache.length){
+      renderPhones(phonesCache);
+      const shownSignature=phonesSignature(phonesCache);
+      refreshPhonesFromD1().then(rows=>{
+        if(document.body.dataset.screen==='screenPhones'&&phonesSignature(rows)!==shownSignature)renderPhones(rows);
+      });
+      return;
+    }
     box.innerHTML='<div class="phone-mini-loader" aria-label="Загрузка"></div>';
     const rows=await refreshPhonesFromD1();
     if(document.body.dataset.screen==='screenPhones')renderPhones(rows);
@@ -125,7 +131,6 @@
         if(thread)thread.classList.add('hidden');if(list){list.classList.remove('hidden');list.classList.remove('web-polish-enter');void list.offsetWidth;list.classList.add('web-polish-enter')}
         document.body.dataset.screen='screenChats';
         const title=root.querySelector('#title'),meta=root.querySelector('#meta');if(title)title.textContent='Чат с родителями';
-        // Keep the list that was already visible before opening the thread. Do not force unread/read bucket.
         if(meta&&meta.textContent==='')meta.textContent='Выберите чат с нужным родителем.';
       },true);
     }
