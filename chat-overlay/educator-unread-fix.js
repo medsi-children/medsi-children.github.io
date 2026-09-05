@@ -1,4 +1,43 @@
 (function(){
+  const style=document.createElement('style');
+  style.textContent=`
+    .educator-exact-clone .refresh-btn{
+      position:relative!important;
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      overflow:hidden!important;
+    }
+    .educator-exact-clone .refresh-btn .refresh-label{
+      position:absolute!important;
+      left:50%!important;
+      top:50%!important;
+      width:34px!important;
+      height:34px!important;
+      display:grid!important;
+      place-items:center!important;
+      line-height:1!important;
+      transform:translate(-50%,-50%)!important;
+      margin:0!important;
+      padding:0!important;
+    }
+    .educator-exact-clone .refresh-btn.loading .refresh-label{
+      display:none!important;
+    }
+    .educator-exact-clone .refresh-btn .refresh-spinner{
+      position:absolute!important;
+      left:50%!important;
+      top:50%!important;
+      width:28px!important;
+      height:28px!important;
+      margin:-14px 0 0 -14px!important;
+    }
+    .educator-exact-clone .refresh-btn.loading .refresh-spinner{
+      display:block!important;
+    }
+  `;
+  document.head.appendChild(style);
+
   function savedSession(){
     try{
       const s=JSON.parse(localStorage.getItem('medsi_d1_educator_session_v1')||'null');
