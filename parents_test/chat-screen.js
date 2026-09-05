@@ -2,6 +2,7 @@
   const $=id=>document.getElementById(id);
   const t=window.MedsiOverlayTransport;
   if(!t)return;
+  const REACTIONS=['❤️','👍','👌','🙏','🥰','😁'];
   const p10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
   const fmt=v=>{
     const d=new Date(Number(v));if(Number.isNaN(d.getTime()))return'';
@@ -13,7 +14,7 @@
     const months=['янв.','февр.','мар.','апр.','мая','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
     return d.getDate()+' '+months[d.getMonth()]+' • '+time;
   };
-  let state=null,rows=[],busy=false,dead=false,lightbox=null;
+  let state=null,rows=[],busy=false,dead=false,lightbox=null,reactionMenu=null;
 
   function mediaUrl(m){
     const id=String(m&&m.fileId||'');if(!id)return'';
@@ -35,10 +36,33 @@
     close.onclick=closeLightbox;root.onclick=e=>{if(e.target===root)closeLightbox()};
     root.append(img,close);document.body.appendChild(root);lightbox=root;
   }
-  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLightbox()});
+
+  function ensureReactionMenu(){
+    if(reactionMenu)return reactionMenu;
+    const menu=document.createElement('div');menu.className='parent-chat-context hidden';menu.setAttribute('role','menu');
+    document.body.appendChild(menu);reactionMenu=menu;return menu;
+  }
+  function closeReactionMenu(){if(reactionMenu)reactionMenu.classList.add('hidden')}
+  function openReactionMenu(m,el){
+    if(!state||!m||!m.messageKey||String(m.messageKey).startsWith('pending-'))return;
+    const menu=ensureReactionMenu();menu.replaceChildren();
+    REACTIONS.forEach(reaction=>{
+      const b=document.createElement('button');b.type='button';b.className='parent-chat-reaction-btn';b.textContent=reaction;b.setAttribute('aria-label','Поставить реакцию '+reaction);
+      b.onclick=async ev=>{ev.preventDefault();ev.stopPropagation();closeReactionMenu();try{await t.react(state.session,m.messageKey,reaction);await refresh({stick:false})}catch(err){showError(err&&err.message||'Не удалось поставить реакцию.')}};
+      menu.appendChild(b);
+    });
+    const r=el.getBoundingClientRect();
+    menu.classList.remove('hidden');
+    const w=Math.min(310,window.innerWidth-24);
+    menu.style.left=Math.min(window.innerWidth-w-12,Math.max(12,r.left+(r.width-w)/2))+'px';
+    const menuH=54;let top=r.bottom+7;if(top+menuH>window.innerHeight)top=Math.max(12,r.top-menuH-7);menu.style.top=top+'px';
+  }
+  document.addEventListener('click',e=>{if(reactionMenu&&!reactionMenu.classList.contains('hidden')&&!e.target.closest('.parent-chat-context,.parent-chat-msg'))closeReactionMenu()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLightbox();closeReactionMenu()}});
 
   function render(list,opts){
     const box=$('parentChatMessages');if(!box)return;
+    closeReactionMenu();
     const stick=opts&&opts.stick!==undefined?!!opts.stick:nearBottom();
     const oldHeight=box.scrollHeight,oldTop=box.scrollTop;
     rows=Array.isArray(list)?list:[];box.replaceChildren();
@@ -61,7 +85,9 @@
       }
       if(m.text){const b=document.createElement('div');b.textContent=String(m.text);el.appendChild(b)}
       if(m.reaction){const r=document.createElement('span');r.className='parent-chat-reaction';r.textContent=String(m.reaction);el.appendChild(r)}
-      const tm=document.createElement('span');tm.className='parent-chat-time';tm.textContent=fmt(m.timestamp);el.appendChild(tm);box.appendChild(el)
+      const tm=document.createElement('span');tm.className='parent-chat-time';tm.textContent=fmt(m.timestamp);el.appendChild(tm);
+      el.onclick=e=>{if(e.target.closest('img,video,button,.parent-chat-reaction'))return;e.preventDefault();e.stopPropagation();openReactionMenu(m,el)};
+      box.appendChild(el)
     });
     requestAnimationFrame(()=>{
       if(stick)box.scrollTop=box.scrollHeight;
@@ -78,7 +104,7 @@
   }
 
   async function open(next){
-    dead=false;state={...next,phone:p10(next&&next.phone)};clearError();
+    dead=false;state={...next,phone:p10(next&&next.phone)};clearError();closeReactionMenu();
     $('parentChatChild').textContent=state.childName||state.parentName||'Ребёнок';
     $('parentChatPhone').textContent=state.phone?'8'+state.phone:'';
     $('parentChatInput').value='';
@@ -87,7 +113,7 @@
     else $('parentChatMessages').innerHTML='<div class="parent-chat-empty">Загружаем сообщения…</div>';
     try{await refresh({stick:true})}catch(e){showError(e&&e.message||'Не удалось загрузить сообщения.')}
   }
-  function close(){dead=true;state=null;rows=[];setBusy(false);clearError();closeLightbox()}
+  function close(){dead=true;state=null;rows=[];setBusy(false);clearError();closeLightbox();closeReactionMenu()}
 
   $('parentChatBack').onclick=()=>{if(state&&typeof state.onBack==='function')state.onBack()};
   $('parentChatCompose').onsubmit=async e=>{
