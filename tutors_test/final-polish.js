@@ -88,6 +88,22 @@
   if(window.visualViewport)window.visualViewport.addEventListener('resize',()=>{if(activeMessage)positionMenu(activeMessage)});
 
   if(!window.MedsiVideoLink&&!document.querySelector('script[data-medsi-video-link]')){
-    const s=document.createElement('script');s.src='/chat-overlay/video-link.js?v=1';s.dataset.medsiVideoLink='1';document.head.appendChild(s);
+    const s=document.createElement('script');
+    s.src='/chat-overlay/video-link.js?v=1';
+    s.dataset.medsiVideoLink='1';
+    s.onload=()=>{
+      if(!document.querySelector('script[data-medsi-video-preview]')){
+        const p=document.createElement('script');
+        p.src='/chat-overlay/video-link-preview.js?v=1';
+        p.dataset.medsiVideoPreview='1';
+        document.head.appendChild(p);
+      }
+    };
+    document.head.appendChild(s);
+  }else if(!document.querySelector('script[data-medsi-video-preview]')){
+    const p=document.createElement('script');
+    p.src='/chat-overlay/video-link-preview.js?v=1';
+    p.dataset.medsiVideoPreview='1';
+    document.head.appendChild(p);
   }
 })();
