@@ -4,6 +4,7 @@
   transport.__medsiPrewarmWrapped=true;
 
   const SESSION_KEY='medsi_d1_educator_session_v1';
+  const TUTOR_KEY='medsi_tutor_session_v1';
   const listCache=new Map();
   const threadCache=new Map();
   const listInFlight=new Map();
@@ -167,4 +168,33 @@
     kick,
     clear(){listCache.clear();threadCache.clear();listInFlight.clear();threadInFlight.clear();startedForToken=''}
   };
+
+  const AUTH_WATCH_MS=2800;
+  let authWatchTimer=null;
+  function educatorChatReady(){
+    const overlay=document.getElementById('medsiChatOverlay');
+    const list=document.getElementById('chatList');
+    const err=document.getElementById('chatListError');
+    if(!overlay||overlay.classList.contains('hidden')||!list)return false;
+    if(err&&!err.classList.contains('hidden')&&String(err.textContent||'').trim())return false;
+    return list.children.length>0||String(list.textContent||'').trim().length>0;
+  }
+  function clearEducatorAuthState(){
+    listCache.clear();threadCache.clear();listInFlight.clear();threadInFlight.clear();startedForToken='';
+    try{localStorage.removeItem(TUTOR_KEY);localStorage.removeItem(SESSION_KEY)}catch(_){}
+    try{Object.keys(sessionStorage).filter(k=>k.startsWith('medsi_')).forEach(k=>sessionStorage.removeItem(k))}catch(_){}
+  }
+  function forceEducatorReauth(){
+    if(authWatchTimer){clearTimeout(authWatchTimer);authWatchTimer=null}
+    clearEducatorAuthState();
+    location.replace('/tutors?reauth=1&reset='+Date.now());
+  }
+  function armEducatorAuthWatch(){
+    if(authWatchTimer)clearTimeout(authWatchTimer);
+    authWatchTimer=setTimeout(()=>{
+      authWatchTimer=null;
+      if(!educatorChatReady())forceEducatorReauth();
+    },AUTH_WATCH_MS);
+  }
+  document.addEventListener('click',e=>{if(e.target&&e.target.closest&&e.target.closest('#btnParentChats'))armEducatorAuthWatch()},true);
 })();
