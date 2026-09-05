@@ -1,15 +1,13 @@
 (function(){
-  const PRIMARY='https://chat.xn----btbhdqvtun.xn--p1ai';
-  const BACKUP='https://medsi-chat-worker.medsi-children.workers.dev';
-  const SESSION_KEY='medsi_d1_educator_session_v1';
-  const objectUrls=new Map();
+  const APP_BASE_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
+  const TUTOR_KEY='medsi_tutor_session_v1';
+  const imageCache=new Map();
+  const PLACEHOLDER='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
-  function sessionToken(){
-    try{
-      const s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
-      return s&&s.token?String(s.token):'';
-    }catch(_){return''}
+  function tutorToken(){
+    try{return String(localStorage.getItem(TUTOR_KEY)||'')}catch(_){return''}
   }
+
   function mediaKey(src){
     try{
       const u=new URL(src,location.href);
@@ -19,52 +17,80 @@
       return decodeURIComponent(u.pathname.slice(i+marker.length));
     }catch(_){return''}
   }
-  async function fetchBlob(base,key,token){
-    const r=await fetch(base+'/media/'+encodeURIComponent(key),{headers:{'X-Medsi-Chat-Session':token},cache:'no-store'});
-    if(!r.ok)throw new Error('MEDIA_HTTP_'+r.status);
-    return r.blob();
-  }
-  function race(primary,backup,delay){
-    return new Promise((resolve,reject)=>{
-      let done=false,backupStarted=false,pending=1,lastError=null,timer=0;
-      const win=v=>{if(done)return;done=true;if(timer)clearTimeout(timer);resolve(v)};
-      const lose=e=>{lastError=e;pending--;if(!backupStarted){startBackup();return}if(pending<=0&&!done)reject(lastError)};
-      const startBackup=()=>{if(done||backupStarted)return;backupStarted=true;pending++;Promise.resolve().then(backup).then(win,lose)};
-      Promise.resolve().then(primary).then(win,lose);
-      timer=setTimeout(startBackup,delay||900);
+
+  async function callApi(method,args,ms){
+    const request=fetch(APP_BASE_URL,{
+      method:'POST',
+      headers:{'content-type':'text/plain;charset=UTF-8'},
+      body:JSON.stringify({action:'api',method,args:args||[]}),
+      cache:'no-store'
+    }).then(async r=>{
+      const raw=await r.text();
+      let p;
+      try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
+      if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));
+      return p.result;
     });
+    return Promise.race([
+      request,
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('MEDIA_FALLBACK_TIMEOUT')),ms||30000))
+    ]);
   }
-  async function resolveObjectUrl(key,token){
-    if(objectUrls.has(key))return objectUrls.get(key);
-    const blob=await race(()=>fetchBlob(PRIMARY,key,token),()=>fetchBlob(BACKUP,key,token),900);
-    const url=URL.createObjectURL(blob);
-    objectUrls.set(key,url);
-    return url;
+
+  function resolveImage(key){
+    if(imageCache.has(key))return imageCache.get(key);
+    const token=tutorToken();
+    if(!token)return Promise.reject(new Error('NO_TUTOR_SESSION'));
+    const p=callApi('getD1MediaForEducator',['kv:'+key,token],30000)
+      .then(res=>{
+        const dataUrl=String(res&&res.dataUrl||'');
+        if(!/^data:image\//i.test(dataUrl))throw new Error('INVALID_MEDIA_DATA');
+        return dataUrl;
+      })
+      .catch(err=>{imageCache.delete(key);throw err});
+    imageCache.set(key,p);
+    return p;
   }
+
   function patch(el){
-    if(!el||el.dataset.medsiMediaAuth==='1')return;
+    if(!el||el.tagName!=='IMG'||el.dataset.medsiMediaFallback==='1')return;
     const src=String(el.getAttribute('src')||'');
-    if(!src||src.startsWith('blob:'))return;
+    if(!src||src.startsWith('data:')||src.startsWith('blob:'))return;
     const key=mediaKey(src);
     if(!key)return;
-    const token=sessionToken();
-    if(!token)return;
-    el.dataset.medsiMediaAuth='1';
-    resolveObjectUrl(key,token).then(url=>{
+
+    el.dataset.medsiMediaFallback='1';
+    el.dataset.medsiOriginalSrc=src;
+    el.src=PLACEHOLDER;
+
+    resolveImage(key).then(dataUrl=>{
       if(!document.contains(el))return;
-      el.src=url;
-      if(el.tagName==='VIDEO')el.load();
-    }).catch(()=>{delete el.dataset.medsiMediaAuth});
+      el.src=dataUrl;
+      el.dataset.medsiMediaFallbackReady='1';
+    }).catch(()=>{
+      if(!document.contains(el))return;
+      const original=el.dataset.medsiOriginalSrc||src;
+      delete el.dataset.medsiMediaFallback;
+      delete el.dataset.medsiOriginalSrc;
+      el.src=original;
+    });
   }
+
   function scan(root){
-    (root||document).querySelectorAll('img[src*="/media/"],video[src*="/media/"]').forEach(patch);
+    const scope=root&&root.querySelectorAll?root:document;
+    scope.querySelectorAll('img[src*="/media/"]').forEach(patch);
   }
+
   const observer=new MutationObserver(records=>{
     records.forEach(r=>{
       if(r.type==='attributes'&&r.target)patch(r.target);
-      r.addedNodes&&r.addedNodes.forEach(n=>{if(n.nodeType!==1)return;patch(n);scan(n)});
+      r.addedNodes&&r.addedNodes.forEach(n=>{
+        if(n.nodeType!==1)return;
+        patch(n);scan(n);
+      });
     });
   });
+
   observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['src']});
   scan(document);
 })();
