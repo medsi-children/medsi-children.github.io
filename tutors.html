@@ -36,7 +36,8 @@
   <script src="/tutors-app/chat-prewarm.js?v=20260905-background-prewarm-1"></script>
   <script src="/chat-overlay/interaction-fix.js?v=20260905-production"></script>
   <script src="/chat-overlay/educator-chat.js?v=20260905-production"></script>
-  <script src="/chat-overlay/loading-feedback.js?v=20260905-delay-loading-1"></script>
+  <script src="/chat-overlay/loading-feedback.js?v=20260905-loading-instant-1"></script>
+  <script src="/chat-overlay/media-auth-fix.js?v=20260905-media-auth-1"></script>
   <script src="/chat-overlay/educator-unread-fix.js?v=20260905-production"></script>
   <script src="/chat-overlay/educator-new-chat.js?v=20260905-production"></script>
   <script src="/chat-overlay/overlay-core.js?v=20260905-production"></script>
@@ -113,7 +114,7 @@
           <p class="report-hint">После имени ребёнка обязательно ставьте “:” или “-”. Блок для врачей и общий комментарий перед отправкой лучше удалить.</p>
           <textarea id="text" class="report-area" placeholder="Вставьте весь текст отчёта сюда…"></textarea>
           <p id="reportError" class="status error hidden" role="alert"></p>
-          <div class="row" style="margin-top:14px">
+          <div class="grid2" style="margin-top:14px">
             <button id="btnBack" class="btn">Назад</button>
             <button id="btnSend" class="btn btn-teal" data-type="">Отправить</button>
           </div>
