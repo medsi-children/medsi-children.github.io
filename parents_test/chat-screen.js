@@ -3,7 +3,16 @@
   const t=window.MedsiOverlayTransport;
   if(!t)return;
   const p10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
-  const fmt=v=>{const d=new Date(Number(v));return Number.isNaN(d.getTime())?'':d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})};
+  const fmt=v=>{
+    const d=new Date(Number(v));if(Number.isNaN(d.getTime()))return'';
+    const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate()),day=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+    const diff=Math.round((today-day)/86400000);
+    const time=d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+    if(diff===0)return'сегодня • '+time;
+    if(diff===1)return'вчера • '+time;
+    const months=['янв.','февр.','мар.','апр.','мая','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
+    return d.getDate()+' '+months[d.getMonth()]+' • '+time;
+  };
   let state=null,rows=[],busy=false,dead=false,lightbox=null;
 
   function mediaUrl(m){
@@ -51,6 +60,7 @@
         frame.appendChild(md);el.appendChild(frame)
       }
       if(m.text){const b=document.createElement('div');b.textContent=String(m.text);el.appendChild(b)}
+      if(m.reaction){const r=document.createElement('span');r.className='parent-chat-reaction';r.textContent=String(m.reaction);el.appendChild(r)}
       const tm=document.createElement('span');tm.className='parent-chat-time';tm.textContent=fmt(m.timestamp);el.appendChild(tm);box.appendChild(el)
     });
     requestAnimationFrame(()=>{
