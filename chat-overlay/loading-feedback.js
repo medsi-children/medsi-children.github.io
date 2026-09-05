@@ -1,5 +1,5 @@
 (function(){
-  const DELAY=500;
+  const DELAY=1;
   let timer=0;
   let target=null;
   let token=0;
@@ -7,18 +7,18 @@
   const style=document.createElement('style');
   style.textContent=`
     .medsi-card-skeleton{display:block;width:100%;min-height:122px;border:1.5px solid rgba(36,211,218,.14);border-radius:14px;padding:16px 18px;margin:0;background:#fdfefe;overflow:hidden}
-    .medsi-skeleton-line,.medsi-message-skeleton-line{height:12px;border-radius:999px;background:linear-gradient(90deg,rgba(213,232,235,.48) 20%,rgba(238,248,249,.96) 42%,rgba(213,232,235,.48) 64%);background-size:220% 100%;animation:medsiSkeleton 1.25s ease-in-out infinite}
-    .medsi-card-skeleton .medsi-skeleton-line:nth-child(1){width:42%;height:16px;margin-bottom:13px}
+    .medsi-skeleton-line,.medsi-message-skeleton-line{height:14px;border-radius:999px;background:linear-gradient(90deg,rgba(213,232,235,.48) 20%,rgba(238,248,249,.96) 42%,rgba(213,232,235,.48) 64%);background-size:220% 100%;animation:medsiSkeleton 1.25s ease-in-out infinite}
+    .medsi-card-skeleton .medsi-skeleton-line:nth-child(1){width:42%;height:17px;margin-bottom:13px}
     .medsi-card-skeleton .medsi-skeleton-line:nth-child(2){width:72%;margin-bottom:9px}
     .medsi-card-skeleton .medsi-skeleton-line:nth-child(3){width:58%;margin-bottom:9px}
     .medsi-card-skeleton .medsi-skeleton-line:nth-child(4){width:84%;margin-top:16px}
     .medsi-card-skeleton+.medsi-card-skeleton{margin-top:10px}
 
-    .medsi-thread-skeleton{padding:8px 2px 14px;display:flex;flex-direction:column;gap:12px}
-    .medsi-message-skeleton{width:min(78%,520px);padding:14px 16px;border-radius:16px;background:rgba(239,249,250,.72);border:1px solid rgba(36,211,218,.12)}
-    .medsi-message-skeleton:nth-child(even){align-self:flex-end;width:min(68%,470px)}
-    .medsi-message-skeleton-line{margin-bottom:8px}
-    .medsi-message-skeleton-line:last-child{margin-bottom:0;width:58%}
+    .medsi-thread-skeleton{padding:8px 2px 14px;display:flex;flex-direction:column;gap:14px}
+    .medsi-message-skeleton{width:min(82%,540px);min-height:98px;padding:20px 18px;border-radius:16px;background:rgba(239,249,250,.72);border:1px solid rgba(36,211,218,.12);display:flex;flex-direction:column;justify-content:center;gap:11px}
+    .medsi-message-skeleton:nth-child(even){align-self:flex-end;width:min(72%,490px);min-height:88px}
+    .medsi-message-skeleton-line{height:16px;margin:0}
+    .medsi-message-skeleton-line:last-child{width:58%}
     .medsi-message-skeleton:nth-child(2) .medsi-message-skeleton-line:first-child{width:78%}
     .medsi-message-skeleton:nth-child(3) .medsi-message-skeleton-line:first-child{width:66%}
     @keyframes medsiSkeleton{0%{background-position:100% 0}100%{background-position:-120% 0}}
@@ -73,7 +73,8 @@
     }
     if(screen==='screenChats'){
       const list=root.querySelector('#chatList');
-      if(isPlainLoading(list)){
+      const section=root.querySelector('#screenChats');
+      if(section && !section.classList.contains('hidden') && isPlainLoading(list)){
         const meta=(root.querySelector('#meta')?.textContent||'').trim();
         schedule(list,meta==='Прочитанные чаты'?'read':'unread');return;
       }
