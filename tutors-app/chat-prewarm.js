@@ -3,19 +3,17 @@
   if(!transport||transport.__medsiPrewarmWrapped)return;
   transport.__medsiPrewarmWrapped=true;
 
+  const APP_BASE_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
   const SESSION_KEY='medsi_d1_educator_session_v1';
-  const CACHE_PREFIX='medsi_educator_chat_cache_v3:';
-  const LIST_TTL=45000;
-  const THREAD_TTL=45000;
+  const TUTOR_KEY='medsi_tutor_session_v1';
   const listCache=new Map();
   const threadCache=new Map();
   const listInFlight=new Map();
   const threadInFlight=new Map();
+  const warmedPhones=new Set();
+  const warmQueuedPhones=new Set();
   const warmQueue=[];
-  const warmQueued=new Set();
-  let warming=false;
-  let startedForToken='';
-
+  let warmWorkers=0;
   const original={
     chats:transport.chats.bind(transport),
     thread:transport.thread.bind(transport),
@@ -28,8 +26,31 @@
 
   const phone10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
   const now=()=>Date.now();
-  const tokenPart=s=>String(s&&s.token||'').slice(-18);
   const sameSession=(a,b)=>!!(a&&b&&a.token&&b.token&&a.token===b.token);
+  const requestTimeout=(promise,ms)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>{const e=new Error('CHAT_PREWARM_TIMEOUT');e.code='CHAT_PREWARM_TIMEOUT';reject(e)},ms))]);
+  const tutorToken=()=>{try{return String(localStorage.getItem(TUTOR_KEY)||'')}catch(_){return''}};
+  async function callApi(method,args,ms){
+    const run=async()=>{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));return p.result};
+    return requestTimeout(run(),ms||15000);
+  }
+  async function fallbackChats(bucket){const tok=tutorToken();if(!tok)throw new Error('Сессия воспитателя недоступна.');return callApi('listD1ChatsForEducator',[tok,bucket||'all'],18000)}
+  async function fallbackThread(phone,before,limit){const tok=tutorToken();if(!tok)throw new Error('Сессия воспитателя недоступна.');return callApi('getD1ThreadForEducator',[phone10(phone),tok,String(before||''),Number(limit)||50],18000)}
+  async function fallbackSend(phone,message){const tok=tutorToken();if(!tok)throw new Error('Сессия воспитателя недоступна.');return callApi('sendD1MessageForEducator',[phone10(phone),message||{},tok],20000)}
+
+  function resilient(direct,fallback){
+    return new Promise((resolve,reject)=>{
+      let done=false,fallbackStarted=false,pending=1,lastError=null,timer=null;
+      const win=value=>{if(done)return;done=true;if(timer)clearTimeout(timer);resolve(value)};
+      const lose=error=>{lastError=error;pending-=1;if(!fallbackStarted){startFallback();return}if(pending<=0&&!done)reject(lastError)};
+      const startFallback=()=>{
+        if(done||fallbackStarted)return;
+        fallbackStarted=true;pending+=1;
+        Promise.resolve().then(fallback).then(win,lose);
+      };
+      Promise.resolve().then(direct).then(win,lose);
+      timer=setTimeout(startFallback,900);
+    });
+  }
 
   function savedSession(){
     try{
@@ -40,89 +61,66 @@
     }catch(_){return null}
   }
 
-  function storageGet(key,ttl){
-    try{
-      const x=JSON.parse(sessionStorage.getItem(CACHE_PREFIX+key)||'null');
-      if(!x||!x.value||now()-Number(x.at||0)>ttl)return null;
-      return x;
-    }catch(_){return null}
-  }
-  function storageSet(key,value){
-    try{sessionStorage.setItem(CACHE_PREFIX+key,JSON.stringify({value,at:now()}))}catch(_){}
-  }
-  function storageDeletePrefix(prefix){
-    try{Object.keys(sessionStorage).filter(k=>k.startsWith(CACHE_PREFIX+prefix)).forEach(k=>sessionStorage.removeItem(k))}catch(_){}
-  }
-
-  function listKey(session,bucket){return 'list:'+tokenPart(session)+':'+String(bucket||'all')}
-  function threadKey(session,phone,before,limit){return 'thread:'+tokenPart(session)+':'+phone10(phone)+':'+String(before||'')+':'+String(limit||50)}
+  function listKey(session,bucket){return String(session&&session.token||'').slice(-18)+'|'+String(bucket||'all')}
+  function threadKey(session,phone,before,limit){return String(session&&session.token||'').slice(-18)+'|'+phone10(phone)+'|'+String(before||'')+'|'+String(limit||50)}
 
   async function fetchList(session,bucket){
     const key=listKey(session,bucket);
     if(listInFlight.has(key))return listInFlight.get(key);
     let p;
-    p=original.chats(session,bucket).then(res=>{
-      const entry={value:res,at:now()};
-      listCache.set(key,entry);storageSet(key,res);return res;
+    p=resilient(()=>original.chats(session,bucket),()=>fallbackChats(bucket)).then(res=>{
+      listCache.set(key,{value:res,at:now()});
+      return res;
     }).finally(()=>{if(listInFlight.get(key)===p)listInFlight.delete(key)});
-    listInFlight.set(key,p);return p;
+    listInFlight.set(key,p);
+    return p;
   }
 
   async function fetchThread(session,phone,before,limit){
     const key=threadKey(session,phone,before,limit);
     if(threadInFlight.has(key))return threadInFlight.get(key);
     let p;
-    p=original.thread(session,phone,before,limit).then(res=>{
-      const entry={value:res,at:now()};
-      threadCache.set(key,entry);storageSet(key,res);return res;
+    p=resilient(()=>original.thread(session,phone,before,limit),()=>fallbackThread(phone,before,limit)).then(res=>{
+      threadCache.set(key,{value:res,at:now()});
+      return res;
     }).finally(()=>{if(threadInFlight.get(key)===p)threadInFlight.delete(key)});
-    threadInFlight.set(key,p);return p;
-  }
-
-  function readList(session,bucket){
-    const key=listKey(session,bucket);
-    const mem=listCache.get(key);if(mem&&now()-mem.at<LIST_TTL)return mem;
-    const stored=storageGet(key,LIST_TTL);if(stored){listCache.set(key,stored);return stored}
-    return null;
-  }
-  function readThread(session,phone,before,limit){
-    const key=threadKey(session,phone,before,limit);
-    const mem=threadCache.get(key);if(mem&&now()-mem.at<THREAD_TTL)return mem;
-    const stored=storageGet(key,THREAD_TTL);if(stored){threadCache.set(key,stored);return stored}
-    return null;
+    threadInFlight.set(key,p);
+    return p;
   }
 
   transport.chats=function(session,bucket){
-    const cached=readList(session,bucket);
+    const key=listKey(session,bucket);
+    const cached=listCache.get(key);
     if(cached){
-      fetchList(session,bucket).then(res=>queueWarmFromList(session,res)).catch(()=>{});
+      if(now()-cached.at>3500)fetchList(session,bucket).catch(()=>{});
       return Promise.resolve(cached.value);
     }
-    return fetchList(session,bucket).then(res=>{queueWarmFromList(session,res);return res});
+    return fetchList(session,bucket);
   };
 
   transport.thread=function(session,phone,before,limit){
-    const cached=readThread(session,phone,before,limit);
+    const key=threadKey(session,phone,before,limit);
+    const cached=threadCache.get(key);
     if(cached){
-      if(!before)fetchThread(session,phone,before,limit).catch(()=>{});
+      if(now()-cached.at>5000)fetchThread(session,phone,before,limit).catch(()=>{});
       return Promise.resolve(cached.value);
     }
     return fetchThread(session,phone,before,limit);
   };
 
   function clearLists(session){
-    const prefix='list:'+tokenPart(session)+':';
+    const prefix=String(session&&session.token||'').slice(-18)+'|';
     [...listCache.keys()].forEach(k=>{if(k.startsWith(prefix))listCache.delete(k)});
-    storageDeletePrefix(prefix);
   }
   function clearPhoneThreads(session,phone){
-    const prefix='thread:'+tokenPart(session)+':'+phone10(phone)+':';
+    const p=phone10(phone);
+    const prefix=String(session&&session.token||'').slice(-18)+'|'+p+'|';
     [...threadCache.keys()].forEach(k=>{if(k.startsWith(prefix))threadCache.delete(k)});
-    storageDeletePrefix(prefix);
+    warmedPhones.delete(p);
   }
 
   transport.sendMessage=async function(session,role,phone,message){
-    const res=await original.sendMessage(session,role,phone,message);
+    const res=await resilient(()=>original.sendMessage(session,role,phone,message),()=>fallbackSend(phone,message));
     clearPhoneThreads(session,phone);clearLists(session);return res;
   };
   transport.markRead=async function(session,role,phone){
@@ -132,43 +130,78 @@
     const res=await original.markUnread(session,phone);clearLists(session);return res;
   };
   transport.remove=async function(session,role,key){
-    const res=await original.remove(session,role,key);
-    clearLists(session);threadCache.clear();storageDeletePrefix('thread:'+tokenPart(session)+':');return res;
+    const res=await original.remove(session,role,key);clearLists(session);threadCache.clear();warmedPhones.clear();return res;
   };
   transport.pin=async function(session,phone,bucket){
     const res=await original.pin(session,phone,bucket);clearLists(session);return res;
   };
 
-  function queueWarmFromList(session,res){
-    const chats=Array.isArray(res&&res.chats)?res.chats:[];
-    chats.slice(0,8).forEach(chat=>{
-      const phone=phone10(chat&&chat.phone);if(!phone)return;
-      const qkey=tokenPart(session)+':'+phone;
-      if(warmQueued.has(qkey)||readThread(session,phone,'',100))return;
-      warmQueued.add(qkey);warmQueue.push({session,phone,qkey});
-    });
-    runWarmQueue();
+  function backgroundConcurrency(){
+    const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+    if(c&&c.saveData)return 1;
+    const type=String(c&&c.effectiveType||'').toLowerCase();
+    if(type==='slow-2g'||type==='2g'||type==='3g')return 1;
+    return /iPhone|iPad|Android/i.test(navigator.userAgent||'')?1:2;
   }
 
-  async function runWarmQueue(){
-    if(warming)return;warming=true;
+  function queueWarm(session,chats){
+    if(!session||!session.token)return;
+    (chats||[]).forEach(chat=>{
+      const p=phone10(chat&&chat.phone);
+      if(!p||warmedPhones.has(p)||warmQueuedPhones.has(p))return;
+      warmQueuedPhones.add(p);
+      warmQueue.push({session,phone:p});
+    });
+    scheduleWarmWorkers();
+  }
+
+  function scheduleWarmWorkers(){
+    const max=backgroundConcurrency();
+    while(warmWorkers<max&&warmQueue.length){
+      warmWorkers+=1;
+      setTimeout(runWarmWorker,180);
+    }
+  }
+
+  async function runWarmWorker(){
     try{
       while(warmQueue.length){
-        const item=warmQueue.shift();warmQueued.delete(item.qkey);
-        if(!sameSession(savedSession(),item.session))continue;
-        try{await fetchThread(item.session,item.phone,'',100)}catch(_){}
-        await new Promise(r=>setTimeout(r,160));
+        const item=warmQueue.shift();
+        const p=item&&item.phone;
+        if(p)warmQueuedPhones.delete(p);
+        const current=savedSession();
+        if(!item||!sameSession(current,item.session))continue;
+        if(warmedPhones.has(p))continue;
+        try{
+          await fetchThread(item.session,p,'',100);
+          if(sameSession(savedSession(),item.session))warmedPhones.add(p);
+        }catch(_){}
+        await new Promise(r=>setTimeout(r,120));
       }
-    }finally{warming=false}
+    }finally{
+      warmWorkers=Math.max(0,warmWorkers-1);
+      if(warmQueue.length)scheduleWarmWorkers();
+    }
   }
 
+  let startedForToken='';
   async function start(session){
     if(!session||!session.token||startedForToken===session.token)return;
     startedForToken=session.token;
-    fetchList(session,'unread').then(res=>queueWarmFromList(session,res)).catch(()=>{});
+
+    // Lists start warming immediately from the main menu. Each list feeds the
+    // thread queue as soon as it arrives; we do not wait for the other bucket.
+    const warmBucket=bucket=>fetchList(session,bucket).then(res=>{
+      if(!sameSession(savedSession(),session))return res;
+      const chats=Array.isArray(res&&res.chats)?res.chats:[];
+      queueWarm(session,chats);
+      return res;
+    }).catch(()=>null);
+
+    warmBucket('unread');
     setTimeout(()=>{
-      if(sameSession(savedSession(),session))fetchList(session,'read').then(res=>queueWarmFromList(session,res)).catch(()=>{});
-    },500);
+      if(sameSession(savedSession(),session))warmBucket('read');
+    },220);
   }
 
   function kick(){const s=savedSession();if(s)start(s)}
@@ -182,6 +215,10 @@
 
   window.MedsiEducatorPrewarm={
     kick,
-    clear(){listCache.clear();threadCache.clear();listInFlight.clear();threadInFlight.clear();warmQueue.length=0;warmQueued.clear();storageDeletePrefix('');startedForToken=''}
+    usingFallback:()=>false,
+    activateFallback:()=>{},
+    callApi,
+    tutorToken,
+    clear(){listCache.clear();threadCache.clear();listInFlight.clear();threadInFlight.clear();warmedPhones.clear();warmQueuedPhones.clear();warmQueue.length=0;startedForToken=''}
   };
 })();
