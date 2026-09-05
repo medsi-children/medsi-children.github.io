@@ -98,7 +98,7 @@
     return request(session, '/lab/delete/' + encodeURIComponent(String(key || '')), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ actor: String(role || ''), text: '' })
+      body: JSON.stringify({ actor: String(role || '') })
     });
   }
 
