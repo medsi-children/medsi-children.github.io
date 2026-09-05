@@ -6,7 +6,7 @@
   const APP_BASE_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
   const SESSION_KEY='medsi_d1_educator_session_v1';
   const TUTOR_KEY='medsi_tutor_session_v1';
-  const FALLBACK_KEY='medsi_educator_chat_fallback_v1';
+  const FALLBACK_KEY='medsi_educator_chat_fallback_custom_domain_v2';
   const listCache=new Map();
   const threadCache=new Map();
   const listInFlight=new Map();
