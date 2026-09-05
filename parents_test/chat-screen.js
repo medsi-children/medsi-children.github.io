@@ -2,7 +2,7 @@
   const $=id=>document.getElementById(id);
   const t=window.MedsiOverlayTransport;
   if(!t)return;
-  const REACTIONS=['❤️','👍','👌','🙏','🥰','😁'];
+  const REACTIONS=['❤️','👍','👌','🙏','🥰','😁','🔥'];
   const p10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
   const fmt=v=>{
     const d=new Date(Number(v));if(Number.isNaN(d.getTime()))return'';
