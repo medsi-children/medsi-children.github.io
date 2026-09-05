@@ -1,5 +1,5 @@
 (function () {
-  const BASE_URL = 'https://medsi-chat-worker.medsi-children.workers.dev';
+  const BASE_URL = 'https://chat.xn----btbhdqvtun.xn--p1ai';
   const UPLOAD_URL = BASE_URL + '/lab/upload';
 
   function requireSession(session) {
