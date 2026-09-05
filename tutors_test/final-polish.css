@@ -1,0 +1,18 @@
+/* Final mobile polish for the accepted tutors_test UI. */
+@media(max-width:560px){
+  /* The dashboard must use the available phone height instead of keeping the old square desktop frame. */
+  body[data-screen="screenChoose"] .wrap{min-height:100dvh;display:flex;align-items:flex-start;padding:calc(14px + env(safe-area-inset-top)) 10px calc(14px + env(safe-area-inset-bottom))}
+  body[data-screen="screenChoose"] .frame.choose-mode{width:100%!important;max-width:100%!important;aspect-ratio:auto!important;height:calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;min-height:680px!important;max-height:none!important;border-radius:20px!important}
+  body[data-screen="screenChoose"] .scene{padding:16px 18px 20px!important}
+  #screenChoose .menu-card{padding:18px!important}
+  #screenChoose .educator-report-grid .menu-card-title,#screenChoose .educator-secondary-grid .menu-card-title{font-size:.86rem!important;line-height:1.18!important;white-space:normal!important}
+  #screenChoose .menu-card-text{font-size:.76rem!important;line-height:1.38!important}
+
+  /* Keep the composer as one coherent block when quick replies are expanded. */
+  .educator-exact-clone #screenChatThread:not(.hidden){grid-template-rows:auto minmax(170px,1fr) auto auto auto auto auto auto!important}
+  .educator-exact-clone #screenChatThread .chat-compose{position:relative;z-index:2;background:#fff;padding-top:2px;border-top:1px solid rgba(36,211,218,.16)}
+  .educator-exact-clone #screenChatThread .quick-panel{max-height:32dvh!important;overflow-y:auto!important;overscroll-behavior:contain;margin-top:2px!important}
+}
+
+/* Reaction badge: a compact circle, slightly lower than before. */
+.educator-exact-clone .msg-reaction{left:10px!important;bottom:5px!important;width:28px!important;min-width:28px!important;height:28px!important;padding:0!important;border-radius:50%!important}
