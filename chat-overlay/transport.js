@@ -37,7 +37,8 @@
 
     if (!response.ok || !payload || !payload.ok) {
       const error = new Error((payload && payload.message) || 'Ошибка чата.');
-      error.code = 'HTTP-' + response.status;
+      error.code = (payload && payload.code) || ('HTTP-' + response.status);
+      error.status = response.status;
       throw error;
     }
     return payload;
@@ -146,7 +147,8 @@
 
     if (!response.ok || !payload || !payload.ok) {
       const error = new Error((payload && payload.message) || 'Не удалось загрузить файл.');
-      error.code = 'HTTP-' + response.status;
+      error.code = (payload && payload.code) || ('HTTP-' + response.status);
+      error.status = response.status;
       throw error;
     }
 
