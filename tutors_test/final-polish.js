@@ -39,6 +39,21 @@
     if(pushReady&&window.MedsiPush)MedsiPush.setPanelVisible(panelShouldShow());
   }
 
+  // Phone cards display Russian numbers as 8XXXXXXXXXX. Keep the tel: target
+  // identical so iOS confirmation does not fall back to the raw 9XXXXXXXXX value.
+  function normalizeTutorCallLinks(root){
+    const scope=root&&root.querySelectorAll?root:document;
+    scope.querySelectorAll('#screenPhones a[href^="tel:"]').forEach(link=>{
+      const digits=String(link.getAttribute('href')||'').replace(/\D+/g,'').slice(-10);
+      if(digits.length===10)link.setAttribute('href','tel:8'+digits);
+    });
+  }
+  const phones=document.getElementById('screenPhones');
+  if(phones){
+    new MutationObserver(()=>normalizeTutorCallLinks(phones)).observe(phones,{childList:true,subtree:true});
+    normalizeTutorCallLinks(phones);
+  }
+
   const observer=new MutationObserver(syncPush);
   observer.observe(document.body,{attributes:true,attributeFilter:['data-screen','class','data-started']});
   const gate=document.getElementById('tutorAuthGate');
@@ -124,7 +139,7 @@
     requestAnimationFrame(()=>positionMenu(bubble));
   },true);
 
-  document.addEventListener('click',function(e){
+  document.addEventListener('click',function(){
     const menu=menuEl();
     if(menu&&menu.classList.contains('hidden'))activeMessage=null;
   });
