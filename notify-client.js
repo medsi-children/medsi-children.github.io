@@ -137,16 +137,6 @@
         endpoint: message.endpoint
       });
     }
-
-    if (!state.appEndpointUrl) return;
-    sendPushRequest(state.appEndpointUrl, {
-      action: message.action,
-      role: message.role,
-      phone: message.phone,
-      endpoint: message.endpoint,
-      subscription: message.subscription,
-      userAgent: message.userAgent
-    });
   }
 
   function sendPushRequest(url, body) {
