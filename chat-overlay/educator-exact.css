@@ -439,6 +439,30 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
 .link-modal-cancel{ color:#2f5960; background:#e8f7f8; border:1px solid rgba(36,211,218,.22); }
 .link-modal-save{ border:0; color:#fff; background:var(--btn-teal); }
 .link-modal-delete{ background:linear-gradient(135deg,#fb7185,#f43f5e); }
+.link-modal-delete.is-loading{
+  opacity:.58;
+  cursor:default;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.link-modal-cancel:disabled{
+  opacity:.5;
+  cursor:default;
+}
+.delete-button-spinner{
+  width:15px;
+  height:15px;
+  flex:0 0 15px;
+  border:2px solid rgba(255,255,255,.42);
+  border-top-color:#fff;
+  border-radius:50%;
+  animation:medsi-delete-spin .7s linear infinite;
+}
+@keyframes medsi-delete-spin{
+  to{transform:rotate(360deg)}
+}
 
 @media (max-width:560px){
   html,body{ font-size:16px; line-height:1.55; }

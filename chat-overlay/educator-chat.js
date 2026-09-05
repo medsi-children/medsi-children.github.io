@@ -249,8 +249,47 @@
     fileInput.onchange=()=>{const f=fileInput.files&&fileInput.files[0];fileInput.value='';if(!f)return;if(f.size>20*1024*1024){overlay.showError('Размер файла не должен превышать 20 МБ.');return}clearFile();pendingFile=f;pendingUrl=URL.createObjectURL(f);imagePreview.querySelector('img').src=pendingUrl;imagePreview.classList.remove('hidden')};
     imagePreview.querySelector('#chatImageRemoveBtn').onclick=clearFile;
     chatReplyPreview.querySelector('#chatReplyCancel').onclick=()=>setReply(null);
-    childDeleteModal.querySelector('#childDeleteCancel').onclick=()=>{deleteTarget=null;childDeleteModal.classList.add('hidden')};
-    childDeleteModal.querySelector('#childDeleteConfirm').onclick=async()=>{if(!deleteTarget)return;const target=deleteTarget;try{childDeleteModal.querySelector('#childDeleteConfirm').disabled=true;await appApi('deleteReportChildByPhone',[target.phone,tutorToken()]);deleteTarget=null;childDeleteModal.classList.add('hidden');await loadChats(false)}catch(err){overlay.showError(err.message)}finally{childDeleteModal.querySelector('#childDeleteConfirm').disabled=false}};
+    childDeleteModal.querySelector('#childDeleteCancel').onclick=()=>{
+      const confirmBtn=childDeleteModal.querySelector('#childDeleteConfirm');
+      if(confirmBtn.classList.contains('is-loading'))return;
+      deleteTarget=null;
+      childDeleteModal.classList.add('hidden');
+    };
+
+    childDeleteModal.querySelector('#childDeleteConfirm').onclick=async()=>{
+      if(!deleteTarget)return;
+
+      const target=deleteTarget;
+      const confirmBtn=childDeleteModal.querySelector('#childDeleteConfirm');
+      const cancelBtn=childDeleteModal.querySelector('#childDeleteCancel');
+
+      confirmBtn.disabled=true;
+      cancelBtn.disabled=true;
+      confirmBtn.classList.add('is-loading');
+      confirmBtn.innerHTML='<span class="delete-button-spinner" aria-hidden="true"></span><span>Удаляем…</span>';
+
+      try{
+        await appApi('deleteReportChildByPhone',[target.phone,tutorToken()]);
+
+        threadCache.delete(phone10(target.phone));
+
+        deleteTarget=null;
+        childDeleteModal.classList.add('hidden');
+
+        window.dispatchEvent(new CustomEvent('medsi:parent-deleted',{
+          detail:{phone:target.phone}
+        }));
+
+        await loadChats(false);
+      }catch(err){
+        overlay.showError(err.message);
+      }finally{
+        confirmBtn.disabled=false;
+        cancelBtn.disabled=false;
+        confirmBtn.classList.remove('is-loading');
+        confirmBtn.textContent='Удалить';
+      }
+    };
     childDeleteModal.onclick=e=>{if(e.target===childDeleteModal){deleteTarget=null;childDeleteModal.classList.add('hidden')}};
     document.addEventListener('click',closeMessageMenu);
 

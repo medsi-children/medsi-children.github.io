@@ -175,8 +175,23 @@
     if(!confirm('Удалить ребёнка '+child+' из бота?\n\nВся история сообщений будет удалена.'))return;
     const request=callApi('deleteReportChildByPhone',[row.phone,tutorToken],30000);
     const snapshot=removePhoneCardOptimistically(row,card);
-    try{const res=await request;if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось удалить.')}catch(e){restorePhoneAfterFailedDelete(snapshot,e&&e.message||e)}
+    try{
+      const res=await request;
+      if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось удалить.');
+      await refreshPhones().catch(()=>{});
+      if(document.body.dataset.screen==='screenPhones')renderPhones(parentsCache);
+    }catch(e){
+      restorePhoneAfterFailedDelete(snapshot,e&&e.message||e);
+    }
   }
+
+  window.addEventListener('medsi:parent-deleted',()=>{
+    parentsCache=[];
+    parentsSignature='';
+    if(document.body.dataset.screen==='screenPhones'){
+      refreshPhones().then(rows=>renderPhones(rows)).catch(()=>{});
+    }
+  });
   async function openPhones(){
     setScreen('screenPhones','Телефоны родителей','Здесь можно быстро скопировать номер или позвонить.');
     const box=$('phonesList');const err=$('phonesError');err.classList.add('hidden');
