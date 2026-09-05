@@ -32,43 +32,4 @@
     return Promise.race([p,new Promise(resolve=>setTimeout(()=>{if(pending.get(k)===p)pending.delete(k);resolve((cache.get(k)||readSession(phone))?.res||null)},1200))]).catch(()=>null)
   }
   window.MedsiParentPrewarm={warm:(session,phone)=>fetchThread(session,phone).catch(()=>null),ready,peek:phone=>((cache.get(key(phone))||readSession(phone))?.res||null),clear:()=>{cache.clear();pending.clear();clearSession()}};
-
-  const AUTH_WATCH_MS=2800;
-  let authWatchTimer=null;
-  function parentChatReady(){
-    const screen=document.getElementById('screenChat');
-    const box=document.getElementById('parentChatMessages');
-    const err=document.getElementById('parentChatError');
-    if(!screen||screen.classList.contains('hidden')||!box)return false;
-    if(err&&!err.classList.contains('hidden')&&String(err.textContent||'').trim())return false;
-    return !/Загружаем сообщения/i.test(String(box.textContent||''));
-  }
-  function clearParentAuthState(){
-    cache.clear();pending.clear();clearSession();
-    try{
-      ['medsi_parent_phone','medsi_phone','medsi_parent','medsi_child','medsi_d1_parent_session_v1'].forEach(k=>localStorage.removeItem(k));
-      Object.keys(localStorage).filter(k=>k.startsWith('medsi_parent_thread_')).forEach(k=>localStorage.removeItem(k));
-    }catch(_){}
-    try{Object.keys(sessionStorage).filter(k=>k.startsWith('medsi_parent_thread_')).forEach(k=>sessionStorage.removeItem(k))}catch(_){}
-  }
-  function forceParentReauth(){
-    if(authWatchTimer){clearTimeout(authWatchTimer);authWatchTimer=null}
-    clearParentAuthState();
-    location.replace('/?reauth=1&reset='+Date.now());
-  }
-  function armParentAuthWatch(){
-    if(authWatchTimer)clearTimeout(authWatchTimer);
-    authWatchTimer=setTimeout(()=>{
-      authWatchTimer=null;
-      if(!parentChatReady())forceParentReauth();
-    },AUTH_WATCH_MS);
-  }
-  document.addEventListener('click',e=>{if(e.target&&e.target.closest&&e.target.closest('#btnChat'))armParentAuthWatch()},true);
-  window.addEventListener('DOMContentLoaded',()=>{
-    try{
-      if(new URLSearchParams(location.search).get('reauth')==='1'){
-        setTimeout(()=>{const b=document.getElementById('btnGoAuth');if(b)b.click()},80);
-      }
-    }catch(_){}
-  });
 })();
