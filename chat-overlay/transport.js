@@ -1,6 +1,6 @@
 (function () {
-  const BASE_URL = 'https://medsi-chat-worker.medsi-children.workers.dev';
-  const TEST_UPLOAD_URL = 'https://medsi-chat-upload-test.medsi-children.workers.dev/chat-upload';
+  const BASE_URL = window.location.origin;
+  const TEST_UPLOAD_URL = window.location.origin + '/chat-upload';
 
   function requireSession(session) {
     if (!session || !session.token) throw new Error('Нет активной сессии чата.');
@@ -98,7 +98,7 @@
     return request(session, '/lab/delete/' + encodeURIComponent(String(key || '')), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ actor: String(role || '') })
+      body: JSON.stringify({ actor: String(role || ''), text: '' })
     });
   }
 
