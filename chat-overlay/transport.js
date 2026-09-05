@@ -1,6 +1,6 @@
 (function () {
   const BASE_URL = 'https://medsi-chat-worker.medsi-children.workers.dev';
-  const TEST_UPLOAD_URL = 'https://medsi-chat-upload-test.medsi-children.workers.dev/chat-upload';
+  const UPLOAD_URL = BASE_URL + '/lab/upload';
 
   function requireSession(session) {
     if (!session || !session.token) throw new Error('Нет активной сессии чата.');
@@ -120,7 +120,7 @@
   async function uploadAttempt(auth, phone, file, uploadId) {
     let response;
     try {
-      response = await fetch(TEST_UPLOAD_URL, {
+      response = await fetch(UPLOAD_URL, {
         method: 'POST',
         body: file,
         headers: {
