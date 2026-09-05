@@ -311,6 +311,59 @@
     document.head.appendChild(style);
   }
 
+  function parentFullName() {
+    try {
+      return String(localStorage.getItem('medsi_parent') || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function educatorThreadParentFirstName() {
+    const header = document.getElementById('chatThreadHeader');
+    const line = header && header.firstElementChild ? String(header.firstElementChild.textContent || '') : '';
+    const full = line.replace(/^Родитель:\s*/i, '').trim();
+    if (!full || full === '—') return '';
+    return full.split(/\s+/)[0] || '';
+  }
+
+  function ensureAuthor(message, className, text) {
+    if (!message) return;
+    let author = message.querySelector(':scope > .' + className);
+    if (!author) {
+      author = document.createElement('div');
+      author.className = className;
+      message.insertBefore(author, message.firstChild);
+    }
+    author.textContent = text;
+  }
+
+  function refreshChatAuthorLabels() {
+    const parentName = parentFullName() || 'Родитель';
+    document.querySelectorAll('.parent-chat-msg.parent').forEach(message => {
+      ensureAuthor(message, 'parent-chat-author', parentName);
+    });
+    document.querySelectorAll('.parent-chat-msg.educator').forEach(message => {
+      ensureAuthor(message, 'parent-chat-author', 'Детское Отделение Медси');
+    });
+
+    const firstName = educatorThreadParentFirstName();
+    document.querySelectorAll('.educator-exact-clone .msg.parent').forEach(message => {
+      ensureAuthor(message, 'msg-author', firstName ? 'Родитель ' + firstName : 'Родитель');
+    });
+    document.querySelectorAll('.educator-exact-clone .msg.educator').forEach(message => {
+      ensureAuthor(message, 'msg-author', 'Детское Отделение Медси');
+    });
+  }
+
+  const authorLabelObserver = new MutationObserver(() => refreshChatAuthorLabels());
+  authorLabelObserver.observe(document.documentElement, { childList: true, subtree: true });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', refreshChatAuthorLabels, { once: true });
+  } else {
+    refreshChatAuthorLabels();
+  }
+
   window.addEventListener('message', event => {
     const data = event.data || {};
     if (data.type !== PUSH_MESSAGE_TYPE || data.action !== 'get') return;
