@@ -1,8 +1,8 @@
 {
   "name": "medsi-timeweb-gateway",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Medsi web interface with a same-origin Timeweb gateway for chat traffic.",
+  "description": "Medsi web interface with a same-origin Timeweb gateway for chat traffic and optional PostgreSQL storage.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,6 +11,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pg": "^8.0.0"
   }
 }
