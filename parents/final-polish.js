@@ -27,4 +27,7 @@
   if(!window.MedsiVideoLink&&!document.querySelector('script[data-medsi-video-link]')){
     const s=document.createElement('script');s.src='/chat-overlay/video-link.js?v=1';s.dataset.medsiVideoLink='1';document.head.appendChild(s);
   }
+  if(!document.querySelector('script[data-medsi-message-enhancements]')){
+    const s=document.createElement('script');s.src='/chat-overlay/message-enhancements.js?v=20260905-1';s.dataset.medsiMessageEnhancements='1';document.head.appendChild(s);
+  }
 })();
