@@ -29,8 +29,24 @@
     const run=async()=>{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));return p.result};
     return requestTimeout(run(),ms||15000);
   }
-  function activateFallback(){}
-  async function resilient(direct){return direct()}
+  async function fallbackChats(bucket){const tok=tutorToken();if(!tok)throw new Error('Сессия воспитателя недоступна.');return callApi('listD1ChatsForEducator',[tok,bucket||'all'],18000)}
+  async function fallbackThread(phone,before,limit){const tok=tutorToken();if(!tok)throw new Error('Сессия воспитателя недоступна.');return callApi('getD1ThreadForEducator',[phone10(phone),tok,String(before||''),Number(limit)||50],18000)}
+  async function fallbackSend(phone,message){const tok=tutorToken();if(!tok)throw new Error('Сессия воспитателя недоступна.');return callApi('sendD1MessageForEducator',[phone10(phone),message||{},tok],20000)}
+
+  function resilient(direct,fallback){
+    return new Promise((resolve,reject)=>{
+      let done=false,fallbackStarted=false,pending=1,lastError=null,timer=null;
+      const win=value=>{if(done)return;done=true;if(timer)clearTimeout(timer);resolve(value)};
+      const lose=error=>{lastError=error;pending-=1;if(!fallbackStarted){startFallback();return}if(pending<=0&&!done)reject(lastError)};
+      const startFallback=()=>{
+        if(done||fallbackStarted)return;
+        fallbackStarted=true;pending+=1;
+        Promise.resolve().then(fallback).then(win,lose);
+      };
+      Promise.resolve().then(direct).then(win,lose);
+      timer=setTimeout(startFallback,900);
+    });
+  }
 
   function savedSession(){
     try{
@@ -48,7 +64,7 @@
     const key=listKey(session,bucket);
     if(listInFlight.has(key))return listInFlight.get(key);
     let p;
-    p=resilient(()=>original.chats(session,bucket)).then(res=>{
+    p=resilient(()=>original.chats(session,bucket),()=>fallbackChats(bucket)).then(res=>{
       listCache.set(key,{value:res,at:now()});
       return res;
     }).finally(()=>{if(listInFlight.get(key)===p)listInFlight.delete(key)});
@@ -60,7 +76,7 @@
     const key=threadKey(session,phone,before,limit);
     if(threadInFlight.has(key))return threadInFlight.get(key);
     let p;
-    p=resilient(()=>original.thread(session,phone,before,limit)).then(res=>{
+    p=resilient(()=>original.thread(session,phone,before,limit),()=>fallbackThread(phone,before,limit)).then(res=>{
       threadCache.set(key,{value:res,at:now()});
       return res;
     }).finally(()=>{if(threadInFlight.get(key)===p)threadInFlight.delete(key)});
@@ -98,7 +114,7 @@
   }
 
   transport.sendMessage=async function(session,role,phone,message){
-    const res=await resilient(()=>original.sendMessage(session,role,phone,message));
+    const res=await resilient(()=>original.sendMessage(session,role,phone,message),()=>fallbackSend(phone,message));
     clearPhoneThreads(session,phone);clearLists(session);return res;
   };
   transport.markRead=async function(session,role,phone){
@@ -175,7 +191,7 @@
   window.MedsiEducatorPrewarm={
     kick,
     usingFallback:()=>false,
-    activateFallback,
+    activateFallback:()=>{},
     callApi,
     tutorToken,
     clear(){listCache.clear();threadCache.clear();listInFlight.clear();threadInFlight.clear();startedForToken=''}
