@@ -1,5 +1,5 @@
 (function(){
-const REACTIONS=['❤️','👍','👌','🙏','🥰','😁'];const cache=new Map();
+const REACTIONS=['❤️','👍','👌','🙏','🥰','😁','🔥'];const cache=new Map();
 const p10=v=>String(v||'').replace(/\D+/g,'').slice(-10);const phoneDisplay=v=>{const p=p10(v);return p?'8'+p:''};
 const fmt=v=>{const d=new Date(Number(v));return Number.isNaN(d.getTime())?'':d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})};
 const mediaUrl=m=>{const id=String(m&&m.fileId||'');if(!id)return'';if(id.startsWith('kv:')||id.startsWith('r2:'))return window.MedsiOverlayTransport.baseUrl+'/media/'+encodeURIComponent(id.slice(3));return'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1200'};
