@@ -1,18 +1,28 @@
 /* Final mobile polish for the accepted tutors_test UI. */
 @media(max-width:560px){
-  /* The dashboard must use the available phone height instead of keeping the old square desktop frame. */
+  /* Keep the accepted compact dashboard proportions instead of stretching the menu to the full viewport. */
   body[data-screen="screenChoose"] .wrap{min-height:100dvh;display:flex;align-items:flex-start;padding:calc(14px + env(safe-area-inset-top)) 10px calc(14px + env(safe-area-inset-bottom))}
-  body[data-screen="screenChoose"] .frame.choose-mode{width:100%!important;max-width:100%!important;aspect-ratio:auto!important;height:calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;min-height:680px!important;max-height:none!important;border-radius:20px!important}
-  body[data-screen="screenChoose"] .scene{padding:16px 18px 20px!important}
-  #screenChoose .menu-card{padding:18px!important}
+  body[data-screen="screenChoose"] .frame.choose-mode{width:100%!important;max-width:100%!important;aspect-ratio:auto!important;height:min(145vw,calc(100dvh - 120px))!important;min-height:500px!important;max-height:590px!important;border-radius:20px!important}
+  body[data-screen="screenChoose"] .scene{padding:14px 18px 18px!important}
+  #screenChoose .educator-start-brand{padding:6px 4px 12px!important;gap:8px!important}
+  #screenChoose .educator-actions{gap:10px!important}
+  #screenChoose .educator-report-grid,#screenChoose .educator-secondary-grid{gap:10px!important}
+  #screenChoose .menu-card{padding:15px!important}
+  #screenChoose .menu-card-chat{min-height:104px!important}
+  #screenChoose .educator-report-grid .menu-card,#screenChoose .educator-secondary-grid .menu-card{min-height:100px!important;height:100px!important}
   #screenChoose .educator-report-grid .menu-card-title,#screenChoose .educator-secondary-grid .menu-card-title{font-size:.86rem!important;line-height:1.18!important;white-space:normal!important}
-  #screenChoose .menu-card-text{font-size:.76rem!important;line-height:1.38!important}
+  #screenChoose .menu-card-text{font-size:.76rem!important;line-height:1.34!important}
 
   /* Keep the composer as one coherent block when quick replies are expanded. */
-  .educator-exact-clone #screenChatThread:not(.hidden){grid-template-rows:auto minmax(170px,1fr) auto auto auto auto auto auto!important}
+  .educator-exact-clone #screenChatThread:not(.hidden){grid-template-rows:auto minmax(170px,1fr) auto auto auto auto auto auto!important;gap:4px!important}
   .educator-exact-clone #screenChatThread .chat-compose{position:relative;z-index:2;background:#fff;padding-top:2px;border-top:1px solid rgba(36,211,218,.16)}
+  .educator-exact-clone #screenChatThread>.row{margin-top:3px!important}
   .educator-exact-clone #screenChatThread .quick-panel{max-height:32dvh!important;overflow-y:auto!important;overscroll-behavior:contain;margin-top:2px!important}
 }
 
-/* Reaction badge: a compact circle, slightly lower than before. */
-.educator-exact-clone .msg-reaction{left:10px!important;bottom:5px!important;width:28px!important;min-width:28px!important;height:28px!important;padding:0!important;border-radius:50%!important}
+/* Reaction badge: a true circle, a couple of pixels lower. */
+.educator-exact-clone .msg-reaction{left:10px!important;bottom:2px!important;width:28px!important;min-width:28px!important;height:28px!important;padding:0!important;border-radius:50%!important;line-height:1!important}
+
+/* The message context menu stays mounted while hidden so both opening and closing can animate. */
+.chat-context-menu{opacity:1;transform:translateY(0) scale(1);visibility:visible;transition:opacity .16s ease,transform .16s ease,visibility 0s linear 0s;transform-origin:center top}
+.chat-context-menu.hidden{display:block!important;opacity:0;transform:translateY(5px) scale(.975);visibility:hidden;pointer-events:none;transition:opacity .16s ease,transform .16s ease,visibility 0s linear .16s}
