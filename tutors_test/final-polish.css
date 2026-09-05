@@ -1,10 +1,11 @@
 /* Final mobile polish for the accepted tutors_test UI. */
 @media(max-width:560px){
-  /* Match the compact, balanced proportions of the parent dashboard. */
+  /* The reference screen uses the same outer frame, but its dashboard cards are
+     about 12px closer to each side. Keep the shell and widen only the content. */
   body[data-screen="screenChoose"] .wrap{min-height:100dvh;display:flex;align-items:flex-start;padding:calc(14px + env(safe-area-inset-top)) 10px calc(14px + env(safe-area-inset-bottom))}
   body[data-screen="screenChoose"] .frame.choose-mode{width:100%!important;max-width:100%!important;aspect-ratio:.69 / 1!important;height:auto!important;min-height:0!important;max-height:calc(100dvh - 110px)!important;border-radius:20px!important}
-  body[data-screen="screenChoose"] .scene{padding:14px 18px 18px!important}
-  #screenChoose .educator-start-brand{padding:2px 4px 10px!important;gap:10px!important}
+  body[data-screen="screenChoose"] .scene{padding:14px 6px 18px!important}
+  #screenChoose .educator-start-brand{padding:2px 16px 10px!important;gap:10px!important}
   #screenChoose .educator-logo{width:88px!important;height:40px!important;margin-bottom:2px!important}
   #screenChoose .educator-logo span:nth-child(1){width:24px!important;height:24px!important;left:0!important;bottom:1px!important;top:auto!important}
   #screenChoose .educator-logo span:nth-child(2){width:19px!important;height:19px!important;left:20px!important;top:1px!important}
@@ -16,11 +17,13 @@
   #screenChoose .educator-actions{gap:12px!important}
   #screenChoose .educator-report-grid,#screenChoose .educator-secondary-grid{gap:12px!important}
   #screenChoose .menu-card{padding:15px!important;border-radius:18px!important}
-  #screenChoose .menu-card-chat{min-height:108px!important}
-  #screenChoose .educator-report-grid .menu-card,#screenChoose .educator-secondary-grid .menu-card{min-height:108px!important;height:108px!important}
-  #screenChoose .educator-report-grid .menu-card-title,#screenChoose .educator-secondary-grid .menu-card-title{font-size:.84rem!important;line-height:1.14!important;white-space:nowrap!important;gap:6px!important}
+  /* The accepted reference has a slightly shorter hero card and slightly taller
+     two-column cards. This also restores the original vertical rhythm. */
+  #screenChoose .menu-card-chat{min-height:102px!important}
+  #screenChoose .educator-report-grid .menu-card,#screenChoose .educator-secondary-grid .menu-card{min-height:112px!important;height:112px!important}
+  #screenChoose .educator-report-grid .menu-card-title,#screenChoose .educator-secondary-grid .menu-card-title{font-size:.82rem!important;line-height:1.14!important;white-space:nowrap!important;gap:6px!important}
   #screenChoose .menu-card-chat .menu-card-title{font-size:1rem!important}
-  #screenChoose .menu-card-text{font-size:.78rem!important;line-height:1.34!important}
+  #screenChoose .menu-card-text{font-size:.76rem!important;line-height:1.34!important}
 
   /* Keep the composer as one coherent block when quick replies are expanded. */
   .educator-exact-clone #screenChatThread:not(.hidden){grid-template-rows:auto minmax(170px,1fr) auto auto auto auto auto auto!important;gap:4px!important}
