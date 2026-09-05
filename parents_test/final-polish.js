@@ -23,4 +23,8 @@
   const observer=new MutationObserver(syncPushPanel);
   observer.observe(document.body,{attributes:true,attributeFilter:['data-screen']});
   syncPushPanel();
+
+  if(!window.MedsiVideoLink&&!document.querySelector('script[data-medsi-video-link]')){
+    const s=document.createElement('script');s.src='/chat-overlay/video-link.js?v=1';s.dataset.medsiVideoLink='1';document.head.appendChild(s);
+  }
 })();
