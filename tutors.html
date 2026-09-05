@@ -33,7 +33,7 @@
   <script src="/notify-client.js?v=20260905-production"></script>
   <script src="/tutors-app/push-auth.js?v=20260905-staff-reset-1"></script>
   <script src="/chat-overlay/transport.js?v=20260905-race-upload-1"></script>
-  <script src="/tutors-app/chat-prewarm.js?v=20260905-race-upload-1"></script>
+  <script src="/tutors-app/chat-prewarm.js?v=20260905-background-prewarm-1"></script>
   <script src="/chat-overlay/interaction-fix.js?v=20260905-production"></script>
   <script src="/chat-overlay/educator-chat.js?v=20260905-production"></script>
   <script src="/chat-overlay/loading-feedback.js?v=20260905-delay-loading-1"></script>
@@ -96,11 +96,11 @@
                 </button>
               </div>
               <div class="grid2 educator-secondary-grid">
-                <button id="btnPsychology" class="btn menu-card menu-card-therapy block start-cascade start-cascade-3">
+                <button id="btnPsychology" class="btn menu-card menu-card-therapy start-cascade start-cascade-3">
                   <span class="menu-card-title">🧠 Психотерапия</span>
                   <span class="menu-card-text">Отправить отчёт по психотерапии.</span>
                 </button>
-                <button id="btnParentPhones" class="btn menu-card menu-card-phones block start-cascade start-cascade-3">
+                <button id="btnParentPhones" class="btn menu-card menu-card-phones start-cascade start-cascade-3">
                   <span class="menu-card-title">📞 Телефоны</span>
                   <span class="menu-card-text">Дать ребёнку позвонить родителю.</span>
                 </button>
@@ -127,7 +127,7 @@
         <section id="screenPhones" class="hidden">
           <div class="row" style="margin-bottom:14px"><button id="btnPhonesBack" class="btn soft-back-btn">← Назад в меню</button></div>
           <div id="phonesList" class="phones-list"></div>
-          <p id="phonesError" class="status error hidden" role="alert"></p>
+          <p id="phonesError" class="status error hidden"></p>
         </section>
       </div>
     </article>
