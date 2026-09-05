@@ -2,6 +2,7 @@
 
 const express = require('express');
 const path = require('path');
+const database = require('./lib/database');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -47,7 +48,9 @@ async function proxy(req, res, target) {
       'cache-control',
       'etag',
       'last-modified',
-      'x-content-type-options'
+      'x-content-type-options',
+      'accept-ranges',
+      'content-range'
     ]) {
       const value = upstream.headers.get(name);
       if (value) res.setHeader(name, value);
@@ -77,6 +80,29 @@ async function proxy(req, res, target) {
   }
 }
 
+async function probe(url) {
+  const startedAt = Date.now();
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(8000)
+    });
+    try { await response.body?.cancel(); } catch (_) {}
+    return {
+      ok: true,
+      status: response.status,
+      latencyMs: Date.now() - startedAt
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      message: error.message
+    };
+  }
+}
+
 app.all(/^\/lab(?:\/.*)?$/, (req, res) => {
   proxy(req, res, CHAT_UPSTREAM + req.originalUrl);
 });
@@ -89,8 +115,32 @@ app.all('/chat-upload', (req, res) => {
   proxy(req, res, UPLOAD_UPSTREAM + '/chat-upload');
 });
 
-app.get('/__health', (_req, res) => {
-  res.json({ ok: true, service: 'medsi-timeweb-gateway' });
+app.get('/__health', async (_req, res) => {
+  const db = await database.health();
+  res.status(db.ok ? 200 : 503).json({
+    ok: db.ok,
+    service: 'medsi-timeweb-gateway',
+    database: db
+  });
+});
+
+app.get('/__diag/network', async (_req, res) => {
+  const [chat, upload, db] = await Promise.all([
+    probe(CHAT_UPSTREAM + '/'),
+    probe(UPLOAD_UPSTREAM + '/'),
+    database.health()
+  ]);
+
+  res.setHeader('cache-control', 'no-store');
+  res.json({
+    ok: true,
+    measuredAt: new Date().toISOString(),
+    timewebToCloudflare: {
+      chat,
+      upload
+    },
+    database: db
+  });
 });
 
 app.use(express.static(path.resolve(__dirname), {
