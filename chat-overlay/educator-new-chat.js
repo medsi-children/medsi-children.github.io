@@ -10,12 +10,24 @@
   const rowsSignature=rows=>(Array.isArray(rows)?rows:[]).map(r=>[phone10(r&&r.phone),String(r&&r.parentName||r&&r.parent_name||''),String(r&&r.childName||r&&r.child_name||'')].join('|')).sort().join('||');
   const normalizeRows=res=>{
     const src=Array.isArray(res&&res.parents)?res.parents:(Array.isArray(res&&res.rows)?res.rows:[]);
-    return src.map(r=>({
-      phone:r&& (r.phone||r.phone10)||'',
-      parentName:r&&(r.parentName||r.parent_name)||'',
-      childName:r&&(r.childName||r.child_name)||''
-    }));
+    return src.map(r=>({phone:r&&(r.phone||r.phone10)||'',parentName:r&&(r.parentName||r.parent_name)||'',childName:r&&(r.childName||r.child_name)||''}));
   };
+
+  document.addEventListener('click',e=>{
+    const b=e.target&&e.target.closest&&e.target.closest('.educator-exact-clone #chatList button.btn');
+    if(!b)return;
+    const text=(b.textContent||'').trim();
+    if(text!=='Открыть прочитанные чаты'&&text!=='← Вернуться к непрочитанным')return;
+    const root=b.closest('.educator-exact-clone');
+    const list=root&&root.querySelector('#chatList');
+    const meta=root&&root.querySelector('#meta');
+    if(!list)return;
+    if(meta)meta.textContent=text==='Открыть прочитанные чаты'?'Прочитанные чаты':'Выберите чат с нужным родителем.';
+    queueMicrotask(()=>{
+      if(!list.isConnected)return;
+      list.innerHTML='<div class="chat-empty">Загрузка...</div>';
+    });
+  });
 
   if(!transport.__medsiForcedParentWrapped){
     transport.__medsiForcedParentWrapped=true;
@@ -30,23 +42,13 @@
     };
   }
 
-  function skeleton(count=4){
-    return '<div class="list-skeleton">'+Array.from({length:count}).map(()=>'<div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line wide"></div><div class="skeleton-line mid"></div><div class="skeleton-line short"></div><div class="skeleton-line wide" style="margin-top:16px;"></div><div class="skeleton-line mid"></div></div>').join('')+'</div>';
-  }
+  function skeleton(count=4){return '<div class="list-skeleton">'+Array.from({length:count}).map(()=>'<div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line wide"></div><div class="skeleton-line mid"></div><div class="skeleton-line short"></div><div class="skeleton-line wide" style="margin-top:16px;"></div><div class="skeleton-line mid"></div></div>').join('')+'</div>'}
 
   const originalMount=api.mount.bind(api);
   api.mount=function(overlay,state){
     const originalCleanup=originalMount(overlay,state);
     let disposed=false,rowsCache=null,renderedSignature='',requestToken=0,bridgeTimer=null;
-    const root=overlay.root;
-    const scene=root&&root.querySelector('.scene');
-    const title=root&&root.querySelector('#title');
-    const meta=root&&root.querySelector('#meta');
-    const screenChats=root&&root.querySelector('#screenChats');
-    const screenThread=root&&root.querySelector('#screenChatThread');
-    const btnNew=root&&root.querySelector('#btnNewChat');
-    const btnRefresh=root&&root.querySelector('#btnRefreshChats');
-    const deleteModal=root&&root.querySelector('#childDeleteModal');
+    const root=overlay.root,scene=root&&root.querySelector('.scene'),title=root&&root.querySelector('#title'),meta=root&&root.querySelector('#meta'),screenChats=root&&root.querySelector('#screenChats'),screenThread=root&&root.querySelector('#screenChatThread'),btnNew=root&&root.querySelector('#btnNewChat'),btnRefresh=root&&root.querySelector('#btnRefreshChats'),deleteModal=root&&root.querySelector('#childDeleteModal');
     if(!scene||!title||!meta||!screenChats||!screenThread||!btnNew||!btnRefresh)return originalCleanup;
 
     const screen=document.createElement('section');screen.id='screenNewChat';screen.className='hidden';
@@ -75,7 +77,7 @@
       if(rowsCache){if(renderedSignature!==rowsSignature(rowsCache))render(rowsCache)}else{list.innerHTML=skeleton(4);renderedSignature=''}
       try{
         const res=await transport.parents(state.session);if(disposed||token!==requestToken)return;
-        const nextRows=normalizeRows(res);const nextSignature=rowsSignature(nextRows);rowsCache=nextRows;if(nextSignature!==renderedSignature)render(rowsCache);
+        const nextRows=normalizeRows(res),nextSignature=rowsSignature(nextRows);rowsCache=nextRows;if(nextSignature!==renderedSignature)render(rowsCache);
       }catch(err){if(disposed||token!==requestToken)return;list.replaceChildren();renderedSignature='';error.textContent=(err&&err.message)||'Не удалось загрузить список родителей.';error.classList.remove('hidden')}
     }
     function findChatCard(phone){return [...screenChats.querySelectorAll('.chat-card')].find(el=>phone10(el.dataset.phone)===phone10(phone))||null}
@@ -89,8 +91,7 @@
       };bridgeTimer=setTimeout(probe,35);
     }
 
-    btnNew.onclick=e=>{e&&e.preventDefault();showNew();loadParents()};
-    back.onclick=e=>{e.preventDefault();showChats()};
+    btnNew.onclick=e=>{e&&e.preventDefault();showNew();loadParents()};back.onclick=e=>{e.preventDefault();showChats()};
     return()=>{disposed=true;clearTimeout(bridgeTimer);window.__medsiForcedEducatorParent=null;try{screen.remove()}catch(_){}if(typeof originalCleanup==='function')originalCleanup()};
   };
 })();
