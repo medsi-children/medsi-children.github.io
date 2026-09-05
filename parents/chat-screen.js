@@ -18,6 +18,7 @@
 
   function mediaUrl(m){
     const id=String(m&&m.fileId||'');if(!id)return'';
+    if(typeof t.mediaUrl==='function')return t.mediaUrl(id,'w1600');
     if(id.startsWith('kv:')||id.startsWith('r2:'))return t.baseUrl+'/media/'+encodeURIComponent(id.slice(3));
     return 'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1600';
   }
@@ -136,7 +137,7 @@
   $('parentChatFile').onchange=async()=>{
     if(!state||busy||chatClosed)return;const input=$('parentChatFile'),f=input.files&&input.files[0];input.value='';if(!f)return;
     if(!/^image\//i.test(f.type)&&!/^video\//i.test(f.type)){showError('Можно прикреплять только фото или видео.');return}
-    if(f.size>20*1024*1024){showError('Размер файла не должен превышать 20 МБ.');return}
+    const maxBytes=Number(t.maxUploadBytes||100*1024*1024);if(f.size>maxBytes){showError('Размер файла не должен превышать 100 МБ.');return}
     setBusy(true);clearError();
     try{const up=await t.upload(state.session,state.phone,f);await t.sendMessage(state.session,'parent',state.phone,{type:up.type||(f.type.startsWith('video/')?'video':'image'),text:'',fileId:up.fileId});await refresh({stick:true})}
     catch(err){if(isChatClosedError(err))showClosedChat();else showError(err&&err.message||'Не удалось отправить файл.')}
