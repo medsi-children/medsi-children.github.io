@@ -21,6 +21,7 @@
   const phone10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
   const now=()=>Date.now();
   const sameSession=(a,b)=>!!(a&&b&&a.token&&b.token&&a.token===b.token);
+  const requestTimeout=(promise,ms)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>{const e=new Error('CHAT_PREWARM_TIMEOUT');e.code='CHAT_PREWARM_TIMEOUT';reject(e)},ms))]);
 
   function savedSession(){
     try{
@@ -37,10 +38,11 @@
   async function fetchList(session,bucket){
     const key=listKey(session,bucket);
     if(listInFlight.has(key))return listInFlight.get(key);
-    const p=original.chats(session,bucket).then(res=>{
+    let p;
+    p=requestTimeout(original.chats(session,bucket),8000).then(res=>{
       listCache.set(key,{value:res,at:now()});
       return res;
-    }).finally(()=>listInFlight.delete(key));
+    }).finally(()=>{if(listInFlight.get(key)===p)listInFlight.delete(key)});
     listInFlight.set(key,p);
     return p;
   }
@@ -48,10 +50,11 @@
   async function fetchThread(session,phone,before,limit){
     const key=threadKey(session,phone,before,limit);
     if(threadInFlight.has(key))return threadInFlight.get(key);
-    const p=original.thread(session,phone,before,limit).then(res=>{
+    let p;
+    p=requestTimeout(original.thread(session,phone,before,limit),8000).then(res=>{
       threadCache.set(key,{value:res,at:now()});
       return res;
-    }).finally(()=>threadInFlight.delete(key));
+    }).finally(()=>{if(threadInFlight.get(key)===p)threadInFlight.delete(key)});
     threadInFlight.set(key,p);
     return p;
   }
@@ -162,6 +165,6 @@
 
   window.MedsiEducatorPrewarm={
     kick,
-    clear(){listCache.clear();threadCache.clear();startedForToken=''}
+    clear(){listCache.clear();threadCache.clear();listInFlight.clear();threadInFlight.clear();startedForToken=''}
   };
 })();
