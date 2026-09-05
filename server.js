@@ -1,5 +1,6 @@
 'use strict';
 
+require('./lib/session-preload');
 const express = require('express');
 const path = require('path');
 const database = require('./lib/database');
