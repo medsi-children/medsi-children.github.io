@@ -1,8 +1,8 @@
 {
   "name": "medsi-timeweb-gateway",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
-  "description": "Medsi web interface with a same-origin Timeweb gateway for chat traffic and optional PostgreSQL storage.",
+  "description": "Medsi web interface with Timeweb gateway and S3 media storage.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,6 +11,8 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/lib-storage": "^3.0.0",
     "express": "^5.1.0",
     "pg": "^8.0.0"
   }
