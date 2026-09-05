@@ -14,7 +14,7 @@
     const months=['янв.','февр.','мар.','апр.','мая','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
     return d.getDate()+' '+months[d.getMonth()]+' • '+time;
   };
-  let state=null,rows=[],busy=false,dead=false,lightbox=null,reactionMenu=null;
+  let state=null,rows=[],busy=false,dead=false,chatClosed=false,lightbox=null,reactionMenu=null;
 
   function mediaUrl(m){
     const id=String(m&&m.fileId||'');if(!id)return'';
@@ -25,7 +25,14 @@
   function scrollBottom(smooth){const box=$('parentChatMessages');if(!box)return;requestAnimationFrame(()=>box.scrollTo({top:box.scrollHeight,behavior:smooth?'smooth':'auto'}))}
   function showError(msg){const e=$('parentChatError');if(!e)return;e.textContent=String(msg||'Не удалось открыть чат.');e.classList.remove('hidden')}
   function clearError(){const e=$('parentChatError');if(!e)return;e.textContent='';e.classList.add('hidden')}
-  function setBusy(v){busy=!!v;$('parentChatInput').disabled=busy;$('parentChatSend').disabled=busy;$('parentChatAttach').disabled=busy}
+  function setBusy(v){busy=!!v;const disabled=busy||chatClosed;$('parentChatInput').disabled=disabled;$('parentChatSend').disabled=disabled;$('parentChatAttach').disabled=disabled}
+  function isChatClosedError(error){return !!(error&&(error.code==='CHAT_CLOSED'||Number(error.status)===410))}
+  function showClosedChat(){
+    chatClosed=true;rows=[];clearError();closeReactionMenu();
+    const box=$('parentChatMessages');
+    if(box){box.replaceChildren();const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Чат с воспитателями закрыт.';box.appendChild(e)}
+    $('parentChatInput').value='';setBusy(false);
+  }
 
   function closeLightbox(){if(!lightbox)return;lightbox.remove();lightbox=null}
   function openLightbox(src,alt){
@@ -44,11 +51,11 @@
   }
   function closeReactionMenu(){if(reactionMenu)reactionMenu.classList.add('hidden')}
   function openReactionMenu(m,el){
-    if(!state||!m||!m.messageKey||String(m.messageKey).startsWith('pending-'))return;
+    if(chatClosed||!state||!m||!m.messageKey||String(m.messageKey).startsWith('pending-'))return;
     const menu=ensureReactionMenu();menu.replaceChildren();
     REACTIONS.forEach(reaction=>{
       const b=document.createElement('button');b.type='button';b.className='parent-chat-reaction-btn';b.textContent=reaction;b.setAttribute('aria-label','Поставить реакцию '+reaction);
-      b.onclick=async ev=>{ev.preventDefault();ev.stopPropagation();closeReactionMenu();try{await t.react(state.session,m.messageKey,reaction);await refresh({stick:false})}catch(err){showError(err&&err.message||'Не удалось поставить реакцию.')}};
+      b.onclick=async ev=>{ev.preventDefault();ev.stopPropagation();closeReactionMenu();try{await t.react(state.session,m.messageKey,reaction);await refresh({stick:false})}catch(err){if(isChatClosedError(err))showClosedChat();else showError(err&&err.message||'Не удалось поставить реакцию.')}};
       menu.appendChild(b);
     });
     const r=el.getBoundingClientRect();
@@ -100,39 +107,39 @@
     return Array.isArray(res&&res.messages)?res.messages:[];
   }
   async function refresh(opts){
-    const list=await fetchThread();if(dead)return;render(list,opts||{});t.markRead(state.session,'parent',state.phone).catch(()=>{});return list
+    const list=await fetchThread();if(dead)return;render(list,opts||{});t.markRead(state.session,'parent',state.phone).catch(err=>{if(isChatClosedError(err))showClosedChat()});return list
   }
 
   async function open(next){
-    dead=false;state={...next,phone:p10(next&&next.phone)};clearError();closeReactionMenu();
+    dead=false;chatClosed=false;state={...next,phone:p10(next&&next.phone)};clearError();closeReactionMenu();setBusy(false);
     $('parentChatChild').textContent=state.childName||state.parentName||'Ребёнок';
     $('parentChatPhone').textContent=state.phone?'8'+state.phone:'';
     $('parentChatInput').value='';
     const cached=window.MedsiParentPrewarm?await MedsiParentPrewarm.ready(state.phone).catch(()=>null):null;
     if(cached&&Array.isArray(cached.messages))render(cached.messages,{stick:true});
     else $('parentChatMessages').innerHTML='<div class="parent-chat-empty">Загружаем сообщения…</div>';
-    try{await refresh({stick:true})}catch(e){showError(e&&e.message||'Не удалось загрузить сообщения.')}
+    try{await refresh({stick:true})}catch(e){if(isChatClosedError(e))showClosedChat();else showError(e&&e.message||'Не удалось загрузить сообщения.')}
   }
-  function close(){dead=true;state=null;rows=[];setBusy(false);clearError();closeLightbox();closeReactionMenu()}
+  function close(){dead=true;state=null;rows=[];chatClosed=false;setBusy(false);clearError();closeLightbox();closeReactionMenu()}
 
   $('parentChatBack').onclick=()=>{if(state&&typeof state.onBack==='function')state.onBack()};
   $('parentChatCompose').onsubmit=async e=>{
-    e.preventDefault();if(!state||busy)return;const text=$('parentChatInput').value.trim();if(!text)return;
+    e.preventDefault();if(!state||busy||chatClosed)return;const text=$('parentChatInput').value.trim();if(!text)return;
     setBusy(true);const optimistic={side:'parent',type:'text',text,timestamp:Date.now(),messageKey:'pending-'+Date.now().toString(36)};
     render(rows.concat(optimistic),{stick:true});$('parentChatInput').value='';
     try{await t.sendMessage(state.session,'parent',state.phone,{type:'text',text});await refresh({stick:true})}
-    catch(err){showError(err&&err.message||'Не удалось отправить сообщение.');await refresh({stick:true}).catch(()=>{})}
-    finally{setBusy(false);$('parentChatInput').focus()}
+    catch(err){if(isChatClosedError(err))showClosedChat();else{showError(err&&err.message||'Не удалось отправить сообщение.');await refresh({stick:true}).catch(()=>{})}}
+    finally{setBusy(false);if(!chatClosed)$('parentChatInput').focus()}
   };
   $('parentChatInput').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('parentChatCompose').requestSubmit()}};
-  $('parentChatAttach').onclick=()=>$('parentChatFile').click();
+  $('parentChatAttach').onclick=()=>{if(!chatClosed)$('parentChatFile').click()};
   $('parentChatFile').onchange=async()=>{
-    if(!state||busy)return;const input=$('parentChatFile'),f=input.files&&input.files[0];input.value='';if(!f)return;
+    if(!state||busy||chatClosed)return;const input=$('parentChatFile'),f=input.files&&input.files[0];input.value='';if(!f)return;
     if(!/^image\//i.test(f.type)&&!/^video\//i.test(f.type)){showError('Можно прикреплять только фото или видео.');return}
     if(f.size>20*1024*1024){showError('Размер файла не должен превышать 20 МБ.');return}
     setBusy(true);clearError();
     try{const up=await t.upload(state.session,state.phone,f);await t.sendMessage(state.session,'parent',state.phone,{type:up.type||(f.type.startsWith('video/')?'video':'image'),text:'',fileId:up.fileId});await refresh({stick:true})}
-    catch(err){showError(err&&err.message||'Не удалось отправить файл.')}
+    catch(err){if(isChatClosedError(err))showClosedChat();else showError(err&&err.message||'Не удалось отправить файл.')}
     finally{setBusy(false)}
   };
 
