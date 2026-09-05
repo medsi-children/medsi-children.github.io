@@ -6,11 +6,13 @@
   const APP_BASE_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
   const SESSION_KEY='medsi_d1_educator_session_v1';
   const TUTOR_KEY='medsi_tutor_session_v1';
+  const FALLBACK_KEY='medsi_educator_chat_fallback_v1';
   const listCache=new Map();
   const threadCache=new Map();
   const listInFlight=new Map();
   const threadInFlight=new Map();
   let fallbackMode=false;
+  try{fallbackMode=sessionStorage.getItem(FALLBACK_KEY)==='1'}catch(_){}
   const original={
     chats:transport.chats.bind(transport),
     thread:transport.thread.bind(transport),
@@ -31,12 +33,13 @@
     const run=async()=>{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));return p.result};
     return requestTimeout(run(),ms||15000);
   }
+  function activateFallback(){fallbackMode=true;try{sessionStorage.setItem(FALLBACK_KEY,'1')}catch(_){}}
   async function fallbackChats(bucket){const tok=tutorToken();if(!tok)throw new Error('Сессия воспитателя недоступна.');return callApi('listD1ChatsForEducator',[tok,bucket||'all'],18000)}
   async function fallbackThread(phone,before,limit){const tok=tutorToken();if(!tok)throw new Error('Сессия воспитателя недоступна.');return callApi('getD1ThreadForEducator',[phone10(phone),tok,String(before||''),Number(limit)||50],18000)}
   async function fallbackSend(phone,message){const tok=tutorToken();if(!tok)throw new Error('Сессия воспитателя недоступна.');return callApi('sendD1MessageForEducator',[phone10(phone),message||{},tok],20000)}
   async function resilient(direct,fallback){
     if(fallbackMode)return fallback();
-    try{return await requestTimeout(direct(),2500)}catch(e){if(!shouldFallback(e))throw e;fallbackMode=true;return fallback()}
+    try{return await requestTimeout(direct(),900)}catch(e){if(!shouldFallback(e))throw e;activateFallback();return fallback()}
   }
 
   function savedSession(){
@@ -182,6 +185,9 @@
   window.MedsiEducatorPrewarm={
     kick,
     usingFallback:()=>fallbackMode,
+    activateFallback,
+    callApi,
+    tutorToken,
     clear(){listCache.clear();threadCache.clear();listInFlight.clear();threadInFlight.clear();startedForToken=''}
   };
 })();
