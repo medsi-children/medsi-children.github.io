@@ -1,6 +1,6 @@
 (function () {
   const BASE_URL = 'https://chat.xn----btbhdqvtun.xn--p1ai';
-  const UPLOAD_URL = BASE_URL + '/lab/upload';
+  const BACKUP_BASE_URL = 'https://medsi-chat-worker.medsi-children.workers.dev';
 
   function requireSession(session) {
     if (!session || !session.token) throw new Error('Нет активной сессии чата.');
@@ -117,10 +117,10 @@
     return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + '-' + Math.random().toString(36).slice(2);
   }
 
-  async function uploadAttempt(auth, phone, file, uploadId) {
+  async function uploadAttempt(baseUrl, auth, phone, file, uploadId) {
     let response;
     try {
-      response = await fetch(UPLOAD_URL, {
+      response = await fetch(baseUrl + '/lab/upload', {
         method: 'POST',
         body: file,
         headers: {
@@ -152,24 +152,55 @@
       throw error;
     }
 
-    return { ...payload, url: BASE_URL + String(payload.url || '') };
+    return { ...payload, url: baseUrl + String(payload.url || '') };
+  }
+
+  function raceUpload(primary, backup, delayMs) {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      let backupStarted = false;
+      let pending = 1;
+      let lastError = null;
+      let timer = null;
+      const win = value => {
+        if (done) return;
+        done = true;
+        if (timer) clearTimeout(timer);
+        resolve(value);
+      };
+      const lose = error => {
+        lastError = error;
+        pending -= 1;
+        if (!backupStarted) {
+          startBackup();
+          return;
+        }
+        if (pending <= 0 && !done) reject(lastError);
+      };
+      const startBackup = () => {
+        if (done || backupStarted) return;
+        backupStarted = true;
+        pending += 1;
+        Promise.resolve().then(backup).then(win, lose);
+      };
+      Promise.resolve().then(primary).then(win, lose);
+      timer = setTimeout(startBackup, delayMs || 900);
+    });
   }
 
   async function upload(session, phone, file) {
     const auth = requireSession(session);
     const uploadId = makeUploadId();
-
-    try {
-      return await uploadAttempt(auth, phone, file, uploadId);
-    } catch (error) {
-      if (!error || error.code !== 'NETWORK') throw error;
-      await new Promise(resolve => setTimeout(resolve, 500));
-      return uploadAttempt(auth, phone, file, uploadId);
-    }
+    return raceUpload(
+      () => uploadAttempt(BASE_URL, auth, phone, file, uploadId),
+      () => uploadAttempt(BACKUP_BASE_URL, auth, phone, file, uploadId),
+      900
+    );
   }
 
   window.MedsiOverlayTransport = {
     baseUrl: BASE_URL,
+    backupBaseUrl: BACKUP_BASE_URL,
     request,
     thread,
     chats,
