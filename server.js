@@ -3,9 +3,11 @@
 const express = require('express');
 const path = require('path');
 const database = require('./lib/database');
+const storage = require('./lib/s3-storage');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES || 100 * 1024 * 1024);
 const CHAT_UPSTREAM = String(
   process.env.CHAT_UPSTREAM || 'https://medsi-chat-worker.medsi-children.workers.dev'
 ).replace(/\/$/, '');
@@ -50,7 +52,9 @@ async function proxy(req, res, target) {
       'last-modified',
       'x-content-type-options',
       'accept-ranges',
-      'content-range'
+      'content-range',
+      'content-length',
+      'location'
     ]) {
       const value = upstream.headers.get(name);
       if (value) res.setHeader(name, value);
@@ -103,43 +107,140 @@ async function probe(url) {
   }
 }
 
+function sessionToken(req) {
+  return String(req.get('X-Medsi-Chat-Session') || '').trim();
+}
+
+async function validateSessionForPhone(req, phone) {
+  const token = sessionToken(req);
+  if (!token || !phone) return false;
+  try {
+    const response = await fetch(
+      CHAT_UPSTREAM + '/lab/threads/' + encodeURIComponent(String(phone)) + '?before=&limit=1',
+      {
+        method: 'GET',
+        headers: { 'X-Medsi-Chat-Session': token },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(8000)
+      }
+    );
+    try { await response.body?.cancel(); } catch (_) {}
+    return response.ok;
+  } catch (_) {
+    return false;
+  }
+}
+
 app.all(/^\/lab(?:\/.*)?$/, (req, res) => {
   proxy(req, res, CHAT_UPSTREAM + req.originalUrl);
+});
+
+app.get('/media/s3/:key', async (req, res) => {
+  if (!storage.configured) {
+    res.status(503).json({ ok: false, code: 'S3_NOT_CONFIGURED', message: 'Хранилище медиа ещё не подключено.' });
+    return;
+  }
+  try {
+    const object = await storage.getObject(req.params.key, req.headers.range);
+    if (object.ContentType) res.setHeader('content-type', object.ContentType);
+    if (object.ContentDisposition) res.setHeader('content-disposition', object.ContentDisposition);
+    if (object.ContentLength != null) res.setHeader('content-length', String(object.ContentLength));
+    if (object.ContentRange) res.setHeader('content-range', object.ContentRange);
+    res.setHeader('accept-ranges', object.AcceptRanges || 'bytes');
+    res.setHeader('cache-control', 'private, max-age=3600');
+    res.setHeader('x-content-type-options', 'nosniff');
+    res.status(object.ContentRange ? 206 : 200);
+    if (object.Body && typeof object.Body.pipe === 'function') {
+      object.Body.pipe(res);
+    } else {
+      const bytes = await object.Body.transformToByteArray();
+      res.end(Buffer.from(bytes));
+    }
+  } catch (error) {
+    const status = error && (error.$metadata?.httpStatusCode || error.statusCode);
+    if (status === 404 || error?.name === 'NoSuchKey') {
+      res.status(404).end();
+      return;
+    }
+    console.error('S3_MEDIA_READ_FAILED', error);
+    res.status(502).json({ ok: false, code: 'MEDIA_READ_FAILED', message: 'Не удалось загрузить вложение.' });
+  }
 });
 
 app.all(/^\/media(?:\/.*)?$/, (req, res) => {
   proxy(req, res, CHAT_UPSTREAM + req.originalUrl);
 });
 
-app.all('/chat-upload', (req, res) => {
-  proxy(req, res, UPLOAD_UPSTREAM + '/chat-upload');
+app.post('/chat-upload', async (req, res) => {
+  if (!storage.configured) {
+    proxy(req, res, UPLOAD_UPSTREAM + '/chat-upload');
+    return;
+  }
+
+  const phone = String(req.get('X-Medsi-Phone') || '').replace(/\D+/g, '').slice(-10);
+  const length = Number(req.headers['content-length'] || 0);
+  if (length > MAX_UPLOAD_BYTES) {
+    res.status(413).json({ ok: false, code: 'FILE_TOO_LARGE', message: 'Размер файла не должен превышать 100 МБ.' });
+    return;
+  }
+
+  const allowed = await validateSessionForPhone(req, phone);
+  if (!allowed) {
+    res.status(401).json({ ok: false, code: 'UNAUTHORIZED', message: 'Сессия чата истекла. Откройте чат заново.' });
+    return;
+  }
+
+  try {
+    const uploaded = await storage.uploadStream({
+      body: req,
+      contentType: req.get('content-type') || '',
+      contentLength: length,
+      fileName: req.get('X-File-Name') || 'attachment'
+    });
+    res.setHeader('cache-control', 'no-store');
+    res.json({
+      ok: true,
+      type: uploaded.mediaType,
+      fileId: 's3:' + uploaded.key,
+      url: '/media/s3/' + encodeURIComponent(uploaded.key)
+    });
+  } catch (error) {
+    console.error('S3_UPLOAD_FAILED', error);
+    const unsupported = error && error.code === 'UNSUPPORTED_MEDIA';
+    res.status(unsupported ? 415 : 502).json({
+      ok: false,
+      code: unsupported ? 'UNSUPPORTED_MEDIA' : 'UPLOAD_FAILED',
+      message: unsupported ? error.message : 'Не удалось загрузить вложение.'
+    });
+  }
 });
 
 app.get('/__health', async (_req, res) => {
-  const db = await database.health();
-  res.status(db.ok ? 200 : 503).json({
-    ok: db.ok,
+  const [db, media] = await Promise.all([database.health(), storage.health()]);
+  const ok = db.ok && media.ok;
+  res.status(ok ? 200 : 503).json({
+    ok,
     service: 'medsi-timeweb-gateway',
-    database: db
+    database: db,
+    media
   });
 });
 
 app.get('/__diag/network', async (_req, res) => {
-  const [chat, upload, db] = await Promise.all([
+  const [chat, upload, db, media] = await Promise.all([
     probe(CHAT_UPSTREAM + '/'),
     probe(UPLOAD_UPSTREAM + '/'),
-    database.health()
+    database.health(),
+    storage.health()
   ]);
 
   res.setHeader('cache-control', 'no-store');
   res.json({
     ok: true,
     measuredAt: new Date().toISOString(),
-    timewebToCloudflare: {
-      chat,
-      upload
-    },
-    database: db
+    timewebToCloudflare: { chat, upload },
+    database: db,
+    media
   });
 });
 
