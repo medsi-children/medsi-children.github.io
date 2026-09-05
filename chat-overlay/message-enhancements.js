@@ -3,6 +3,24 @@
   if(!t||t.__medsiMessageEnhancements)return;
   t.__medsiMessageEnhancements=true;
 
+  function injectStyles(){
+    if(document.getElementById('medsi-message-enhancement-style'))return;
+    const s=document.createElement('style');s.id='medsi-message-enhancement-style';s.textContent=`
+      .medsi-read-receipt{position:absolute;right:50px;bottom:7px;font-size:12px;line-height:1;font-weight:900;letter-spacing:-2px;opacity:.72;user-select:none}
+      .medsi-read-receipt.is-read{color:#10aeb8;opacity:1}
+      .educator .medsi-read-receipt{color:rgba(255,255,255,.9)}
+      .educator .medsi-read-receipt.is-read{color:#fff}
+      .medsi-parent-reply-preview{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 11px;margin:0 0 8px;border-radius:12px;border:1px solid rgba(36,211,218,.28);background:#f2fcfd;color:#285a62;animation:medsiReplyIn .18s ease both}
+      .medsi-parent-reply-preview.hidden{display:none!important}
+      .medsi-parent-reply-preview strong{display:block;color:#16aeb7;font-size:.78rem;margin-bottom:2px}
+      .medsi-parent-reply-text{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(68vw,420px)}
+      .medsi-parent-reply-preview button{flex:0 0 34px;width:34px;height:34px;border:0;border-radius:50%;background:#fff;color:#4f7c82;font-size:22px;line-height:1;cursor:pointer}
+      .medsi-reply-action{width:100%;display:flex;align-items:center;gap:10px;border:0;background:#fff;color:#285a62;padding:10px 12px;font:inherit;font-weight:750;text-align:left;border-top:1px solid rgba(36,211,218,.12)}
+      .medsi-reply-action span:first-child{font-size:18px;color:#18b8c2}
+      @keyframes medsiReplyIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+    `;document.head.appendChild(s)
+  }
+
   let lastThread=[];
   let activeSession=null;
   let activePhone='';
@@ -145,7 +163,7 @@
     },true);
   }
 
-  function boot(){captureParentState();wrapSubmit();decorateParent();decorateEducator()}
+  function boot(){injectStyles();captureParentState();wrapSubmit();decorateParent();decorateEducator()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,0),{once:true});else setTimeout(boot,0);
   setInterval(boot,700);
 })();
