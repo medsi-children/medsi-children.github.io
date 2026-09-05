@@ -10,6 +10,10 @@
   const threadCache=new Map();
   const listInFlight=new Map();
   const threadInFlight=new Map();
+  const warmedPhones=new Set();
+  const warmQueuedPhones=new Set();
+  const warmQueue=[];
+  let warmWorkers=0;
   const original={
     chats:transport.chats.bind(transport),
     thread:transport.thread.bind(transport),
@@ -109,8 +113,10 @@
     [...listCache.keys()].forEach(k=>{if(k.startsWith(prefix))listCache.delete(k)});
   }
   function clearPhoneThreads(session,phone){
-    const prefix=String(session&&session.token||'').slice(-18)+'|'+phone10(phone)+'|';
+    const p=phone10(phone);
+    const prefix=String(session&&session.token||'').slice(-18)+'|'+p+'|';
     [...threadCache.keys()].forEach(k=>{if(k.startsWith(prefix))threadCache.delete(k)});
+    warmedPhones.delete(p);
   }
 
   transport.sendMessage=async function(session,role,phone,message){
@@ -124,59 +130,78 @@
     const res=await original.markUnread(session,phone);clearLists(session);return res;
   };
   transport.remove=async function(session,role,key){
-    const res=await original.remove(session,role,key);clearLists(session);threadCache.clear();return res;
+    const res=await original.remove(session,role,key);clearLists(session);threadCache.clear();warmedPhones.clear();return res;
   };
   transport.pin=async function(session,phone,bucket){
     const res=await original.pin(session,phone,bucket);clearLists(session);return res;
   };
 
-  let startedForToken='';
-  function concurrency(){
+  function backgroundConcurrency(){
     const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
     if(c&&c.saveData)return 1;
     const type=String(c&&c.effectiveType||'').toLowerCase();
-    if(type==='slow-2g'||type==='2g')return 1;
-    if(type==='3g')return 2;
-    return /Android/i.test(navigator.userAgent||'')?3:4;
+    if(type==='slow-2g'||type==='2g'||type==='3g')return 1;
+    return /iPhone|iPad|Android/i.test(navigator.userAgent||'')?1:2;
   }
 
-  async function warmThreads(session,chats){
-    const seen=new Set();
-    const queue=[];
+  function queueWarm(session,chats){
+    if(!session||!session.token)return;
     (chats||[]).forEach(chat=>{
       const p=phone10(chat&&chat.phone);
-      if(!p||seen.has(p))return;
-      seen.add(p);queue.push(p);
+      if(!p||warmedPhones.has(p)||warmQueuedPhones.has(p))return;
+      warmQueuedPhones.add(p);
+      warmQueue.push({session,phone:p});
     });
-    if(!queue.length)return;
-
-    let cursor=0;
-    const worker=async()=>{
-      while(cursor<queue.length){
-        const index=cursor++;
-        const phone=queue[index];
-        if(!sameSession(savedSession(),session))return;
-        try{await fetchThread(session,phone,'',100)}catch(_){}
-        if(index<6)await new Promise(r=>setTimeout(r,12));
-        else await new Promise(r=>setTimeout(r,35));
-      }
-    };
-    await Promise.all(Array.from({length:Math.min(concurrency(),queue.length)},worker));
+    scheduleWarmWorkers();
   }
 
+  function scheduleWarmWorkers(){
+    const max=backgroundConcurrency();
+    while(warmWorkers<max&&warmQueue.length){
+      warmWorkers+=1;
+      setTimeout(runWarmWorker,180);
+    }
+  }
+
+  async function runWarmWorker(){
+    try{
+      while(warmQueue.length){
+        const item=warmQueue.shift();
+        const p=item&&item.phone;
+        if(p)warmQueuedPhones.delete(p);
+        const current=savedSession();
+        if(!item||!sameSession(current,item.session))continue;
+        if(warmedPhones.has(p))continue;
+        try{
+          await fetchThread(item.session,p,'',100);
+          if(sameSession(savedSession(),item.session))warmedPhones.add(p);
+        }catch(_){}
+        await new Promise(r=>setTimeout(r,120));
+      }
+    }finally{
+      warmWorkers=Math.max(0,warmWorkers-1);
+      if(warmQueue.length)scheduleWarmWorkers();
+    }
+  }
+
+  let startedForToken='';
   async function start(session){
     if(!session||!session.token||startedForToken===session.token)return;
     startedForToken=session.token;
-    try{
-      const [unreadRes,readRes]=await Promise.all([
-        fetchList(session,'unread').catch(()=>({chats:[]})),
-        fetchList(session,'read').catch(()=>({chats:[]}))
-      ]);
-      if(!sameSession(savedSession(),session))return;
-      const unread=Array.isArray(unreadRes&&unreadRes.chats)?unreadRes.chats:[];
-      const read=Array.isArray(readRes&&readRes.chats)?readRes.chats:[];
-      await warmThreads(session,unread.concat(read));
-    }catch(_){}
+
+    // Lists start warming immediately from the main menu. Each list feeds the
+    // thread queue as soon as it arrives; we do not wait for the other bucket.
+    const warmBucket=bucket=>fetchList(session,bucket).then(res=>{
+      if(!sameSession(savedSession(),session))return res;
+      const chats=Array.isArray(res&&res.chats)?res.chats:[];
+      queueWarm(session,chats);
+      return res;
+    }).catch(()=>null);
+
+    warmBucket('unread');
+    setTimeout(()=>{
+      if(sameSession(savedSession(),session))warmBucket('read');
+    },220);
   }
 
   function kick(){const s=savedSession();if(s)start(s)}
@@ -194,6 +219,6 @@
     activateFallback:()=>{},
     callApi,
     tutorToken,
-    clear(){listCache.clear();threadCache.clear();listInFlight.clear();threadInFlight.clear();startedForToken=''}
+    clear(){listCache.clear();threadCache.clear();listInFlight.clear();threadInFlight.clear();warmedPhones.clear();warmQueuedPhones.clear();warmQueue.length=0;startedForToken=''}
   };
 })();
