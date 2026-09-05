@@ -335,7 +335,7 @@
       author.className = className;
       message.insertBefore(author, message.firstChild);
     }
-    author.textContent = text;
+    if (author.textContent !== text) author.textContent = text;
   }
 
   function refreshChatAuthorLabels() {
