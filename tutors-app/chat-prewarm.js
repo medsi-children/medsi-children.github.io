@@ -1,4 +1,5 @@
 (function(){
+  if(!document.querySelector('script[data-medsi-upload-ux]')){const s=document.createElement('script');s.src='/chat-overlay/upload-ux.js?v=20260905-uploadux1';s.dataset.medsiUploadUx='1';document.head.appendChild(s)}
   const transport=window.MedsiOverlayTransport;
   if(!transport||transport.__medsiPrewarmWrapped)return;
   transport.__medsiPrewarmWrapped=true;
