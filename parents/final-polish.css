@@ -4,6 +4,10 @@
 .parent-chat-time{bottom:7px!important;right:10px!important;font-size:10.5px!important}
 .parent-chat-reaction{position:absolute;left:9px;bottom:1px;width:28px;height:28px;min-width:28px;padding:0;border-radius:50%;background:rgba(255,255,255,.96);border:1px solid rgba(36,211,218,.22);box-shadow:0 4px 12px rgba(36,211,218,.10);display:inline-flex;align-items:center;justify-content:center;color:#11424a;line-height:1}
 
+/* Let unusually long child names grow their pill naturally, but cap the width so the header/menu layout cannot spread indefinitely. */
+#childChip,#parentChatChild{width:max-content;max-width:min(100%,22rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#parentChatChild{flex:0 1 auto}
+
 .parent-chat-context{position:fixed;z-index:10020;display:flex;align-items:center;justify-content:space-between;gap:2px;padding:7px 8px;border-radius:999px;background:rgba(255,255,255,.98);border:1px solid rgba(36,211,218,.18);box-shadow:0 18px 34px rgba(17,66,74,.22);opacity:1;transform:translateY(0) scale(1);visibility:visible;transition:opacity .16s ease,transform .16s ease,visibility 0s linear 0s;transform-origin:center top}
 .parent-chat-context.hidden{display:flex!important;opacity:0;transform:translateY(5px) scale(.975);visibility:hidden;pointer-events:none;transition:opacity .16s ease,transform .16s ease,visibility 0s linear .16s}
 .parent-chat-reaction-btn{appearance:none;border:0;background:transparent;padding:7px;margin:0;border-radius:999px;font-size:1.28rem;line-height:1;cursor:pointer}
