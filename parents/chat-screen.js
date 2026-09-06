@@ -15,6 +15,23 @@
     const months=['янв.','февр.','мар.','апр.','мая','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
     return d.getDate()+' '+months[d.getMonth()]+' • '+time;
   };
+  function moscowDay(value){
+    const d=new Date(Number(value));if(Number.isNaN(d.getTime()))return null;
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',year:'numeric',month:'numeric',day:'numeric'}).formatToParts(d).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+    const year=Number(parts.year),month=Number(parts.month),day=Number(parts.day);
+    if(!year||!month||!day)return null;
+    return{year,month,day,key:`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`};
+  }
+  function dateChip(value){
+    const p=moscowDay(value),n=moscowDay(Date.now());if(!p)return null;
+    let label='';
+    if(n){
+      const current=Date.UTC(n.year,n.month-1,n.day),target=Date.UTC(p.year,p.month-1,p.day),diff=Math.round((current-target)/86400000);
+      if(diff===0)label='Сегодня';else if(diff===1)label='Вчера';
+    }
+    if(!label)label=new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'long',...(n&&p.year===n.year?{}:{year:'numeric'})}).format(new Date(Number(value)));
+    return{key:p.key,label};
+  }
   let state=null,rows=[],busy=false,dead=false,chatClosed=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false;
 
   function mediaUrl(m){
@@ -107,7 +124,10 @@
     const oldHeight=box.scrollHeight,oldTop=box.scrollTop;
     rows=Array.isArray(list)?list:[];box.replaceChildren();
     if(!rows.length){const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Сообщений пока нет.';box.appendChild(e);return}
+    let previousDay='';
     rows.forEach(m=>{
+      const chip=dateChip(m&&m.timestamp);
+      if(chip&&chip.key!==previousDay){const sep=document.createElement('div');sep.className='medsi-date-separator';sep.dataset.dateKey=chip.key;sep.textContent=chip.label;box.appendChild(sep);previousDay=chip.key}
       const el=document.createElement('article');el.className='parent-chat-msg '+(m.side==='parent'?'parent':'educator');
       if(silent)el.dataset.medsiAnimated='1';
       if(m.side!=='parent'){const a=document.createElement('div');a.className='parent-chat-author';a.textContent='Воспитатель';el.appendChild(a)}
