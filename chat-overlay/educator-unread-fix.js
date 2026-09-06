@@ -41,6 +41,13 @@
   `;
   document.head.appendChild(style);
 
+  if(!document.querySelector('script[data-medsi-reaction-icons]')){
+    const s=document.createElement('script');
+    s.src='/chat-overlay/reaction-icons.js?v=20260907-1';
+    s.dataset.medsiReactionIcons='1';
+    document.head.appendChild(s);
+  }
+
   function savedSession(){
     try{
       const s=JSON.parse(localStorage.getItem('medsi_d1_educator_session_v1')||'null');
