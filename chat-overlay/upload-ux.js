@@ -9,8 +9,9 @@
     .medsi-upload-status.is-visible{opacity:1;transform:none}
     .medsi-upload-spinner{width:15px;height:15px;border:2px solid rgba(42,174,183,.22);border-top-color:#2aaeb7;border-radius:50%;animation:medsiUploadSpin .72s linear infinite;flex:0 0 auto}
     @keyframes medsiUploadSpin{to{transform:rotate(360deg)}}
-    .parent-chat-media-frame,.msg-image-wrap{opacity:0;max-height:0!important;margin-bottom:0!important;transform:translateY(4px) scale(.992);transition:opacity .24s ease,transform .24s ease,max-height .34s ease,margin-bottom .34s ease;background:transparent!important}
-    .parent-chat-media-frame.medsi-media-ready,.msg-image-wrap.medsi-media-ready{opacity:1;max-height:560px!important;margin-bottom:7px!important;transform:none}
+    /* The message must reserve its media slot immediately.  Hiding this frame
+       until decoding finishes creates a confusing empty bubble on slow links. */
+    .parent-chat-media-frame,.msg-image-wrap{opacity:1;max-height:560px!important;margin-bottom:7px!important;transform:none}
   `;
   document.head.appendChild(style);
 

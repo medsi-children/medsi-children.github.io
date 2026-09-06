@@ -64,7 +64,7 @@
     nodes.forEach((el,i)=>{
       const m=lastThread[i];
       if(!m||m.side!=='educator'||el.querySelector('.medsi-read-receipt'))return;
-      el.appendChild(receiptNode(explicitRead(m,'educator'));
+      el.appendChild(receiptNode(explicitRead(m,'educator')));
       el.dataset.medsiMessageIndex=String(i);
     });
   }

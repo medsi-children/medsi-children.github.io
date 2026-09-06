@@ -112,7 +112,7 @@
     function open(payload) {
       state = payload || {};
       clearError();
-      title.textContent = state.role === 'educator' ? 'Чат с родителями' : 'Чат с воспитателями и психологами';
+      title.textContent = state.role === 'educator' ? 'Чат с родителями' : 'Чат с воспитателями';
       subtitle.textContent = [state.parentName, state.childName].filter(Boolean).join(' · ');
       statusTitle.textContent = 'Подключаем чат…';
       statusText.textContent = 'Загружаем сообщения из Cloudflare D1.';

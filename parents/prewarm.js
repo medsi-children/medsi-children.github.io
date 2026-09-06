@@ -1,6 +1,6 @@
 (function(){
-  if(!document.querySelector('script[data-medsi-upload-ux]')){const s=document.createElement('script');s.src='/chat-overlay/upload-ux.js?v=20260905-uploadux1';s.dataset.medsiUploadUx='1';document.head.appendChild(s)}
-  if(!document.querySelector('script[data-medsi-chat-polish]')){const s=document.createElement('script');s.src='/chat-overlay/chat-polish-v2.js?v=20260906-polish4';s.dataset.medsiChatPolish='1';document.head.appendChild(s)}
+  if(!document.querySelector('script[data-medsi-upload-ux]')){const s=document.createElement('script');s.src='/chat-overlay/upload-ux.js?v=20260906-media-placeholder';s.dataset.medsiUploadUx='1';document.head.appendChild(s)}
+  if(!document.querySelector('script[data-medsi-chat-polish]')){const s=document.createElement('script');s.src='/chat-overlay/chat-polish-v2.js?v=20260906-media-placeholder';s.dataset.medsiChatPolish='1';document.head.appendChild(s)}
   if(!document.querySelector('script[data-medsi-terminology-fix]')){const s=document.createElement('script');s.src='/chat-overlay/terminology-fix.js?v=20260906-1';s.dataset.medsiTerminologyFix='1';document.head.appendChild(s)}
 
   if(!window.__medsiTimewebSessionFetchWrapped){

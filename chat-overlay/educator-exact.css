@@ -221,6 +221,7 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
 .chat-card-last.parent{ color:#79cfd5; }
 .chat-card-last.educator{ color:#16b8c0; }
 .chat-empty{ color:rgba(95,127,134,.82); text-align:center; padding:18px 10px; }
+#chatThreadBox > .chat-empty{ margin:auto; }
 
 .chat-read-toggle{
   position:relative;
