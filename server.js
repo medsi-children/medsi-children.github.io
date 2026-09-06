@@ -17,6 +17,9 @@ const CHAT_UPSTREAM = String(
 const UPLOAD_UPSTREAM = String(
   process.env.UPLOAD_UPSTREAM || 'https://medsi-chat-upload-test.medsi-children.workers.dev'
 ).replace(/\/$/, '');
+const PUSH_UPSTREAM = String(
+  process.env.PUSH_UPSTREAM || 'https://medsi-push-worker.medsi-children.workers.dev'
+).replace(/\/$/, '');
 const MIGRATION_SHARED_SECRET = String(process.env.MIGRATION_SHARED_SECRET || '');
 // Kept separate from the short-lived legacy-media migration credential.  This
 // secret authorizes only Apps Script's durable deletion queue.
@@ -160,6 +163,11 @@ async function validateSessionForPhone(req, phone) {
 
 app.all(/^\/lab(?:\/.*)?$/, (req, res) => {
   proxy(req, res, CHAT_UPSTREAM + req.originalUrl);
+});
+
+app.all(/^\/push(?:\/.*)?$/, (req, res) => {
+  const suffix = req.originalUrl.replace(/^\/push/, '') || '/';
+  proxy(req, res, PUSH_UPSTREAM + suffix);
 });
 
 app.get('/media/s3/:key', async (req, res) => {
@@ -345,9 +353,10 @@ app.get('/__health', async (_req, res) => {
 });
 
 app.get('/__diag/network', async (_req, res) => {
-  const [chat, upload, db, media] = await Promise.all([
+  const [chat, upload, push, db, media] = await Promise.all([
     probe(CHAT_UPSTREAM + '/'),
     probe(UPLOAD_UPSTREAM + '/'),
+    probe(PUSH_UPSTREAM + '/'),
     database.health(),
     storage.health()
   ]);
@@ -356,7 +365,7 @@ app.get('/__diag/network', async (_req, res) => {
   res.json({
     ok: true,
     measuredAt: new Date().toISOString(),
-    timewebToCloudflare: { chat, upload },
+    timewebToCloudflare: { chat, upload, push },
     database: db,
     media
   });
