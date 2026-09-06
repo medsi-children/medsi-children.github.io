@@ -1,4 +1,8 @@
 /* Final parent-side polish. */
+html:not(.medsi-parent-ready) body>.wrap{visibility:hidden!important}
+html.medsi-parent-ready body>.wrap{animation:medsiParentShellIn .12s ease both}
+@keyframes medsiParentShellIn{from{opacity:0}to{opacity:1}}
+
 .parent-chat-media-frame{max-width:100%!important;width:min(300px,100%)!important}
 .parent-chat-msg{overflow:visible;cursor:pointer}
 .parent-chat-time{bottom:7px!important;right:10px!important;font-size:10.5px!important}
