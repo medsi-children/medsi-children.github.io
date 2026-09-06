@@ -21,6 +21,9 @@
       margin:0!important;
       padding:0!important;
     }
+    #btnRefreshChats.refresh-btn .refresh-label{
+      font-size:2.28rem!important;
+    }
     .educator-exact-clone .refresh-btn.loading .refresh-label{
       display:none!important;
     }
