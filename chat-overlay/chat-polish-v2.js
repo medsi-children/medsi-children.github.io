@@ -5,10 +5,12 @@
 
   const style=document.createElement('style');
   style.textContent=`
-    @keyframes medsiScreenIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+    @keyframes medsiScreenIn{from{opacity:0;transform:translateY(8px) scale(.996)}to{opacity:1;transform:none}}
+    @keyframes medsiMessageIn{from{opacity:0;transform:translateY(8px) scale(.992)}to{opacity:1;transform:none}}
     @keyframes medsiShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
     @keyframes medsiSpin{to{transform:rotate(360deg)}}
-    #screenChats.medsi-screen-enter,#screenChatThread.medsi-screen-enter,#screenChat.medsi-screen-enter{animation:medsiScreenIn .22s ease both}
+    #screenChats.medsi-screen-enter,#screenChatThread.medsi-screen-enter,#screenChat.medsi-screen-enter{animation:medsiScreenIn .26s cubic-bezier(.22,.72,.28,1) both}
+    #chatThreadBox .msg.medsi-message-enter,#parentChatMessages .parent-chat-msg.medsi-message-enter{animation:medsiMessageIn .24s cubic-bezier(.22,.72,.28,1) both;animation-delay:var(--medsi-message-delay,0ms)}
     .msg-image-wrap,.parent-chat-media-frame{position:relative;overflow:hidden;width:min(270px,68vw);max-width:100%;aspect-ratio:1/1;border-radius:12px;background:linear-gradient(100deg,rgba(223,244,245,.78) 20%,rgba(248,253,253,.98) 38%,rgba(223,244,245,.78) 56%);background-size:220% 100%;animation:medsiShimmer 1.15s linear infinite}
     .msg-image-wrap.medsi-media-ready,.parent-chat-media-frame.medsi-media-ready{animation:none;background:rgba(230,247,248,.72)}
     .msg-image-wrap img,.msg-image-wrap video,.parent-chat-media-frame img,.parent-chat-media-frame video{display:block!important;width:100%!important;height:100%!important;object-fit:cover!important;opacity:0;transform:scale(.985);transition:opacity .22s ease,transform .28s ease}
@@ -19,8 +21,9 @@
     .chat-card.medsi-deleting-card,.phone-card.medsi-deleting-card{opacity:.38;transform:scale(.992);transition:opacity .2s ease,transform .2s ease}
     .msg-author,.parent-chat-author{letter-spacing:.01em}
     #btnRefreshChats{display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:0!important;line-height:1!important}
-    #btnRefreshChats .refresh-label{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:100%;height:100%;font-size:2.05rem!important;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-weight:500;transform:translateY(-1px)}
+    #btnRefreshChats .refresh-label{position:absolute!important;inset:0!important;display:flex!important;align-items:center!important;justify-content:center!important;width:auto!important;height:auto!important;font-size:2rem!important;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-weight:500;line-height:1!important;transform:translateY(-1px)!important}
     #btnRefreshChats.loading .refresh-label{display:none!important}
+    @media (prefers-reduced-motion:reduce){#screenChats.medsi-screen-enter,#screenChatThread.medsi-screen-enter,#screenChat.medsi-screen-enter,#chatThreadBox .msg.medsi-message-enter,#parentChatMessages .parent-chat-msg.medsi-message-enter{animation:none!important}}
   `;
   document.head.appendChild(style);
 
@@ -30,13 +33,7 @@
   function parentName(){try{return String(localStorage.getItem('medsi_parent')||'').trim()}catch(_){return''}}
   function activeEducatorParentName(){const lines=[...document.querySelectorAll('#chatThreadHeader > div')].map(x=>String(x.textContent||''));const line=lines.find(x=>x.startsWith('Родитель:'))||'';return line.replace(/^Родитель:\s*/,'').trim()}
 
-  function redrawRefresh(){
-    const btn=document.getElementById('btnRefreshChats');
-    if(!btn||btn.dataset.medsiRefreshV3==='1')return;
-    btn.dataset.medsiRefreshV3='1';
-    const label=btn.querySelector('.refresh-label');
-    if(label)label.textContent='⟳';
-  }
+  function redrawRefresh(){const btn=document.getElementById('btnRefreshChats');if(!btn||btn.dataset.medsiRefreshV3==='1')return;btn.dataset.medsiRefreshV3='1';const label=btn.querySelector('.refresh-label');if(label)label.textContent='⟳'}
 
   function markMedia(frame){
     if(!frame||frame.dataset.medsiPolishedV2==='1')return;
@@ -50,19 +47,17 @@
 
   function fixAuthors(){
     const educatorParent=activeEducatorParentName();
-    document.querySelectorAll('#chatThreadBox .msg').forEach(el=>{
-      let author=el.querySelector('.msg-author');
-      const text=el.classList.contains('parent')?'Родитель'+(educatorParent?' '+educatorParent:''):'Детское Отделение Медси';
-      if(!author){author=document.createElement('div');author.className='msg-author';el.prepend(author)}
-      if(author.textContent!==text)author.textContent=text;
-    });
+    document.querySelectorAll('#chatThreadBox .msg').forEach(el=>{let author=el.querySelector('.msg-author');const text=el.classList.contains('parent')?'Родитель'+(educatorParent?' '+educatorParent:''):'Детское Отделение Медси';if(!author){author=document.createElement('div');author.className='msg-author';el.prepend(author)}if(author.textContent!==text)author.textContent=text});
     const ownParent=parentName();
-    document.querySelectorAll('#parentChatMessages .parent-chat-msg').forEach(el=>{
-      let author=el.querySelector('.parent-chat-author');
-      const text=el.classList.contains('parent')?'Родитель'+(ownParent?' '+ownParent:''):'Детское Отделение Медси';
-      if(!author){author=document.createElement('div');author.className='parent-chat-author';el.prepend(author)}
-      if(author.textContent!==text)author.textContent=text;
-    });
+    document.querySelectorAll('#parentChatMessages .parent-chat-msg').forEach(el=>{let author=el.querySelector('.parent-chat-author');const text=el.classList.contains('parent')?'Родитель'+(ownParent?' '+ownParent:''):'Детское Отделение Медси';if(!author){author=document.createElement('div');author.className='parent-chat-author';el.prepend(author)}if(author.textContent!==text)author.textContent=text});
+  }
+
+  function animateMessages(){
+    for(const box of [document.getElementById('chatThreadBox'),document.getElementById('parentChatMessages')]){
+      if(!box||!box.isConnected)continue;
+      const nodes=[...box.children].filter(el=>el.matches&&el.matches('.msg,.parent-chat-msg')&&!el.dataset.medsiAnimated);
+      nodes.slice(-14).forEach((el,i)=>{el.dataset.medsiAnimated='1';el.style.setProperty('--medsi-message-delay',Math.min(i*22,154)+'ms');el.classList.add('medsi-message-enter')});
+    }
   }
 
   let lastVisible='';
@@ -71,37 +66,21 @@
   }
 
   let polishQueued=false;
-  function polish(){
-    polishQueued=false;
-    document.querySelectorAll('.msg-image-wrap,.parent-chat-media-frame').forEach(markMedia);
-    redrawRefresh();
-    fixAuthors();
-    animateScreens();
-  }
+  function polish(){polishQueued=false;document.querySelectorAll('.msg-image-wrap,.parent-chat-media-frame').forEach(markMedia);redrawRefresh();fixAuthors();animateScreens();animateMessages()}
   function queuePolish(){if(polishQueued)return;polishQueued=true;requestAnimationFrame(polish)}
 
   async function purgeMedia(phone){const session=educatorSession();if(!session||!session.token||!phone)return;try{await fetch('/__chat/purge-media',{method:'POST',headers:{'content-type':'application/json','X-Medsi-Chat-Session':session.token},body:JSON.stringify({phone:p10(phone)}),cache:'no-store'})}catch(_){}}
 
   let pendingChatDelete=null;
   document.addEventListener('click',e=>{
-    const del=e.target.closest&&e.target.closest('.chat-delete-toggle');
-    if(del){const card=del.closest('.chat-card');pendingChatDelete={button:del,card,phone:card&&card.dataset.phone||''};return}
+    const del=e.target.closest&&e.target.closest('.chat-delete-toggle');if(del){const card=del.closest('.chat-card');pendingChatDelete={button:del,card,phone:card&&card.dataset.phone||''};return}
     const confirmBtn=e.target.closest&&e.target.closest('#childDeleteConfirm');
-    if(confirmBtn&&pendingChatDelete&&pendingChatDelete.phone&&!confirmBtn.dataset.medsiReplay){
-      e.preventDefault();e.stopImmediatePropagation();const target=pendingChatDelete;pendingChatDelete=null;target.button.classList.add('medsi-deleting');target.card&&target.card.classList.add('medsi-deleting-card');if(target.card&&!target.card.querySelector('.medsi-delete-spinner'))target.button.insertAdjacentHTML('afterend','<span class="medsi-delete-spinner" aria-hidden="true"></span>');confirmBtn.closest('.link-modal-overlay')?.classList.add('hidden');purgeMedia(target.phone).finally(()=>{confirmBtn.dataset.medsiReplay='1';confirmBtn.click();delete confirmBtn.dataset.medsiReplay;setTimeout(()=>{if(target.card&&target.card.isConnected){target.card.classList.remove('medsi-deleting-card');target.button.classList.remove('medsi-deleting');target.card.querySelector('.medsi-delete-spinner')?.remove()}},5000)});return;
-    }
+    if(confirmBtn&&pendingChatDelete&&pendingChatDelete.phone&&!confirmBtn.dataset.medsiReplay){e.preventDefault();e.stopImmediatePropagation();const target=pendingChatDelete;pendingChatDelete=null;target.button.classList.add('medsi-deleting');target.card&&target.card.classList.add('medsi-deleting-card');if(target.card&&!target.card.querySelector('.medsi-delete-spinner'))target.button.insertAdjacentHTML('afterend','<span class="medsi-delete-spinner" aria-hidden="true"></span>');confirmBtn.closest('.link-modal-overlay')?.classList.add('hidden');purgeMedia(target.phone).finally(()=>{confirmBtn.dataset.medsiReplay='1';confirmBtn.click();delete confirmBtn.dataset.medsiReplay;setTimeout(()=>{if(target.card&&target.card.isConnected){target.card.classList.remove('medsi-deleting-card');target.button.classList.remove('medsi-deleting');target.card.querySelector('.medsi-delete-spinner')?.remove()}},5000)});return}
     const phoneDelete=e.target.closest&&e.target.closest('.phone-delete');
-    if(phoneDelete&&!phoneDelete.dataset.medsiManaged){
-      e.preventDefault();e.stopImmediatePropagation();const card=phoneDelete.closest('.phone-card');const phoneText=[...card.querySelectorAll('*')].map(x=>x.childElementCount?null:String(x.textContent||'')).filter(Boolean).find(x=>/Номер телефона/i.test(x))||card.textContent||'';const phone=p10(phoneText);const child=(card.querySelector('.phone-card-title')?.textContent||'ребёнка').trim();if(!window.confirm('Удалить ребёнка '+child+' из бота?\n\nВся история сообщений и вложения будут удалены.'))return;phoneDelete.dataset.medsiManaged='1';phoneDelete.classList.add('medsi-deleting');card.classList.add('medsi-deleting-card');phoneDelete.insertAdjacentHTML('afterend','<span class="medsi-delete-spinner" aria-hidden="true"></span>');const token=tutorToken();Promise.resolve().then(()=>purgeMedia(phone)).then(()=>fetch(window.MEDSI_APP_BASE_URL||'https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec',{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method:'deleteReportChildByPhone',args:[phone,token]}),cache:'no-store'})).then(r=>r.json()).then(payload=>{if(!payload||!payload.ok)throw new Error(payload&&payload.message||'Не удалось удалить ребёнка.');card.remove();document.getElementById('btnParentPhones')?.click()}).catch(err=>{phoneDelete.classList.remove('medsi-deleting');card.classList.remove('medsi-deleting-card');card.querySelector('.medsi-delete-spinner')?.remove();delete phoneDelete.dataset.medsiManaged;alert(err&&err.message||'Не удалось удалить ребёнка.')});
-    }
+    if(phoneDelete&&!phoneDelete.dataset.medsiManaged){e.preventDefault();e.stopImmediatePropagation();const card=phoneDelete.closest('.phone-card');const phoneText=[...card.querySelectorAll('*')].map(x=>x.childElementCount?null:String(x.textContent||'')).filter(Boolean).find(x=>/Номер телефона/i.test(x))||card.textContent||'';const phone=p10(phoneText);const child=(card.querySelector('.phone-card-title')?.textContent||'ребёнка').trim();if(!window.confirm('Удалить ребёнка '+child+' из бота?\n\nВся история сообщений и вложения будут удалены.'))return;phoneDelete.dataset.medsiManaged='1';phoneDelete.classList.add('medsi-deleting');card.classList.add('medsi-deleting-card');phoneDelete.insertAdjacentHTML('afterend','<span class="medsi-delete-spinner" aria-hidden="true"></span>');const token=tutorToken();Promise.resolve().then(()=>purgeMedia(phone)).then(()=>fetch(window.MEDSI_APP_BASE_URL||'https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec',{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method:'deleteReportChildByPhone',args:[phone,token]}),cache:'no-store'})).then(r=>r.json()).then(payload=>{if(!payload||!payload.ok)throw new Error(payload&&payload.message||'Не удалось удалить ребёнка.');card.remove();document.getElementById('btnParentPhones')?.click()}).catch(err=>{phoneDelete.classList.remove('medsi-deleting');card.classList.remove('medsi-deleting-card');card.querySelector('.medsi-delete-spinner')?.remove();delete phoneDelete.dataset.medsiManaged;alert(err&&err.message||'Не удалось удалить ребёнка.')})}
   },true);
 
   const contentObserver=new MutationObserver(queuePolish);
-  function boot(){
-    contentObserver.observe(document.body,{subtree:true,childList:true});
-    const screenObserver=new MutationObserver(queuePolish);
-    screenObserver.observe(document.body,{attributes:true,attributeFilter:['data-screen']});
-    queuePolish();
-  }
+  function boot(){contentObserver.observe(document.body,{subtree:true,childList:true});const screenObserver=new MutationObserver(queuePolish);screenObserver.observe(document.body,{attributes:true,attributeFilter:['data-screen']});queuePolish()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
