@@ -11,6 +11,24 @@
         box-shadow:0 3px 10px rgba(22,184,192,.06)!important;
         color:#16aeb7!important;
       }
+      body[data-screen="report-morning"] #btnSend{
+        background:linear-gradient(135deg,#ffd867,#ffbf3a 54%,#f5a623)!important;
+        border:1px solid rgba(191,132,16,.18)!important;
+        color:#fff!important;
+        box-shadow:0 10px 22px rgba(217,158,25,.20)!important;
+      }
+      body[data-screen="report-evening"] #btnSend{
+        background:linear-gradient(135deg,#9fd5ff,#5fa8f0 54%,#4a8ee3)!important;
+        border:1px solid rgba(63,111,190,.18)!important;
+        color:#fff!important;
+        box-shadow:0 10px 22px rgba(74,142,227,.20)!important;
+      }
+      body[data-screen="report-psychology"] #btnSend{
+        background:linear-gradient(135deg,#f5b8c8,#e98ba7 48%,#d97898)!important;
+        border:1px solid rgba(190,85,121,.18)!important;
+        color:#fff!important;
+        box-shadow:0 10px 22px rgba(217,120,152,.18)!important;
+      }
       @media(min-width:561px){
         #screenPhones .medsi-phone-call-mini svg{transform:translateX(1px)!important}
       }
