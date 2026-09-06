@@ -19,6 +19,30 @@
       background-position:initial !important;
       background-repeat:no-repeat !important;
     }
+
+    /* Keep refresh icon centered exactly like the paperclip button. */
+    #btnRefreshChats{
+      display:flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      padding:0 !important;
+      line-height:1 !important;
+    }
+    #btnRefreshChats .refresh-label{
+      position:static !important;
+      inset:auto !important;
+      display:flex !important;
+      flex:1 1 auto !important;
+      align-items:center !important;
+      justify-content:center !important;
+      width:100% !important;
+      height:100% !important;
+      margin:0 !important;
+      padding:0 !important;
+      line-height:1 !important;
+      transform:none !important;
+    }
+    #btnRefreshChats.loading .refresh-label{display:none !important;}
   `;
   document.head.appendChild(style);
 
