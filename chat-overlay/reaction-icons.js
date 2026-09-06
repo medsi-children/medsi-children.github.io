@@ -21,6 +21,10 @@
     .parent-chat-reaction .medsi-reaction-icon,.msg-reaction .medsi-reaction-icon{width:23px;height:23px}
     .parent-chat-reaction-btn .medsi-reaction-icon,.msg-reaction-btn .medsi-reaction-icon{width:28px;height:28px}
     .parent-chat-reaction-btn,.msg-reaction-btn{display:inline-flex!important;align-items:center!important;justify-content:center!important}
+    @media(min-width:561px){
+      #childChip{flex:0 1 auto!important;width:auto!important;max-width:min(520px,55vw)!important}
+      #screenPhones .medsi-phone-call-mini svg{transform:translateX(2.5px)!important}
+    }
   `;
   document.head.appendChild(style);
 
@@ -66,6 +70,14 @@
   });
   observer.observe(document.documentElement,{childList:true,subtree:true});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>scan(document),{once:true});else scan(document);
+
+  if(!document.querySelector('script[data-medsi-menu-twemoji]')){
+    const s=document.createElement('script');
+    s.async=false;
+    s.src='/chat-overlay/menu-twemoji.js?v=20260907-1';
+    s.dataset.medsiMenuTwemoji='1';
+    document.head.appendChild(s);
+  }
 
   window.MedsiReactionIcons={paint,scan,source:'Twitter Twemoji'};
 })();
