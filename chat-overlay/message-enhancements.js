@@ -8,11 +8,10 @@
     const s=document.createElement('style');
     s.id='medsi-message-enhancement-style';
     s.textContent=`
-      /* The original timestamp nodes stay in the DOM for compatibility, but the
-         visible Telegram-like metadata is rendered independently so no other
-         patch can overlap or rewrite it. */
-      #parentChatMessages .parent-chat-msg > .parent-chat-time,
-      #chatThreadBox .msg > .msg-time{display:none!important}
+      /* Keep the renderer's native timestamp visible until a real transport row
+         is matched. This prevents cached messages from briefly receiving fake dates. */
+      #parentChatMessages .parent-chat-msg.medsi-meta-ready > .parent-chat-time,
+      #chatThreadBox .msg.medsi-meta-ready > .msg-time{display:none!important}
       .medsi-message-meta{
         position:absolute;right:10px;bottom:7px;z-index:2;
         display:inline-flex;align-items:center;justify-content:flex-end;gap:4px;
@@ -46,7 +45,9 @@
       .medsi-parent-reply-preview strong{display:block;color:#16aeb7;font-size:.78rem;margin-bottom:2px}
       .medsi-parent-reply-text{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(68vw,420px)}
       .medsi-parent-reply-preview button{flex:0 0 34px;width:34px;height:34px;border:0;border-radius:50%;background:#fff;color:#4f7c82;font-size:22px;line-height:1;cursor:pointer}
-      .medsi-reply-action{width:100%;display:flex;align-items:center;gap:10px;border:0;background:#fff;color:#285a62;padding:10px 12px;font:inherit;font-weight:750;text-align:left;border-top:1px solid rgba(36,211,218,.12)}
+      .parent-chat-context:has(.medsi-reply-action){width:min(310px,calc(100vw - 24px));flex-wrap:wrap;border-radius:18px}
+      .parent-chat-context:has(.medsi-reply-action) .parent-chat-reaction-btn{flex:0 0 auto}
+      .medsi-reply-action{flex:0 0 100%;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:0;background:#fff;color:#285a62;padding:9px 12px;margin-top:3px;font:inherit;font-weight:750;text-align:center;border-top:1px solid rgba(36,211,218,.12);border-radius:0 0 13px 13px}
       .medsi-reply-action span:first-child{font-size:18px;color:#18b8c2}
       @keyframes medsiReplyIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
     `;
@@ -54,6 +55,7 @@
   }
 
   let lastThread=[];
+  let lastThreadPhone='';
   let activeSession=null;
   let activePhone='';
   let replyTarget=null;
@@ -141,7 +143,7 @@
   }
 
   function ensureMeta(el,row,ownSide,ownClass){
-    if(!el)return;
+    if(!el||!row)return;
     let meta=el.querySelector(':scope > .medsi-message-meta');
     if(!meta){
       meta=document.createElement('span');
@@ -159,10 +161,11 @@
       if(next&&time.textContent!==next)time.textContent=next;
     }
 
-    const own=row?String(row.side||'')===ownSide:el.classList.contains(ownClass);
+    const own=String(row.side||'')===ownSide;
     let receipt=meta.querySelector('.medsi-read-receipt');
     if(!own){
       if(receipt)receipt.remove();
+      el.classList.add('medsi-meta-ready');
       return;
     }
     if(!receipt){
@@ -176,6 +179,7 @@
     if(receipt.textContent!==glyph)receipt.textContent=glyph;
     receipt.title=read?'Прочитано':'Отправлено';
     receipt.setAttribute('aria-label',receipt.title);
+    el.classList.add('medsi-meta-ready');
   }
 
   function decorateThread(selector,ownSide,ownClass){
@@ -184,8 +188,12 @@
     let previousKey='';
     nodes.forEach((el,i)=>{
       const row=lastThread[i]||null;
-      const rawTs=Number(row&&row.timestamp);
-      const ts=Number.isFinite(rawTs)&&rawTs>0?rawTs:(i>=lastThread.length?Date.now():0);
+      if(!row){
+        el.classList.remove('medsi-meta-ready');
+        return;
+      }
+      const rawTs=Number(row.timestamp);
+      const ts=Number.isFinite(rawTs)&&rawTs>0?rawTs:0;
       const key=ts?dayKey(ts):'';
       if(key&&key!==previousKey)ensureDateSeparator(el,key,dateLabel(ts));
       if(key)previousKey=key;
@@ -210,9 +218,18 @@
   }
 
   t.thread=async function(...args){
-    const res=await originalThread(...args);
     const before=args[2];
-    if(!before&&res&&Array.isArray(res.messages))lastThread=res.messages.slice();
+    const phone=String(args[1]||'');
+    if(!before&&phone&&phone!==lastThreadPhone){
+      lastThreadPhone=phone;
+      lastThread=[];
+      scheduleDecorate();
+    }
+    const res=await originalThread(...args);
+    if(!before&&res&&Array.isArray(res.messages)){
+      lastThreadPhone=phone;
+      lastThread=res.messages.slice();
+    }
     scheduleDecorate();
     return res;
   };
@@ -252,6 +269,17 @@
     return Number.isInteger(idx)?lastThread[idx]:null;
   }
 
+  function keepMenuOnScreen(menu){
+    requestAnimationFrame(()=>{
+      if(!menu||!menu.isConnected||menu.classList.contains('hidden'))return;
+      const r=menu.getBoundingClientRect(),margin=12;
+      let top=parseFloat(menu.style.top)||r.top;
+      if(r.bottom>window.innerHeight-margin)top-=r.bottom-(window.innerHeight-margin);
+      if(top<margin)top=margin;
+      menu.style.top=top+'px';
+    });
+  }
+
   function syncReplyAction(){
     const menu=document.querySelector('.parent-chat-context:not(.hidden)');
     if(!menu||menu.querySelector('.medsi-reply-action'))return;
@@ -261,6 +289,7 @@
     b.innerHTML='<span>↩</span><span>Ответить</span>';
     b.onclick=e=>{e.preventDefault();e.stopPropagation();menu.classList.add('hidden');setReply(m)};
     menu.appendChild(b);
+    keepMenuOnScreen(menu);
   }
 
   document.addEventListener('click',e=>{
@@ -281,9 +310,17 @@
     if(!api||api.__medsiReplyWrapped)return;
     api.__medsiReplyWrapped=true;
     const open=api.open.bind(api);
-    api.open=async function(next){activeSession=next&&next.session||null;activePhone=next&&next.phone||'';setReply(null);return open(next)};
+    api.open=async function(next){
+      activeSession=next&&next.session||null;
+      activePhone=next&&next.phone||'';
+      lastThreadPhone=String(activePhone||'');
+      lastThread=[];
+      setReply(null);
+      scheduleDecorate();
+      return open(next)
+    };
     const close=api.close&&api.close.bind(api);
-    if(close)api.close=function(){activeSession=null;activePhone='';setReply(null);return close()};
+    if(close)api.close=function(){activeSession=null;activePhone='';lastThreadPhone='';lastThread=[];setReply(null);return close()};
   }
 
   function wrapSubmit(){
