@@ -1,6 +1,7 @@
 (function(){
   if(window.__medsiChatPolishV2)return;
   window.__medsiChatPolishV2=true;
+  if(!document.querySelector('script[data-medsi-terminology-fix]')){const s=document.createElement('script');s.src='/chat-overlay/terminology-fix.js?v=20260906-1';s.dataset.medsiTerminologyFix='1';document.head.appendChild(s)}
 
   const style=document.createElement('style');
   style.textContent=`
@@ -18,8 +19,7 @@
     .chat-card.medsi-deleting-card,.phone-card.medsi-deleting-card{opacity:.38;transform:scale(.992);transition:opacity .2s ease,transform .2s ease}
     .msg-author,.parent-chat-author{letter-spacing:.01em}
     #btnRefreshChats{display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:0!important;line-height:1!important}
-    #btnRefreshChats .refresh-label{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:100%;height:100%}
-    #btnRefreshChats .refresh-label svg{display:block;width:31px;height:31px;overflow:visible}
+    #btnRefreshChats .refresh-label{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:100%;height:100%;font-size:2.05rem!important;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-weight:500;transform:translateY(-1px)}
     #btnRefreshChats.loading .refresh-label{display:none!important}
   `;
   document.head.appendChild(style);
@@ -32,10 +32,10 @@
 
   function redrawRefresh(){
     const btn=document.getElementById('btnRefreshChats');
-    if(!btn||btn.dataset.medsiRefreshV2==='1')return;
-    btn.dataset.medsiRefreshV2='1';
+    if(!btn||btn.dataset.medsiRefreshV3==='1')return;
+    btn.dataset.medsiRefreshV3='1';
     const label=btn.querySelector('.refresh-label');
-    if(label)label.innerHTML='<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M25.8 10.7A11 11 0 1 0 26.6 19" fill="none" stroke="currentColor" stroke-width="3.1" stroke-linecap="round"/><path d="M21.2 7.7h6.8v6.8" fill="none" stroke="currentColor" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    if(label)label.textContent='⟳';
   }
 
   function markMedia(frame){
