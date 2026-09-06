@@ -1,10 +1,11 @@
 (function(){
   if(window.MedsiComposerExperiment)return;
 
-  const GLYPHS={
-    plus:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 5v14M5 12h14' fill='none' stroke='%2316b8c0' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E")`,
-    send:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 19V5M6.5 10.5 12 5l5.5 5.5' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-    back:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m15 5-7 7 7 7' fill='none' stroke='%2316b8c0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`
+  const ICONS={
+    plus:'<svg class="medsi-compose-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>',
+    send:'<svg class="medsi-compose-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6.5 10.5 12 5l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    back:'<svg class="medsi-nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    phone:'<svg class="medsi-phone-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 4.2 9.5 8.5 7.6 10.4c1.3 2.6 3.4 4.7 6 6l1.9-1.9 4.3 2.3c.5.3.8.9.6 1.5l-.5 2.1c-.2.7-.8 1.1-1.5 1.1C9.7 21.5 2.5 14.3 2.5 5.6c0-.7.4-1.3 1.1-1.5l2.1-.5c.6-.1 1.2.1 1.5.6Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
 
   function injectStyles(){
@@ -33,20 +34,16 @@
         border:0!important;background:#18bcc5!important;color:#fff!important;
         box-shadow:0 5px 14px rgba(22,184,192,.20)!important;text-shadow:none!important;
       }
-      #parentChatAttach::before,.educator-exact-clone #chatAttachBtn::before,
-      #parentChatSend::before,.educator-exact-clone #chatReplySendBtn::before,
-      #parentChatBack::before,.educator-exact-clone #btnThreadBack::before{
-        content:''!important;display:block!important;background-repeat:no-repeat!important;
-        background-position:center!important;background-size:contain!important;transform:none!important;
+      #parentChatAttach::before,#parentChatAttach::after,#parentChatSend::before,#parentChatSend::after,
+      #parentChatBack::before,#parentChatBack::after,
+      .educator-exact-clone #chatAttachBtn::before,.educator-exact-clone #chatAttachBtn::after,
+      .educator-exact-clone #chatReplySendBtn::before,.educator-exact-clone #chatReplySendBtn::after,
+      .educator-exact-clone #btnThreadBack::before,.educator-exact-clone #btnThreadBack::after{
+        content:none!important;
       }
-      #parentChatAttach::before,.educator-exact-clone #chatAttachBtn::before{
-        width:22px!important;height:22px!important;background-image:${GLYPHS.plus}!important;
-      }
-      #parentChatSend::before,.educator-exact-clone #chatReplySendBtn::before{
-        width:22px!important;height:22px!important;background-image:${GLYPHS.send}!important;
-      }
-      #parentChatAttach::after,.educator-exact-clone #chatAttachBtn::after,
-      #parentChatSend::after,.educator-exact-clone #chatReplySendBtn::after{content:none!important}
+      .medsi-compose-svg{display:block!important;width:22px!important;height:22px!important;flex:0 0 22px!important;pointer-events:none!important;transform:none!important}
+      .medsi-nav-svg{display:block!important;width:22px!important;height:22px!important;flex:0 0 22px!important;pointer-events:none!important;transform:none!important}
+      .medsi-phone-svg{display:block!important;width:22px!important;height:22px!important;flex:0 0 22px!important;pointer-events:none!important;transform:none!important}
       #parentChatAttach:disabled,#parentChatSend:disabled,
       .educator-exact-clone #chatAttachBtn:disabled,.educator-exact-clone #chatReplySendBtn:disabled{opacity:.52!important}
 
@@ -74,10 +71,7 @@
         border:1.5px solid rgba(22,184,192,.30)!important;background:#fff!important;color:#16b8c0!important;
         display:inline-flex!important;align-items:center!important;justify-content:center!important;
         box-shadow:0 3px 10px rgba(22,184,192,.05)!important;text-decoration:none!important;
-      }
-      #parentChatBack,.educator-exact-clone #btnThreadBack{font-size:0!important}
-      #parentChatBack::before,.educator-exact-clone #btnThreadBack::before{
-        width:22px!important;height:22px!important;background-image:${GLYPHS.back}!important;
+        font-size:0!important;line-height:1!important;
       }
 
       .educator-exact-clone .medsi-chat-thread-top{
@@ -85,18 +79,22 @@
         align-items:center!important;gap:9px!important;margin:0 0 10px!important;width:100%!important;
       }
       .educator-exact-clone .medsi-chat-thread-top #chatThreadHeader{
-        min-width:0!important;width:min(100%,420px)!important;justify-self:center!important;
-        margin:0!important;padding:9px 12px!important;border-radius:14px!important;
-        font-size:.86rem!important;line-height:1.34!important;
+        min-width:0!important;width:min(100%,400px)!important;justify-self:center!important;
+        margin:0!important;padding:10px 14px!important;border-radius:22px!important;
+        border:1.5px solid rgba(22,184,192,.30)!important;background:#f7fdfd!important;
+        color:#16aeb7!important;box-shadow:0 3px 10px rgba(22,184,192,.05)!important;
+        text-shadow:none!important;font-size:.86rem!important;line-height:1.34!important;
       }
-      .educator-exact-clone .medsi-tutor-call{
-        justify-self:end!important;font-size:25px!important;font-weight:500!important;line-height:1!important;
-      }
+      .educator-exact-clone .medsi-tutor-call{justify-self:end!important}
 
       .educator-exact-clone #screenChatThread .chat-compose{
-        display:grid!important;grid-template-columns:44px minmax(0,1fr) 44px!important;
+        display:grid!important;grid-template-columns:48px minmax(0,1fr) 48px!important;
         grid-template-areas:'attach editor send'!important;column-gap:8px!important;row-gap:0!important;
         align-items:end!important;border:0!important;border-top:0!important;box-shadow:none!important;
+      }
+      .educator-exact-clone #chatAttachBtn,.educator-exact-clone #chatReplySendBtn{
+        width:48px!important;min-width:48px!important;max-width:48px!important;
+        height:48px!important;min-height:48px!important;max-height:48px!important;flex-basis:48px!important;
       }
       .educator-exact-clone #chatAttachBtn{grid-area:attach!important;align-self:end!important}
       .educator-exact-clone #chatReplyEditor{
@@ -131,26 +129,37 @@
       .educator-exact-clone #chatThreadBox{border-bottom-color:transparent!important}
 
       @media(max-width:560px){
-        #parentChatCompose,.educator-exact-clone #screenChatThread .chat-compose{
-          grid-template-columns:42px minmax(0,1fr) 42px!important;gap:7px!important;
-        }
-        #parentChatAttach,#parentChatSend,
-        .educator-exact-clone #chatAttachBtn,.educator-exact-clone #chatReplySendBtn{
+        #parentChatCompose{grid-template-columns:42px minmax(0,1fr) 42px!important;gap:7px!important}
+        #parentChatAttach,#parentChatSend{
           width:42px!important;min-width:42px!important;max-width:42px!important;
           height:42px!important;min-height:42px!important;max-height:42px!important;flex-basis:42px!important;
         }
         #parentChatInput{height:48px!important;min-height:48px!important;border-radius:24px!important}
+        .educator-exact-clone #screenChatThread .chat-compose{
+          grid-template-columns:48px minmax(0,1fr) 48px!important;gap:7px!important;
+        }
+        .educator-exact-clone #chatAttachBtn,.educator-exact-clone #chatReplySendBtn{
+          width:48px!important;min-width:48px!important;max-width:48px!important;
+          height:48px!important;min-height:48px!important;max-height:48px!important;flex-basis:48px!important;
+        }
         .educator-exact-clone #chatReplyEditor{min-height:48px!important;border-radius:24px!important}
         .educator-exact-clone #chatReplyInput{height:46px!important;min-height:46px!important}
         .educator-exact-clone .medsi-chat-thread-top{
           grid-template-columns:48px minmax(0,1fr) 48px!important;gap:7px!important;
         }
         .educator-exact-clone .medsi-chat-thread-top #chatThreadHeader{
-          width:min(100%,360px)!important;padding:8px 10px!important;font-size:.80rem!important;line-height:1.31!important;
+          width:min(100%,350px)!important;padding:9px 11px!important;border-radius:20px!important;
+          font-size:.80rem!important;line-height:1.31!important;
         }
       }
     `;
     document.head.appendChild(style);
+  }
+
+  function setIcon(el,name){
+    if(!el||!ICONS[name]||el.dataset.medsiIcon===name)return;
+    el.dataset.medsiIcon=name;
+    el.innerHTML=ICONS[name];
   }
 
   function autoGrow(el,min,max){
@@ -167,9 +176,9 @@
     const send=document.getElementById('parentChatSend');
     const back=document.getElementById('parentChatBack');
     const input=document.getElementById('parentChatInput');
-    if(attach){attach.setAttribute('aria-label','Прикрепить фото или видео');attach.title='Прикрепить фото или видео'}
-    if(send)send.setAttribute('aria-label','Отправить сообщение');
-    if(back)back.setAttribute('aria-label','Назад');
+    if(attach){attach.setAttribute('aria-label','Прикрепить фото или видео');attach.title='Прикрепить фото или видео';setIcon(attach,'plus')}
+    if(send){send.setAttribute('aria-label','Отправить сообщение');setIcon(send,'send')}
+    if(back){back.setAttribute('aria-label','Назад');setIcon(back,'back')}
     if(input&&!input.dataset.medsiAutoGrow){
       input.dataset.medsiAutoGrow='1';
       const grow=()=>autoGrow(input,48,120);
@@ -193,11 +202,11 @@
     if(!call){
       call=document.createElement('a');
       call.className='medsi-tutor-call';
-      call.textContent='✆';
       call.setAttribute('aria-label','Позвонить родителю');
       call.title='Позвонить родителю';
       top.appendChild(call);
     }
+    setIcon(call,'phone');
     const href=phoneHrefFromHeader(header);
     if(href){call.href=href;call.removeAttribute('aria-disabled');call.style.visibility='visible'}
     else{call.removeAttribute('href');call.setAttribute('aria-disabled','true');call.style.visibility='hidden'}
@@ -231,9 +240,9 @@
     if(quick.parentNode!==editorWrap)editorWrap.appendChild(quick);
 
     if(video)video.classList.add('medsi-composer-redundant');
-    if(attach){attach.setAttribute('aria-label','Прикрепить фото или видео');attach.title='Прикрепить фото или видео'}
-    if(send)send.setAttribute('aria-label','Отправить сообщение');
-    back.setAttribute('aria-label','Назад');
+    if(attach){attach.setAttribute('aria-label','Прикрепить фото или видео');attach.title='Прикрепить фото или видео';setIcon(attach,'plus')}
+    if(send){send.setAttribute('aria-label','Отправить сообщение');setIcon(send,'send')}
+    back.setAttribute('aria-label','Назад');setIcon(back,'back');
     quick.setAttribute('aria-label','Быстрые ответы');quick.title='Быстрые ответы';
     if(editor.dataset.placeholder==='Введите ответ родителю...')editor.dataset.placeholder='Введите ответ…';
 
