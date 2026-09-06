@@ -335,14 +335,21 @@ app.get(['/tutors.html', '/psychology.html'], (req, res) => {
 // Never expose the whole repository.  The source tree contains operational
 // notes, backups and server code that the browser does not need.  Assets are
 // explicitly allowlisted instead of using express.static(ROOT).
-const publicStatic = express.static(ROOT, {
+const publicStaticOptions = {
   dotfiles: 'ignore',
   index: false,
   maxAge: 0,
   etag: true
-});
+};
+const publicStatic = express.static(ROOT, publicStaticOptions);
 
-app.use(['/parents', '/chat-overlay', '/tutors-app', '/psychology-app'], publicStatic);
+// A mounted static middleware receives a path without its mount prefix, so
+// each directory needs its own root.  Keeping this explicit prevents assets
+// such as bottom-lock.js from disappearing while still hiding the repository.
+app.use('/parents', express.static(path.join(ROOT, 'parents'), publicStaticOptions));
+app.use('/chat-overlay', express.static(path.join(ROOT, 'chat-overlay'), publicStaticOptions));
+app.use('/tutors-app', express.static(path.join(ROOT, 'tutors-app'), publicStaticOptions));
+app.use('/psychology-app', express.static(path.join(ROOT, 'psychology-app'), publicStaticOptions));
 app.get([
   '/favicon.ico',
   '/apple-touch-icon.png',
