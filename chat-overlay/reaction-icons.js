@@ -74,7 +74,7 @@
   if(!document.querySelector('script[data-medsi-menu-twemoji]')){
     const s=document.createElement('script');
     s.async=false;
-    s.src='/chat-overlay/menu-twemoji.js?v=20260907-1';
+    s.src='/chat-overlay/menu-twemoji.js?v=20260907-2';
     s.dataset.medsiMenuTwemoji='1';
     document.head.appendChild(s);
   }
