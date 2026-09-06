@@ -1,5 +1,6 @@
 (function(){
   const TUTOR_KEY='medsi_tutor_session_v1';
+  const PUSH_ORIGIN='https://medsi-push-worker.medsi-children.workers.dev';
   const nativeFetch=window.fetch.bind(window);
 
   function tutorToken(){
@@ -7,8 +8,14 @@
   }
 
   window.fetch=function(input,init){
+    let nextInput=input;
     try{
-      const url=typeof input==='string'?input:String(input&&input.url||'');
+      let url=typeof input==='string'?input:String(input&&input.url||'');
+      if(url.startsWith(PUSH_ORIGIN)){
+        const parsed=new URL(url);
+        nextInput='/push'+parsed.pathname+parsed.search;
+        url=String(nextInput);
+      }
       if(/\/subscribe(?:\?|$)/.test(url)&&init&&typeof init.body==='string'){
         const body=JSON.parse(init.body);
         if(String(body&&body.role||'').toLowerCase()==='educator'){
@@ -20,6 +27,6 @@
         }
       }
     }catch(_){}
-    return nativeFetch(input,init);
+    return nativeFetch(nextInput,init);
   };
 })();
