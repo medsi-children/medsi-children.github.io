@@ -32,8 +32,24 @@
   function readSession(phone){try{const x=JSON.parse(sessionStorage.getItem(storageKey(phone))||'null');return fresh(x)?x:null}catch(_){return null}}
   function writeSession(phone,res){try{sessionStorage.setItem(storageKey(phone),JSON.stringify({res,at:Date.now()}))}catch(_){}}
   function clearSession(phone){try{if(phone)sessionStorage.removeItem(storageKey(phone));else Object.keys(sessionStorage).filter(k=>k.startsWith('medsi_parent_thread_session_v1_')).forEach(k=>sessionStorage.removeItem(k))}catch(_){}}
-  async function fetchThread(session,phone){const k=key(phone);if(pending.has(k))return pending.get(k);const p=originalThread(session,phone,'',100).then(res=>{const entry={res,at:Date.now()};cache.set(k,entry);writeSession(phone,res);return res}).finally(()=>pending.delete(k));pending.set(k,p);return p}
-  t.thread=function(session,phone,before,limit){const k=key(phone);if(!before){const c=cache.get(k)||readSession(phone);if(fresh(c)){cache.set(k,c);return Promise.resolve(c.res)}if(pending.has(k))return pending.get(k)}return originalThread(session,phone,before,limit).then(res=>{if(!before){const entry={res,at:Date.now()};cache.set(k,entry);writeSession(phone,res)}return res})};
+  function rememberThread(phone,res){const entry={res,at:Date.now()};cache.set(key(phone),entry);writeSession(phone,res);return res}
+  async function fetchThread(session,phone,before,limit){
+    const k=key(phone),pendingKey=(before?'history:':'latest:')+k;
+    if(pending.has(pendingKey))return pending.get(pendingKey);
+    const p=originalThread(session,phone,before||'',limit||100).then(res=>{if(!before)rememberThread(phone,res);return res}).finally(()=>pending.delete(pendingKey));
+    pending.set(pendingKey,p);return p;
+  }
+  t.thread=function(session,phone,before,limit,options){
+    const forceFresh=!!(options&&options.fresh);
+    if(forceFresh)return fetchThread(session,phone,before,limit);
+    const k=key(phone);
+    if(!before){
+      const c=cache.get(k)||readSession(phone);
+      if(fresh(c)){cache.set(k,c);return Promise.resolve(c.res)}
+      const pendingKey='latest:'+k;if(pending.has(pendingKey))return pending.get(pendingKey)
+    }
+    return originalThread(session,phone,before,limit).then(res=>{if(!before)rememberThread(phone,res);return res});
+  };
   function invalidatePhone(phone){cache.delete(key(phone));clearSession(phone)}
   t.sendMessage=async function(session,role,phone,message){const r=await originalSend(session,role,phone,message);invalidatePhone(phone);return r};
   t.edit=async function(session,role,messageKey,text){const r=await originalEdit(session,role,messageKey,text);cache.clear();clearSession();return r};
@@ -42,10 +58,10 @@
 
   let loginWarm=null;
   function extractSession(res){if(!res)return null;if(res.token)return res;if(res.session&&res.session.token)return res.session;if(res.d1Session&&res.d1Session.token)return res.d1Session;return null}
-  function saveLoginSession(phone,session){if(!session||!session.token)return;try{localStorage.setItem('medsi_d1_parent_session_v1',JSON.stringify({phone:p10(phone),session}))}catch(_){};fetchThread(session,phone).catch(()=>{})}
+  function saveLoginSession(phone,session){if(!session||!session.token)return;try{localStorage.setItem('medsi_d1_parent_session_v1',JSON.stringify({phone:p10(phone),session}))}catch(_){};fetchThread(session,phone,'',100).catch(()=>{})}
   function prewarmLogin(phone){const ph=p10(phone);if(!ph)return Promise.resolve(null);if(loginWarm&&loginWarm.phone===ph)return loginWarm.promise;const promise=fetch('/__session/apps-script',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'api',method:'getD1ChatSession',args:['parent',ph,'']}),cache:'no-store'}).then(r=>r.json()).then(p=>{const s=extractSession(p&&p.result);if(s)saveLoginSession(ph,s);return s}).catch(()=>null);loginWarm={phone:ph,promise};return promise}
   function installLoginWarm(){const run=()=>{const btn=document.getElementById('authBtn'),input=document.getElementById('phoneInputAuth');if(btn&&input&&!btn.dataset.medsiSessionWarm){btn.dataset.medsiSessionWarm='1';btn.addEventListener('click',()=>prewarmLogin(input.value),true);input.addEventListener('keydown',e=>{if(e.key==='Enter')prewarmLogin(input.value)},true)}};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run()}
   installLoginWarm();
 
-  window.MedsiParentPrewarm={warm:(session,phone)=>fetchThread(session,phone).catch(()=>null),ready:phone=>pending.get(key(phone))||Promise.resolve((cache.get(key(phone))||readSession(phone))?.res||null),peek:phone=>((cache.get(key(phone))||readSession(phone))?.res||null),clear:()=>{cache.clear();clearSession()},prewarmLogin};
+  window.MedsiParentPrewarm={warm:(session,phone)=>fetchThread(session,phone,'',100).catch(()=>null),ready:phone=>pending.get('latest:'+key(phone))||Promise.resolve((cache.get(key(phone))||readSession(phone))?.res||null),peek:phone=>((cache.get(key(phone))||readSession(phone))?.res||null),clear:()=>{cache.clear();clearSession()},prewarmLogin};
 })();
