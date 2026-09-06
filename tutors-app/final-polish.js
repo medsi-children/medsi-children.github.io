@@ -48,11 +48,6 @@
       #btnParentChats.medsi-chat-opening{opacity:.76!important;filter:saturate(.88)}
       .medsi-chat-opening-spinner{position:absolute;right:18px;bottom:16px;width:24px;height:24px;border:3px solid rgba(255,255,255,.42);border-top-color:#fff;border-radius:50%;animation:medsiChatOpenSpin .72s linear infinite;pointer-events:none;z-index:5}
       @keyframes medsiChatOpenSpin{to{transform:rotate(360deg)}}
-      .refresh-btn{position:relative!important;display:block!important;overflow:hidden!important;padding:0!important;line-height:1!important}
-      .refresh-btn .refresh-label{position:absolute!important;inset:0!important;display:flex!important;align-items:center!important;justify-content:center!important;width:auto!important;height:auto!important;margin:0!important;padding:0!important;line-height:0!important;transform:none!important}
-      .refresh-btn .refresh-label svg{display:block!important;width:26px!important;height:26px!important;overflow:visible!important}
-      .refresh-btn.loading .refresh-label{display:none!important}
-      .refresh-btn .refresh-spinner{position:absolute!important;left:50%!important;top:50%!important;margin:0!important;transform:translate(-50%,-50%)!important}
     `;
     document.head.appendChild(style);
 
@@ -76,11 +71,6 @@
       new MutationObserver(()=>{if(document.body.classList.contains('medsi-chat-overlay-open'))clear()}).observe(document.body,{attributes:true,attributeFilter:['class']});
       window.addEventListener('pageshow',clear);
     }
-
-    const refreshSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.6 8.2A7 7 0 1 0 19 15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M16.2 5.8h4.4v4.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    const repairRefresh=()=>document.querySelectorAll('.refresh-btn .refresh-label').forEach(el=>{if(el.dataset.medsiRefreshFixed==='2')return;el.dataset.medsiRefreshFixed='2';el.innerHTML=refreshSvg});
-    repairRefresh();
-    new MutationObserver(repairRefresh).observe(document.body,{childList:true,subtree:true});
   }
   installChatOpeningUx();
 
