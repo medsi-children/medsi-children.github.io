@@ -13,7 +13,7 @@
     style.textContent=`
       .medsi-message-meta{font-size:10px!important;gap:3px!important;opacity:.72!important}
       .medsi-read-receipt{font-size:11px!important;font-weight:700!important;letter-spacing:-1.5px!important;opacity:.62!important}
-      .medsi-read-receipt.is-read{opacity:.84!important}
+      .medsi-read-receipt.is-read{opacity:.84!important;letter-spacing:-3px!important;min-width:13px!important}
     `;
     document.head.appendChild(style);
   }
