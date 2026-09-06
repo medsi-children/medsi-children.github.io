@@ -1,4 +1,37 @@
 (function(){
+  function installChatOpeningUx(){
+    if(document.getElementById('medsi-parent-chat-opening-style'))return;
+    const style=document.createElement('style');
+    style.id='medsi-parent-chat-opening-style';
+    style.textContent=`
+      #btnChat{position:relative!important;transition:opacity .18s ease,filter .18s ease,transform .18s ease!important}
+      #btnChat.medsi-chat-opening{opacity:.76!important;filter:saturate(.88)}
+      .medsi-chat-opening-spinner{position:absolute;right:18px;bottom:16px;width:24px;height:24px;border:3px solid rgba(255,255,255,.42);border-top-color:#fff;border-radius:50%;animation:medsiChatOpenSpin .72s linear infinite;pointer-events:none;z-index:5}
+      @keyframes medsiChatOpenSpin{to{transform:rotate(360deg)}}
+    `;
+    document.head.appendChild(style);
+    const btn=document.getElementById('btnChat');
+    if(!btn||btn.dataset.medsiOpeningUx)return;
+    btn.dataset.medsiOpeningUx='1';
+    let timer=0;
+    const clear=()=>{
+      if(timer){clearTimeout(timer);timer=0}
+      btn.classList.remove('medsi-chat-opening');
+      const spin=btn.querySelector('.medsi-chat-opening-spinner');if(spin)spin.remove();
+    };
+    btn.addEventListener('click',()=>{
+      clear();
+      timer=setTimeout(()=>{
+        if(document.body.dataset.screen==='screenChat')return;
+        btn.classList.add('medsi-chat-opening');
+        if(!btn.querySelector('.medsi-chat-opening-spinner')){const s=document.createElement('span');s.className='medsi-chat-opening-spinner';s.setAttribute('aria-hidden','true');btn.appendChild(s)}
+      },1000);
+    },true);
+    new MutationObserver(()=>{if(document.body.dataset.screen==='screenChat')clear()}).observe(document.body,{attributes:true,attributeFilter:['data-screen']});
+    window.addEventListener('pageshow',clear);
+  }
+  installChatOpeningUx();
+
   const banner=document.getElementById('reportDisclaimer');
   if(banner){
     const standard='<strong>Пожалуйста, не обсуждайте отчёты с ребёнком и не показывайте их ему.</strong><div class="chat-note-list"><span class="chat-note-item">В отчётах содержатся безоценочные наблюдения о состоянии и поведении ребёнка.</span><span class="chat-note-item">Даже нейтральные фразы могут повлиять на доверие и работу специалистов.</span></div>';
