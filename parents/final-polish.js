@@ -31,8 +31,6 @@
     });
     const chatTitle=document.querySelector('#btnChat .menu-card-title');
     if(chatTitle)chatTitle.style.fontSize='calc(1em + 2px)';
-    const logout=document.getElementById('logoutBtn');
-    if(logout)logout.textContent='Выйти';
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',normalizeParentCopy,{once:true});else normalizeParentCopy();
 
@@ -98,10 +96,10 @@
     const s=document.createElement('script');s.src='/chat-overlay/video-link.js?v=1';s.dataset.medsiVideoLink='1';document.head.appendChild(s);
   }
   if(!document.querySelector('script[data-medsi-reaction-icons]')){
-    const s=document.createElement('script');s.src='/chat-overlay/reaction-icons.js?v=20260907-twemoji-1';s.dataset.medsiReactionIcons='1';document.head.appendChild(s);
+    const s=document.createElement('script');s.src='/chat-overlay/reaction-icons.js?v=20260907-twemoji-2';s.dataset.medsiReactionIcons='1';document.head.appendChild(s);
   }
   if(!document.querySelector('script[data-medsi-message-enhancements]')){
-    const s=document.createElement('script');s.src='/chat-overlay/message-enhancements.js?v=20260906-receipt-layout';s.dataset.medsiMessageEnhancements='1';document.head.appendChild(s);
+    const s=document.createElement('script');s.src='/chat-overlay/message-enhancements.js?v=20260907-artifact-fix-1';s.dataset.medsiMessageEnhancements='1';document.head.appendChild(s);
   }
   if(!document.querySelector('script[data-medsi-bottom-lock]')){
     const s=document.createElement('script');s.src='/chat-overlay/bottom-lock.js?v=20260906-1';s.dataset.medsiBottomLock='1';document.head.appendChild(s);
