@@ -325,15 +325,36 @@ function sendAppFile(res, fileName) {
 }
 
 // Clean production URLs. Keep the .html files themselves available for old bookmarks.
+app.get(['/', '/index.html'], (_req, res) => sendAppFile(res, 'index.html'));
 app.get(['/tutors', '/tutors/'], (_req, res) => sendAppFile(res, 'tutors.html'));
 app.get(['/psychology', '/psychology/'], (_req, res) => sendAppFile(res, 'psychology.html'));
+app.get(['/tutors.html', '/psychology.html'], (req, res) => {
+  sendAppFile(res, req.path === '/tutors.html' ? 'tutors.html' : 'psychology.html');
+});
 
-app.use(express.static(ROOT, {
+// Never expose the whole repository.  The source tree contains operational
+// notes, backups and server code that the browser does not need.  Assets are
+// explicitly allowlisted instead of using express.static(ROOT).
+const publicStatic = express.static(ROOT, {
   dotfiles: 'ignore',
-  index: 'index.html',
+  index: false,
   maxAge: 0,
   etag: true
-}));
+});
+
+app.use(['/parents', '/chat-overlay', '/tutors-app', '/psychology-app'], publicStatic);
+app.get([
+  '/favicon.ico',
+  '/apple-touch-icon.png',
+  '/apple-touch-icon2.png',
+  '/background.png',
+  '/manifest.json',
+  '/tutors-manifest.json',
+  '/notify-client.js',
+  '/sw.js'
+], publicStatic);
+
+app.use((_req, res) => res.status(404).end());
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Medsi Timeweb gateway listening on ${PORT}`);
