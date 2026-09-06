@@ -22,6 +22,13 @@
         width:1.08em;height:1.08em;display:inline-block;object-fit:contain;
         margin-right:.26em;vertical-align:-.12em;pointer-events:none;user-select:none;-webkit-user-drag:none
       }
+      /* The Twemoji speech balloon is fairly dark. On both teal chat cards,
+         use it as a clean white pictogram so it reads like the title text. */
+      #btnChat .menu-card-title .medsi-menu-twemoji,
+      #btnParentChats .menu-card-title .medsi-menu-twemoji{
+        filter:brightness(0) invert(1) drop-shadow(0 1px 1px rgba(17,66,74,.12));
+        opacity:.98;
+      }
     `;
     document.head.appendChild(style);
   }
