@@ -125,6 +125,14 @@
         border-width:1px!important;box-shadow:0 3px 12px rgba(17,66,74,.035)!important;background:rgba(255,255,255,.94)!important;
         transition:opacity .16s ease,background .16s ease,border-color .16s ease,box-shadow .16s ease!important;
       }
+      .educator-exact-clone #chatList .chat-card.medsi-chat-card-enter{
+        animation:medsiChatCardCascade .23s cubic-bezier(.2,.72,.28,1) both;
+        animation-delay:var(--medsi-card-delay,0ms);
+      }
+      @keyframes medsiChatCardCascade{
+        from{opacity:0;transform:translateY(7px) scale(.993)}
+        to{opacity:1;transform:none}
+      }
       .educator-exact-clone #chatList .chat-card.unread{
         border-width:1.5px!important;background:#fff!important;box-shadow:0 5px 15px rgba(22,184,192,.075)!important;
       }
@@ -181,6 +189,9 @@
         #screenPhones .phone-card{padding-right:101px!important}
         #screenPhones .medsi-phone-mini{width:39px!important;min-width:39px!important;max-width:39px!important;height:39px!important;min-height:39px!important;max-height:39px!important}
       }
+      @media(prefers-reduced-motion:reduce){
+        .educator-exact-clone #chatList .chat-card.medsi-chat-card-enter{animation:none!important}
+      }
     `;
     document.head.appendChild(style);
   }
@@ -233,6 +244,14 @@
     }
     const empty=list.querySelector(':scope > .chat-empty');
     if(empty&&(/Новых сообщений нет/i.test(empty.textContent||'')||/Прочитанных чатов нет/i.test(empty.textContent||'')))empty.textContent='Чатов пока нет.';
+    const cards=[...list.querySelectorAll(':scope > .chat-card')];
+    if(!state.didCascade&&cards.length){
+      cards.forEach((card,i)=>{
+        card.style.setProperty('--medsi-card-delay',Math.min(i,8)*26+'ms');
+        card.classList.add('medsi-chat-card-enter');
+      });
+      state.didCascade=true;
+    }
     applyFilter(state);
   }
 
@@ -265,7 +284,7 @@
 
       toolbar.append(backProxy,search,newProxy);
       screen.insertBefore(toolbar,list);
-      state={list,input};toolbar._medsiState=state;
+      state={list,input,didCascade:false};toolbar._medsiState=state;
       input.addEventListener('input',()=>applyFilter(state));
       new MutationObserver(()=>polishList(state)).observe(list,{childList:true,subtree:false});
     }
