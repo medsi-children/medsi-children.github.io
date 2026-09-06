@@ -188,4 +188,7 @@
   if(!document.querySelector('script[data-medsi-bottom-lock]')){
     const s=document.createElement('script');s.src='/chat-overlay/bottom-lock.js?v=20260906-1';s.dataset.medsiBottomLock='1';document.head.appendChild(s);
   }
+  if(!document.querySelector('script[data-medsi-live-chat-refresh]')){
+    const s=document.createElement('script');s.src='/tutors-app/live-chat-refresh.js?v=20260907-1';s.dataset.medsiLiveChatRefresh='1';document.head.appendChild(s);
+  }
 })();
