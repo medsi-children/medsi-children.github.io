@@ -31,6 +31,8 @@
     });
     const chatTitle=document.querySelector('#btnChat .menu-card-title');
     if(chatTitle)chatTitle.style.fontSize='calc(1em + 2px)';
+    const logout=document.getElementById('logoutBtn');
+    if(logout)logout.textContent='Выйти';
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',normalizeParentCopy,{once:true});else normalizeParentCopy();
 
