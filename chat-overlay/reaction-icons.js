@@ -2,15 +2,15 @@
   if(window.MedsiReactionIcons)return;
 
   // Visual-only reaction skin. The chat still stores/sends normal Unicode reactions.
-  // Preview source: Microsoft Fluent Emoji 3D (MIT License).
+  // Preview source: Twitter Twemoji graphics (CC BY 4.0).
   const REACTIONS={
-    '❤️':'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Red%20heart/3D/red_heart_3d.png',
-    '👍':'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Thumbs%20up/Default/3D/thumbs_up_3d_default.png',
-    '👌':'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Ok%20hand/Default/3D/ok_hand_3d_default.png',
-    '🙏':'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Folded%20hands/Default/3D/folded_hands_3d_default.png',
-    '🥰':'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Smiling%20face%20with%20hearts/3D/smiling_face_with_hearts_3d.png',
-    '😁':'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Beaming%20face%20with%20smiling%20eyes/3D/beaming_face_with_smiling_eyes_3d.png',
-    '🔥':'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Fire/3D/fire_3d.png'
+    '❤️':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/2764.svg',
+    '👍':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f44d.svg',
+    '👌':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f44c.svg',
+    '🙏':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f64f.svg',
+    '🥰':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f970.svg',
+    '😁':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f601.svg',
+    '🔥':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f525.svg'
   };
   const selector='.parent-chat-reaction,.parent-chat-reaction-btn,.educator-exact-clone .msg-reaction,.educator-exact-clone .msg-reaction-btn';
 
@@ -67,5 +67,5 @@
   observer.observe(document.documentElement,{childList:true,subtree:true});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>scan(document),{once:true});else scan(document);
 
-  window.MedsiReactionIcons={paint,scan,source:'Microsoft Fluent Emoji 3D'};
+  window.MedsiReactionIcons={paint,scan,source:'Twitter Twemoji'};
 })();
