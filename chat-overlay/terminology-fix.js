@@ -2,6 +2,26 @@
   if(window.__medsiTerminologyFix)return;
   window.__medsiTerminologyFix=true;
 
+  const style=document.createElement('style');
+  style.id='medsi-chat-background-style';
+  style.textContent=`
+    #chatThreadBox.chat-box,
+    .parent-chat-messages{
+      background:
+        radial-gradient(circle at 18% 12%,rgba(36,211,218,.10),transparent 30%),
+        radial-gradient(circle at 82% 88%,rgba(15,199,206,.08),transparent 32%),
+        linear-gradient(180deg,#fbfefe 0%,#f5fbfc 100%) !important;
+      background-image:
+        radial-gradient(circle at 18% 12%,rgba(36,211,218,.10),transparent 30%),
+        radial-gradient(circle at 82% 88%,rgba(15,199,206,.08),transparent 32%),
+        linear-gradient(180deg,#fbfefe 0%,#f5fbfc 100%) !important;
+      background-size:auto !important;
+      background-position:initial !important;
+      background-repeat:no-repeat !important;
+    }
+  `;
+  document.head.appendChild(style);
+
   const pairs=[
     ['воспитателей и психологов','воспитателей'],
     ['Воспитателей и психологов','Воспитателей'],
