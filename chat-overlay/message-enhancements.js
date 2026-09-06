@@ -209,8 +209,9 @@
     });
   }
 
-  t.thread=async function(session,phone,before,limit){
-    const res=await originalThread(session,phone,before,limit);
+  t.thread=async function(...args){
+    const res=await originalThread(...args);
+    const before=args[2];
     if(!before&&res&&Array.isArray(res.messages))lastThread=res.messages.slice();
     scheduleDecorate();
     return res;
