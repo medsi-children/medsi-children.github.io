@@ -18,6 +18,9 @@ const UPLOAD_UPSTREAM = String(
   process.env.UPLOAD_UPSTREAM || 'https://medsi-chat-upload-test.medsi-children.workers.dev'
 ).replace(/\/$/, '');
 const MIGRATION_SHARED_SECRET = String(process.env.MIGRATION_SHARED_SECRET || '');
+// Kept separate from the short-lived legacy-media migration credential.  This
+// secret authorizes only Apps Script's durable deletion queue.
+const REPORTS_SYNC_SECRET = String(process.env.REPORTS_SYNC_SECRET || '');
 
 function timingSafeEqual(left, right) {
   const a = Buffer.from(String(left || ''));
@@ -29,6 +32,13 @@ function migrationAuthorized(req) {
   return Boolean(MIGRATION_SHARED_SECRET) && timingSafeEqual(
     req.get('X-Medsi-Migration-Secret'),
     MIGRATION_SHARED_SECRET
+  );
+}
+
+function reportsSyncAuthorized(req) {
+  return Boolean(REPORTS_SYNC_SECRET) && timingSafeEqual(
+    req.get('X-Medsi-Reports-Sync-Secret'),
+    REPORTS_SYNC_SECRET
   );
 }
 
@@ -288,6 +298,39 @@ app.post('/__migration/media', async (req, res) => {
     console.error('LEGACY_MEDIA_MIGRATION_UPLOAD_FAILED', error);
     res.status(502).json({ ok: false, code: 'MIGRATION_UPLOAD_FAILED' });
   }
+});
+
+// Apps Script places an attachment list into its retryable deletion queue
+// before removing the D1 thread.  This endpoint is deliberately not part of
+// the browser session or the normal upload API.
+app.post('/__sync/purge-s3', express.json({ limit: '128kb' }), async (req, res) => {
+  if (!reportsSyncAuthorized(req)) {
+    res.status(404).end();
+    return;
+  }
+  if (!storage.configured) {
+    res.status(503).json({ ok: false, code: 'S3_NOT_CONFIGURED' });
+    return;
+  }
+
+  const keys = [...new Set(Array.isArray(req.body && req.body.keys) ? req.body.keys : [])]
+    .map(value => String(value || '').trim())
+    .filter(value => value && value.length <= 1024)
+    .slice(0, 500);
+  if (!keys.length) {
+    res.json({ ok: true, deleted: [], failed: [] });
+    return;
+  }
+
+  const result = await Promise.allSettled(keys.map(key => storage.removeObject(key)));
+  const deleted = [];
+  const failed = [];
+  result.forEach((entry, index) => {
+    if (entry.status === 'fulfilled') deleted.push(keys[index]);
+    else failed.push({ key: keys[index], message: String(entry.reason && entry.reason.message || 'S3_DELETE_FAILED') });
+  });
+  res.setHeader('cache-control', 'no-store');
+  res.status(failed.length ? 502 : 200).json({ ok: failed.length === 0, deleted, failed });
 });
 
 app.get('/__health', async (_req, res) => {
