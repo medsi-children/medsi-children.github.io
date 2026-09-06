@@ -1,4 +1,6 @@
 (function(){
+  document.documentElement.classList.add('medsi-tutor-ready');
+
   function normalizeTutorCopy(){
     const replacements=[
       ['воспитателями и психологами','воспитателями'],
@@ -104,6 +106,7 @@
     }
     pushLoading=true;
     const s=document.createElement('script');
+    s.async=false;
     s.src='/notify-client.js?v=20260905-tutor-panel';
     s.onload=()=>{pushLoading=false;initPush()};
     s.onerror=()=>{pushLoading=false};
@@ -165,11 +168,13 @@
 
   if(!window.MedsiVideoLink&&!document.querySelector('script[data-medsi-video-link]')){
     const s=document.createElement('script');
+    s.async=false;
     s.src='/chat-overlay/video-link.js?v=1';
     s.dataset.medsiVideoLink='1';
     s.onload=()=>{
       if(!document.querySelector('script[data-medsi-video-preview]')){
         const p=document.createElement('script');
+        p.async=false;
         p.src='/chat-overlay/video-link-preview.js?v=1';
         p.dataset.medsiVideoPreview='1';
         document.head.appendChild(p);
@@ -178,26 +183,27 @@
     document.head.appendChild(s);
   }else if(!document.querySelector('script[data-medsi-video-preview]')){
     const p=document.createElement('script');
+    p.async=false;
     p.src='/chat-overlay/video-link-preview.js?v=1';
     p.dataset.medsiVideoPreview='1';
     document.head.appendChild(p);
   }
   if(!document.querySelector('script[data-medsi-composer-experiment]')){
-    const s=document.createElement('script');s.src='/chat-overlay/composer-experiment.js?v=20260907-3';s.dataset.medsiComposerExperiment='1';document.head.appendChild(s);
+    const s=document.createElement('script');s.async=false;s.src='/chat-overlay/composer-experiment.js?v=20260907-3';s.dataset.medsiComposerExperiment='1';document.head.appendChild(s);
   }
   if(!document.querySelector('script[data-medsi-chat-list-experiment]')){
-    const s=document.createElement('script');s.src='/chat-overlay/chat-list-experiment.js?v=20260907-1';s.dataset.medsiChatListExperiment='1';document.head.appendChild(s);
+    const s=document.createElement('script');s.async=false;s.src='/chat-overlay/chat-list-experiment.js?v=20260907-2';s.dataset.medsiChatListExperiment='1';document.head.appendChild(s);
   }
   if(!document.querySelector('script[data-medsi-gesture-navigation]')){
-    const s=document.createElement('script');s.src='/chat-overlay/gesture-navigation.js?v=20260907-1';s.dataset.medsiGestureNavigation='1';document.head.appendChild(s);
+    const s=document.createElement('script');s.async=false;s.src='/chat-overlay/gesture-navigation.js?v=20260907-2';s.dataset.medsiGestureNavigation='1';document.head.appendChild(s);
   }
   if(!document.querySelector('script[data-medsi-message-enhancements]')){
-    const s=document.createElement('script');s.src='/chat-overlay/message-enhancements.js?v=20260907-artifact-fix-1';s.dataset.medsiMessageEnhancements='1';document.head.appendChild(s);
+    const s=document.createElement('script');s.async=false;s.src='/chat-overlay/message-enhancements.js?v=20260907-artifact-fix-1';s.dataset.medsiMessageEnhancements='1';document.head.appendChild(s);
   }
   if(!document.querySelector('script[data-medsi-bottom-lock]')){
-    const s=document.createElement('script');s.src='/chat-overlay/bottom-lock.js?v=20260906-1';s.dataset.medsiBottomLock='1';document.head.appendChild(s);
+    const s=document.createElement('script');s.async=false;s.src='/chat-overlay/bottom-lock.js?v=20260906-1';s.dataset.medsiBottomLock='1';document.head.appendChild(s);
   }
   if(!document.querySelector('script[data-medsi-live-chat-refresh]')){
-    const s=document.createElement('script');s.src='/tutors-app/live-chat-refresh.js?v=20260907-1';s.dataset.medsiLiveChatRefresh='1';document.head.appendChild(s);
+    const s=document.createElement('script');s.async=false;s.src='/tutors-app/live-chat-refresh.js?v=20260907-1';s.dataset.medsiLiveChatRefresh='1';document.head.appendChild(s);
   }
 })();
