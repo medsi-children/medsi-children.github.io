@@ -11,38 +11,36 @@
     const style=document.createElement('style');
     style.id='medsi-gesture-navigation-style';
     style.textContent=`
-      /* Small composer finish: parent circles sit optically level with the field. */
+      /* Parent composer circles need a tiny optical lift on iOS. */
       #parentChatCompose #parentChatAttach,
-      #parentChatCompose #parentChatSend{
-        top:-2px!important;
-      }
+      #parentChatCompose #parentChatSend{top:-2px!important}
 
-      /* Quick replies stay a generous tap target, but visually become only three quiet lines. */
+      /* Quick replies keep the same tap target but visually become only quiet grey lines. */
       .educator-exact-clone #btnQuickReplies{
-        border:0!important;
-        background:transparent!important;
-        box-shadow:none!important;
-        color:#9aa6b5!important;
+        border:0!important;background:transparent!important;box-shadow:none!important;color:#a0a9b3!important;
       }
       .educator-exact-clone #btnQuickReplies::before{
-        content:''!important;
-        display:block!important;
-        width:16px!important;
-        height:12px!important;
+        content:''!important;display:block!important;width:16px!important;height:12px!important;
         background:
-          linear-gradient(#9aa6b5,#9aa6b5) 0 0/16px 2px no-repeat,
-          linear-gradient(#9aa6b5,#9aa6b5) 0 5px/16px 2px no-repeat,
-          linear-gradient(#9aa6b5,#9aa6b5) 0 10px/16px 2px no-repeat!important;
+          linear-gradient(#a0a9b3,#a0a9b3) 0 0/16px 2px no-repeat,
+          linear-gradient(#a0a9b3,#a0a9b3) 0 5px/16px 2px no-repeat,
+          linear-gradient(#a0a9b3,#a0a9b3) 0 10px/16px 2px no-repeat!important;
         border-radius:1px!important;
       }
+
+      /* Date chips are inserted after the transport row is matched. Reveal them quietly instead of popping in. */
+      .medsi-date-separator{animation:medsiDateChipIn .18s cubic-bezier(.22,.7,.3,1) both}
+      @keyframes medsiDateChipIn{
+        from{opacity:0;transform:translateY(3px) scale(.985)}
+        to{opacity:1;transform:none}
+      }
+      @media(prefers-reduced-motion:reduce){.medsi-date-separator{animation:none!important}}
     `;
     document.head.appendChild(style);
   }
 
   function visibleModal(){
-    return !!document.querySelector(
-      '.link-modal-overlay:not(.hidden),.parent-chat-lightbox:not(.hidden),.overlay-image-viewer.is-open'
-    );
+    return !!document.querySelector('.link-modal-overlay:not(.hidden),.parent-chat-lightbox:not(.hidden),.overlay-image-viewer.is-open');
   }
 
   function click(el){
@@ -51,43 +49,10 @@
     return true;
   }
 
-  function buttonByText(root,text){
-    if(!root)return null;
-    return Array.from(root.querySelectorAll('button')).find(btn=>String(btn.textContent||'').trim()===text)||null;
-  }
-
-  function tutorBucketIsRead(){
-    const active=document.querySelector('.educator-exact-clone .medsi-list-tab.is-active');
-    if(active)return String(active.textContent||'').trim()==='Прочитанные';
-    const list=document.getElementById('chatList');
-    if(!list)return false;
-    return !!Array.from(list.querySelectorAll('button')).find(btn=>String(btn.textContent||'').includes('Вернуться к непрочитанным'));
-  }
-
-  function tutorToUnread(){
-    const tabs=Array.from(document.querySelectorAll('.educator-exact-clone .medsi-list-tab'));
-    const unread=tabs.find(btn=>String(btn.textContent||'').trim()==='Непрочитанные');
-    if(unread&&click(unread))return true;
-    const legacy=Array.from((document.getElementById('chatList')||document).querySelectorAll('button')).find(btn=>String(btn.textContent||'').includes('Вернуться к непрочитанным'));
-    return click(legacy);
-  }
-
   function tutorOverlayBack(screen){
     if(screen==='screenChatThread')return click(document.getElementById('btnThreadBack'));
-
-    if(screen==='screenNewChat'){
-      const moved=click(document.getElementById('btnParentsBack'));
-      if(moved){
-        setTimeout(()=>tutorToUnread(),0);
-        setTimeout(()=>tutorToUnread(),80);
-      }
-      return moved;
-    }
-
-    if(screen==='screenChats'){
-      if(tutorBucketIsRead())return tutorToUnread();
-      return click(document.getElementById('btnChatsBack'));
-    }
+    if(screen==='screenNewChat')return click(document.getElementById('btnParentsBack'));
+    if(screen==='screenChats')return click(document.getElementById('btnChatsBack'));
     return false;
   }
 
@@ -102,8 +67,6 @@
     if(screen==='screenChat')return click(document.getElementById('parentChatBack'));
     if(screen==='screenReport')return click(document.getElementById('reportBackBtn'));
     if(screen==='screenSchedule')return click(document.getElementById('scheduleBackBtn'));
-
-    // Registration/auth screens follow their fixed structural parent as well.
     if(screen==='screenPhoneReg')return click(document.getElementById('phoneRegBackBtn'));
     if(screen==='screenNames')return click(document.getElementById('namesBackBtn'));
     if(screen==='screenAuth')return click(document.getElementById('authBackBtn'));
@@ -160,7 +123,6 @@
     const dx=endX-current.startX,dy=endY-current.startY,elapsed=Date.now()-current.started;
     if(dx<MIN_X||Math.abs(dx)<Math.abs(dy)*1.35||elapsed>MAX_MS)return;
 
-    // Capture the completed gesture so legacy screen-specific swipe handlers cannot perform a second jump.
     e.preventDefault();
     e.stopImmediatePropagation();
     requestAnimationFrame(()=>current.action());
