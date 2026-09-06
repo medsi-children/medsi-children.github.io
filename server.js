@@ -8,6 +8,7 @@ const storage = require('./lib/s3-storage');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const ROOT = path.resolve(__dirname);
 const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES || 100 * 1024 * 1024);
 const CHAT_UPSTREAM = String(
   process.env.CHAT_UPSTREAM || 'https://medsi-chat-worker.medsi-children.workers.dev'
@@ -245,7 +246,16 @@ app.get('/__diag/network', async (_req, res) => {
   });
 });
 
-app.use(express.static(path.resolve(__dirname), {
+function sendAppFile(res, fileName) {
+  res.setHeader('cache-control', 'no-store');
+  res.sendFile(path.join(ROOT, fileName));
+}
+
+// Clean production URLs. Keep the .html files themselves available for old bookmarks.
+app.get(['/tutors', '/tutors/'], (_req, res) => sendAppFile(res, 'tutors.html'));
+app.get(['/psychology', '/psychology/'], (_req, res) => sendAppFile(res, 'psychology.html'));
+
+app.use(express.static(ROOT, {
   dotfiles: 'ignore',
   index: 'index.html',
   maxAge: 0,
