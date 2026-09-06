@@ -35,9 +35,9 @@
       .medsi-date-separator{
         align-self:center;display:block;max-width:calc(100% - 32px);
         margin:7px auto 3px;padding:5px 11px;border-radius:999px;
-        background:rgba(239,248,249,.94);border:1px solid rgba(74,139,147,.18);
-        box-shadow:0 3px 10px rgba(44,92,99,.08);
-        color:#658087;font-size:11px;font-weight:750;line-height:1.2;
+        background:#f2fcfd;border:1px solid rgba(22,184,192,.25);
+        box-shadow:0 3px 10px rgba(22,184,192,.06);
+        color:#16aeb7;font-size:11px;font-weight:750;line-height:1.2;
         text-align:center;white-space:nowrap;pointer-events:none;user-select:none
       }
       .medsi-parent-reply-preview{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 11px;margin:0 0 8px;border-radius:12px;border:1px solid rgba(36,211,218,.28);background:#f2fcfd;color:#285a62;animation:medsiReplyIn .18s ease both}
@@ -59,8 +59,29 @@
   let activeSession=null;
   let activePhone='';
   let replyTarget=null;
+  const threadByPhone=new Map();
+  const phoneKey=v=>String(v||'').replace(/\D+/g,'').slice(-10);
   const originalThread=t.thread.bind(t);
   const originalSend=t.sendMessage.bind(t);
+
+  function rememberThread(phone,rows){
+    const key=phoneKey(phone);if(!key||!Array.isArray(rows))return;
+    const copy=rows.slice();threadByPhone.set(key,copy);
+    if(key===phoneKey(activePhone)||key===phoneKey(lastThreadPhone)){lastThreadPhone=String(phone||'');lastThread=copy}
+  }
+  function currentTutorPhone(){
+    const header=document.getElementById('chatThreadHeader');if(!header)return'';
+    const line=[...header.querySelectorAll('div')].map(el=>String(el.textContent||'')).find(text=>/Номер телефона/i.test(text))||'';
+    return phoneKey(line)
+  }
+  function rowsFor(selector){
+    if(selector.includes('parentChatMessages')){
+      const key=phoneKey(activePhone||lastThreadPhone);
+      return threadByPhone.get(key)||lastThread;
+    }
+    const key=currentTutorPhone();
+    return threadByPhone.get(key)||(key&&key===phoneKey(lastThreadPhone)?lastThread:[]);
+  }
 
   function moscowParts(value){
     const d=new Date(Number(value));
@@ -185,9 +206,11 @@
   function decorateThread(selector,ownSide,ownClass){
     const nodes=[...document.querySelectorAll(selector)];
     if(!nodes.length)return;
+    const rows=rowsFor(selector);
+    if(!rows||!rows.length)return;
     let previousKey='';
     nodes.forEach((el,i)=>{
-      const row=lastThread[i]||null;
+      const row=rows[i]||null;
       if(!row){
         el.classList.remove('medsi-meta-ready');
         return;
@@ -210,25 +233,28 @@
   function scheduleDecorate(){
     if(decorateScheduled)return;
     decorateScheduled=true;
-    requestAnimationFrame(()=>{
+    const run=()=>{
       decorateScheduled=false;
       decorateAll();
       syncReplyAction();
-    });
+    };
+    if(window.queueMicrotask)queueMicrotask(run);else Promise.resolve().then(run);
   }
 
   t.thread=async function(...args){
     const before=args[2];
     const phone=String(args[1]||'');
-    if(!before&&phone&&phone!==lastThreadPhone){
+    const key=phoneKey(phone);
+    if(!before&&phone&&key!==phoneKey(lastThreadPhone)){
       lastThreadPhone=phone;
-      lastThread=[];
+      lastThread=threadByPhone.get(key)||[];
       scheduleDecorate();
     }
     const res=await originalThread(...args);
     if(!before&&res&&Array.isArray(res.messages)){
       lastThreadPhone=phone;
       lastThread=res.messages.slice();
+      rememberThread(phone,lastThread);
     }
     scheduleDecorate();
     return res;
@@ -266,7 +292,8 @@
     const menu=document.querySelector('.parent-chat-context:not(.hidden)');
     if(!menu)return null;
     const idx=Number(menu.dataset.medsiIndex);
-    return Number.isInteger(idx)?lastThread[idx]:null;
+    const rows=rowsFor('#parentChatMessages .parent-chat-msg');
+    return Number.isInteger(idx)?rows[idx]||null:null;
   }
 
   function keepMenuOnScreen(menu){
@@ -302,8 +329,26 @@
     }
   },true);
 
-  const mo=new MutationObserver(()=>scheduleDecorate());
+  const mo=new MutationObserver(()=>{
+    decorateAll();
+    syncReplyAction();
+  });
   mo.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+
+  function captureParentPrewarm(){
+    const pre=window.MedsiParentPrewarm;
+    if(!pre||pre.__medsiMessageRowsWrapped||typeof pre.ready!=='function')return;
+    pre.__medsiMessageRowsWrapped=true;
+    const ready=pre.ready.bind(pre);
+    pre.ready=async function(phone){
+      const res=await ready(phone);
+      if(res&&Array.isArray(res.messages)){
+        rememberThread(phone,res.messages);
+        if(phoneKey(activePhone)===phoneKey(phone)){lastThreadPhone=String(phone||'');lastThread=res.messages.slice()}
+      }
+      return res;
+    };
+  }
 
   function captureParentState(){
     const api=window.MedsiParentChatScreen;
@@ -314,7 +359,7 @@
       activeSession=next&&next.session||null;
       activePhone=next&&next.phone||'';
       lastThreadPhone=String(activePhone||'');
-      lastThread=[];
+      lastThread=threadByPhone.get(phoneKey(activePhone))||[];
       setReply(null);
       scheduleDecorate();
       return open(next)
@@ -348,7 +393,7 @@
     },true);
   }
 
-  function boot(){injectStyles();captureParentState();wrapSubmit();scheduleDecorate()}
+  function boot(){injectStyles();captureParentPrewarm();captureParentState();wrapSubmit();scheduleDecorate()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,0),{once:true});else setTimeout(boot,0);
   setInterval(boot,700);
 })();
