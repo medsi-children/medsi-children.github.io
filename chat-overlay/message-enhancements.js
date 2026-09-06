@@ -6,7 +6,10 @@
   function injectStyles(){
     if(document.getElementById('medsi-message-enhancement-style'))return;
     const s=document.createElement('style');s.id='medsi-message-enhancement-style';s.textContent=`
-      .medsi-read-receipt{position:absolute;right:50px;bottom:7px;font-size:12px;line-height:1;font-weight:900;letter-spacing:-2px;opacity:.72;user-select:none}
+      /* Keep the delivery state in its own reserved corner.  The timestamp
+         moves left, so long labels such as "сегодня 23:01" never overlap it. */
+      .medsi-read-receipt{position:absolute;right:11px;bottom:7px;width:24px;text-align:right;font-size:12px;line-height:1;font-weight:900;letter-spacing:-2px;opacity:.72;user-select:none}
+      .parent-chat-time,.msg-time{right:45px!important}
       .medsi-read-receipt.is-read{color:#10aeb8;opacity:1}
       .educator .medsi-read-receipt{color:rgba(255,255,255,.9)}
       .educator .medsi-read-receipt.is-read{color:#fff}
