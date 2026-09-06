@@ -1,6 +1,7 @@
 'use strict';
 
 require('./lib/session-preload');
+const crypto = require('crypto');
 const express = require('express');
 const path = require('path');
 const database = require('./lib/database');
@@ -16,6 +17,20 @@ const CHAT_UPSTREAM = String(
 const UPLOAD_UPSTREAM = String(
   process.env.UPLOAD_UPSTREAM || 'https://medsi-chat-upload-test.medsi-children.workers.dev'
 ).replace(/\/$/, '');
+const MIGRATION_SHARED_SECRET = String(process.env.MIGRATION_SHARED_SECRET || '');
+
+function timingSafeEqual(left, right) {
+  const a = Buffer.from(String(left || ''));
+  const b = Buffer.from(String(right || ''));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function migrationAuthorized(req) {
+  return Boolean(MIGRATION_SHARED_SECRET) && timingSafeEqual(
+    req.get('X-Medsi-Migration-Secret'),
+    MIGRATION_SHARED_SECRET
+  );
+}
 
 function forwardedHeaders(req) {
   const headers = new Headers();
@@ -214,6 +229,64 @@ app.post('/chat-upload', async (req, res) => {
       code: unsupported ? 'UNSUPPORTED_MEDIA' : 'UPLOAD_FAILED',
       message: unsupported ? error.message : 'Не удалось загрузить вложение.'
     });
+  }
+});
+
+// This endpoint is intentionally separate from normal chat uploads. It is for
+// the one-off legacy-media migration only: Apps Script sends a source file
+// after reading it from Drive/KV, then updates D1 itself only after the hash
+// returned below matches the source hash. It is inert until a Timeweb secret
+// is configured and cannot be authenticated by a browser chat session.
+app.post('/__migration/media', async (req, res) => {
+  if (!migrationAuthorized(req)) {
+    res.status(404).end();
+    return;
+  }
+  if (!storage.configured) {
+    res.status(503).json({ ok: false, code: 'S3_NOT_CONFIGURED' });
+    return;
+  }
+
+  const expectedSha256 = String(req.get('X-Medsi-Source-Sha256') || '')
+    .trim()
+    .toLowerCase();
+  const length = Number(req.headers['content-length'] || 0);
+  if (!/^[a-f0-9]{64}$/.test(expectedSha256)) {
+    res.status(400).json({ ok: false, code: 'SOURCE_HASH_REQUIRED' });
+    return;
+  }
+  if (length <= 0 || length > MAX_UPLOAD_BYTES) {
+    res.status(413).json({ ok: false, code: 'FILE_TOO_LARGE' });
+    return;
+  }
+
+  let uploaded;
+  try {
+    uploaded = await storage.uploadStream({
+      body: req,
+      contentType: req.get('content-type') || '',
+      contentLength: length,
+      fileName: req.get('X-File-Name') || 'legacy-attachment'
+    });
+    const sha256 = await storage.sha256Object(uploaded.key);
+    if (!timingSafeEqual(sha256, expectedSha256)) {
+      await storage.removeObject(uploaded.key);
+      res.status(422).json({ ok: false, code: 'SOURCE_HASH_MISMATCH' });
+      return;
+    }
+    res.setHeader('cache-control', 'no-store');
+    res.json({
+      ok: true,
+      fileId: 's3:' + uploaded.key,
+      type: uploaded.mediaType,
+      sha256
+    });
+  } catch (error) {
+    if (uploaded && uploaded.key) {
+      try { await storage.removeObject(uploaded.key); } catch (_) {}
+    }
+    console.error('LEGACY_MEDIA_MIGRATION_UPLOAD_FAILED', error);
+    res.status(502).json({ ok: false, code: 'MIGRATION_UPLOAD_FAILED' });
   }
 });
 
