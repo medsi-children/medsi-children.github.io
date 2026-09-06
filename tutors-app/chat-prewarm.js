@@ -1,6 +1,6 @@
 (function(){
   if(!document.querySelector('script[data-medsi-upload-ux]')){const s=document.createElement('script');s.src='/chat-overlay/upload-ux.js?v=20260905-uploadux1';s.dataset.medsiUploadUx='1';document.head.appendChild(s)}
-  if(!document.querySelector('script[data-medsi-chat-polish]')){const s=document.createElement('script');s.src='/chat-overlay/chat-polish.js?v=20260906-polish1';s.dataset.medsiChatPolish='1';document.head.appendChild(s)}
+  if(!document.querySelector('script[data-medsi-chat-polish]')){const s=document.createElement('script');s.src='/chat-overlay/chat-polish-v2.js?v=20260906-polish2';s.dataset.medsiChatPolish='1';document.head.appendChild(s)}
   const transport=window.MedsiOverlayTransport;
   if(!transport||transport.__medsiPrewarmWrapped)return;
   transport.__medsiPrewarmWrapped=true;
@@ -20,11 +20,7 @@
   function threadKey(session,phone,before,limit){return String(session&&session.token||'').slice(-18)+'|'+phone10(phone)+'|'+String(before||'')+'|'+String(limit||50)}
   async function fetchList(session,bucket){const key=listKey(session,bucket);if(listInFlight.has(key))return listInFlight.get(key);const p=original.chats(session,bucket).then(res=>{listCache.set(key,{value:res,at:now()});return res}).finally(()=>listInFlight.delete(key));listInFlight.set(key,p);return p}
   async function fetchThread(session,phone,before,limit){const key=threadKey(session,phone,before,limit);if(threadInFlight.has(key))return threadInFlight.get(key);const p=original.thread(session,phone,before,limit).then(res=>{threadCache.set(key,{value:res,at:now()});return res}).finally(()=>threadInFlight.delete(key));threadInFlight.set(key,p);return p}
-  async function warmThread(session,phone){
-    const key=threadKey(session,phone,'',100);
-    const cached=threadCache.get(key);if(cached&&now()-cached.at<45000)return cached.value;
-    try{const res=await original.thread(session,phone,'',100);threadCache.set(key,{value:res,at:now()});return res}catch(_){return null}
-  }
+  async function warmThread(session,phone){const key=threadKey(session,phone,'',100);const cached=threadCache.get(key);if(cached&&now()-cached.at<45000)return cached.value;try{const res=await original.thread(session,phone,'',100);threadCache.set(key,{value:res,at:now()});return res}catch(_){return null}}
   transport.chats=function(session,bucket){const key=listKey(session,bucket),cached=listCache.get(key);if(cached){if(now()-cached.at>3500)fetchList(session,bucket).catch(()=>{});return Promise.resolve(cached.value)}return fetchList(session,bucket)};
   transport.thread=function(session,phone,before,limit){const key=threadKey(session,phone,before,limit),cached=threadCache.get(key);if(cached){if(now()-cached.at>5000)warmThread(session,phone).catch(()=>{});return Promise.resolve(cached.value)}return fetchThread(session,phone,before,limit)};
   function clearLists(session){const prefix=String(session&&session.token||'').slice(-18)+'|';[...listCache.keys()].forEach(k=>{if(k.startsWith(prefix))listCache.delete(k)})}
@@ -35,12 +31,17 @@
   transport.remove=async function(session,role,key){const res=await original.remove(session,role,key);clearLists(session);threadCache.clear();return res};
   transport.pin=async function(session,phone,bucket){const res=await original.pin(session,phone,bucket);clearLists(session);return res};
 
+  function networkAllowsThreadWarm(){const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;if(c&&c.saveData)return false;const type=String(c&&c.effectiveType||'').toLowerCase();return type!=='slow-2g'&&type!=='2g'}
   function uniquePhones(chats){const seen=new Set(),out=[];(chats||[]).forEach(chat=>{const p=phone10(chat&&chat.phone);if(p&&!seen.has(p)){seen.add(p);out.push(p)}});return out}
-  async function warmQueue(session,phones,runId,delay){
+  async function warmPriority(session,chats,runId){
+    if(!networkAllowsThreadWarm())return;
+    const phones=uniquePhones(chats).slice(0,2);
+    if(!phones.length)return;
+    await sleep(700);
     for(const phone of phones){
       if(runId!==backgroundRun||document.hidden||!sameSession(savedSession(),session))return;
       await warmThread(session,phone);
-      await sleep(delay);
+      await sleep(220);
     }
   }
   async function start(session){
@@ -50,18 +51,18 @@
     try{
       const [u,r]=await Promise.all([fetchList(session,'unread').catch(()=>({chats:[]})),fetchList(session,'read').catch(()=>({chats:[]}))]);
       if(runId!==backgroundRun||!sameSession(savedSession(),session))return;
-      const unread=Array.isArray(u&&u.chats)?u.chats:[],read=Array.isArray(r&&r.chats)?r.chats:[];
-      const all=uniquePhones(unread.concat(read));
-      const priority=all.slice(0,4),rest=all.slice(4);
-      await warmQueue(session,priority,runId,90);
-      if(rest.length){await sleep(1200);await warmQueue(session,rest,runId,180)}
+      const unread=Array.isArray(u&&u.chats)?u.chats:[];
+      // Warm the lists immediately, but do not crawl every thread in the background.
+      // On constrained workplace Wi-Fi that extra traffic can starve the foreground chat request.
+      warmPriority(session,unread,runId).catch(()=>{});
+      return r;
     }catch(_){}
   }
   async function ensureSession(){const existing=savedSession();if(existing){start(existing);return existing}const tutor=String(localStorage.getItem(TUTOR_KEY)||'');if(!tutor)return null;if(sessionRequest)return sessionRequest;sessionRequest=(async()=>{try{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method:'getD1ChatSession',args:['educator','',tutor]}),cache:'no-store'});const p=await r.json();const x=p&&p.ok?p.result:null;const s=x&&x.d1Session&&x.d1Session.token?x.d1Session:x&&x.session&&x.session.token?x.session:x&&x.token?x:null;if(s&&s.token){saveSession(s);start(s);return s}}catch(_){}return null})().finally(()=>{sessionRequest=null});return sessionRequest}
   function kick(){ensureSession().catch(()=>{})}
   kick();
-  const timer=setInterval(()=>{const s=savedSession();if(s&&s.token!==startedForToken)start(s);else if(!s)ensureSession().catch(()=>{});if(startedForToken&&s&&s.token===startedForToken)clearInterval(timer)},450);
-  setTimeout(()=>clearInterval(timer),30000);
+  const timer=setInterval(()=>{const s=savedSession();if(s&&s.token!==startedForToken)start(s);else if(!s)ensureSession().catch(()=>{});if(startedForToken&&s&&s.token===startedForToken)clearInterval(timer)},500);
+  setTimeout(()=>clearInterval(timer),20000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){const s=savedSession();if(s)start(s)}});
   window.MedsiEducatorPrewarm={kick,clear(){backgroundRun++;listCache.clear();threadCache.clear();startedForToken=''}};
 })();
