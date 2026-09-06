@@ -1,4 +1,14 @@
 /* tutors_test only: reserve the final layout before async chat data arrives. */
+html:not(.medsi-tutor-ready) body>.wrap,
+html:not(.medsi-tutor-ready) .auth-gate .educator-start-brand{visibility:hidden!important}
+html.medsi-tutor-ready body>.wrap,
+html.medsi-tutor-ready .auth-gate .educator-start-brand{animation:medsiTutorShellIn .12s ease both}
+@keyframes medsiTutorShellIn{from{opacity:0}to{opacity:1}}
+
+/* Never flash the old oversized chat-list action row while the messenger toolbar mounts. */
+.educator-exact-clone #screenChats>.row{display:none!important}
+.educator-exact-clone #screenChats #chatList>div:has(>button.btn){display:none!important}
+
 .educator-exact-clone #screenChats #chatList{
   min-height:58px;
 }
