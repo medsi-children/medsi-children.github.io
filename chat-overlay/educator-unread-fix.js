@@ -43,7 +43,7 @@
 
   if(!document.querySelector('script[data-medsi-reaction-icons]')){
     const s=document.createElement('script');
-    s.src='/chat-overlay/reaction-icons.js?v=20260907-twemoji-1';
+    s.src='/chat-overlay/reaction-icons.js?v=20260907-twemoji-2';
     s.dataset.medsiReactionIcons='1';
     document.head.appendChild(s);
   }
