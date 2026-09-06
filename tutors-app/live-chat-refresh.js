@@ -24,12 +24,15 @@
   function session(){
     try{
       const s=JSON.parse(localStorage.getItem('medsi_d1_educator_session_v1')||'null');
-      return s&&s.token?s:null;
+      if(!s||!s.token)return null;
+      if(Number(s.expiresAt||0)&&Number(s.expiresAt)<=Date.now()+3000)return null;
+      return s;
     }catch(_){return null}
   }
   function overlayOpen(){return !!document.querySelector('.medsi-chat-overlay.educator-exact-clone')}
   function listVisible(){const el=document.getElementById('screenChats');return overlayOpen()&&document.body.dataset.screen==='screenChats'&&el&&!el.classList.contains('hidden')}
   function threadVisible(){const el=document.getElementById('screenChatThread');return overlayOpen()&&document.body.dataset.screen==='screenChatThread'&&el&&!el.classList.contains('hidden')}
+  function menuVisible(){const gate=document.getElementById('tutorAuthGate');return !overlayOpen()&&document.body.dataset.screen==='screenChoose'&&gate&&gate.classList.contains('hidden')}
   function modalOpen(){const el=document.getElementById('childDeleteModal');return !!el&&!el.classList.contains('hidden')}
   function currentBucket(){
     const list=document.getElementById('chatList');
@@ -42,11 +45,17 @@
     const line=[...header.querySelectorAll('div')].map(x=>String(x.textContent||'')).find(x=>/Номер телефона/i.test(x))||'';
     return phone10(line)
   }
-  function readState(m){return [m&&m.readByEducator,m&&m.readByEducatorAt,m&&m.educatorRead,m&&m.educatorReadAt,m&&m.read_by_educator,m&&m.educator_read_at,m&&m.readByParent,m&&m.readByParentAt,m&&m.parentRead,m&&m.parentReadAt,m&&m.read_by_parent,m&&m.parent_read_at,m&&m.readByOther,m&&m.otherReadAt,m&&m.isRead,m&&m.read]}
+  function receiptState(m){
+    if(!m||String(m.side||'')!=='educator')return[];
+    return [
+      m.readByParent,m.readByParentAt,m.parentRead,m.parentReadAt,m.read_by_parent,m.parent_read_at,
+      m.readByOther,m.otherReadAt,m.isRead,m.read
+    ]
+  }
   function threadSig(rows){
     return JSON.stringify((rows||[]).map(m=>[
       m&&m.messageKey||'',m&&m.side||'',m&&m.type||'',m&&m.text||'',m&&m.fileId||'',m&&m.reaction||'',
-      m&&m.editedAt||'',m&&m.timestamp||'',m&&m.replyToKey||'',m&&m.reply&&m.reply.messageKey||'',m&&m.reply&&m.reply.text||'',readState(m)
+      m&&m.editedAt||'',m&&m.timestamp||'',m&&m.replyToKey||'',m&&m.reply&&m.reply.messageKey||'',m&&m.reply&&m.reply.text||'',receiptState(m)
     ]))
   }
   function chatSig(rows){
@@ -158,13 +167,22 @@
     setTimeout(()=>{silentThreadRefresh=false},260);
   }
 
+  async function refreshMenuBadge(s){
+    const badge=document.getElementById('newParentMsgBanner');if(!badge)return;
+    try{
+      const res=await baseChats(s,'unread',{fresh:true});
+      badge.classList.toggle('hidden',!chatsFrom(res).some(chat=>!!chat.hasUnread));
+    }catch(_){}
+  }
+
   async function tick(){
-    if(running||document.hidden||!overlayOpen()||modalOpen())return;
+    if(running||document.hidden||modalOpen())return;
     const s=session();if(!s)return;
     running=true;
     try{
       if(threadVisible())await refreshVisibleThread(s);
       else if(listVisible())await refreshVisibleList(s);
+      else if(menuVisible())await refreshMenuBadge(s);
     }catch(_){}
     finally{running=false}
   }
@@ -178,6 +196,7 @@
     const del=target.closest('.chat-delete-toggle');
     if(del){const card=del.closest('.chat-card');pendingDeletePhone=phone10(card&&card.dataset.phone||'');return}
     if(target.closest('#childDeleteCancel')){pendingDeletePhone='';deleteRefreshPhone='';return}
+    if(target.id==='childDeleteModal'){pendingDeletePhone='';deleteRefreshPhone='';return}
     const confirm=target.closest('#childDeleteConfirm');
     if(confirm&&pendingDeletePhone){deleteRefreshPhone=pendingDeletePhone}
   },true);
