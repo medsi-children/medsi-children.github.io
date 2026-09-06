@@ -18,20 +18,6 @@
   function patchOverlay(root){
     if(!root)return;
     root.querySelectorAll('.msg-image-wrap img,.msg-image-wrap video').forEach(prepareMedia);
-    const back=root.querySelector('#btnThreadBack');
-    if(back&&!back.dataset.medsiBackPatched){
-      back.dataset.medsiBackPatched='1';
-      back.addEventListener('click',e=>{
-        e.preventDefault();e.stopImmediatePropagation();
-        const thread=root.querySelector('#screenChatThread');const list=root.querySelector('#screenChats');
-        if(thread)thread.classList.add('hidden');
-        if(list){list.classList.remove('hidden');list.classList.remove('web-polish-enter');void list.offsetWidth;list.classList.add('web-polish-enter')}
-        document.body.dataset.screen='screenChats';
-        const title=root.querySelector('#title'),meta=root.querySelector('#meta');
-        if(title)title.textContent='Чат с родителями';
-        if(meta&&meta.textContent==='')meta.textContent='Выберите чат с нужным родителем.';
-      },true);
-    }
     root.querySelectorAll('#screenChats:not(.hidden),#screenNewChat:not(.hidden),#screenChatThread:not(.hidden)').forEach(el=>{
       if(el.dataset.medsiEnter==='1')return;
       el.dataset.medsiEnter='1';el.classList.add('web-polish-enter');
