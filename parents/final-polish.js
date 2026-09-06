@@ -1,4 +1,25 @@
 (function(){
+  function normalizeParentCopy(){
+    const replacements=[
+      ['воспитателями и психологами','воспитателями'],
+      ['воспитателей и психологов','воспитателей'],
+      ['Воспитатели и психологи','Воспитатели'],
+      ['воспитатели и психологи','воспитатели']
+    ];
+    const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+    const nodes=[];let node;
+    while((node=walker.nextNode()))nodes.push(node);
+    nodes.forEach(textNode=>{
+      let value=textNode.nodeValue||'';
+      let next=value;
+      replacements.forEach(([from,to])=>{next=next.split(from).join(to)});
+      if(next!==value)textNode.nodeValue=next;
+    });
+    const chatTitle=document.querySelector('#btnChat .menu-card-title');
+    if(chatTitle)chatTitle.style.fontSize='calc(1em + 2px)';
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',normalizeParentCopy,{once:true});else normalizeParentCopy();
+
   function installChatOpeningUx(){
     if(document.getElementById('medsi-parent-chat-opening-style'))return;
     const style=document.createElement('style');
