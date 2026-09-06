@@ -34,7 +34,24 @@
         from{opacity:0;transform:translateY(3px) scale(.985)}
         to{opacity:1;transform:none}
       }
-      @media(prefers-reduced-motion:reduce){.medsi-date-separator{animation:none!important}}
+
+      /* Lightweight swipe-back affordance: only the hint follows the finger, never the whole screen. */
+      .medsi-swipe-back-hint{
+        position:fixed;z-index:25000;left:8px;width:38px;height:38px;border-radius:999px;
+        display:grid;place-items:center;pointer-events:none;opacity:0;
+        color:#16b8c0;background:rgba(249,254,254,.96);border:1.5px solid rgba(22,184,192,.32);
+        box-shadow:0 7px 18px rgba(22,184,192,.12),inset 0 1px 0 rgba(255,255,255,.86);
+        transform:translate3d(-8px,-50%,0) scale(.86);transform-origin:center;
+        transition:opacity .08s linear;will-change:transform,opacity;
+      }
+      .medsi-swipe-back-hint svg{
+        width:19px;height:19px;display:block;fill:none;stroke:currentColor;stroke-width:2.35;
+        stroke-linecap:round;stroke-linejoin:round;
+      }
+      @media(prefers-reduced-motion:reduce){
+        .medsi-date-separator{animation:none!important}
+        .medsi-swipe-back-hint{transition:none!important}
+      }
     `;
     document.head.appendChild(style);
   }
@@ -95,6 +112,38 @@
     return !!(target&&target.closest&&target.closest('input,textarea,[contenteditable="true"],video,audio'));
   }
 
+  function createHint(y){
+    const hint=document.createElement('div');
+    hint.className='medsi-swipe-back-hint';
+    hint.setAttribute('aria-hidden','true');
+    hint.innerHTML='<svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg>';
+    const top=Math.max(52,Math.min(window.innerHeight-52,Number(y)||window.innerHeight/2));
+    hint.style.top=top+'px';
+    document.body.appendChild(hint);
+    return hint;
+  }
+
+  function updateHint(current,dx){
+    if(!current||!current.hint)return;
+    const x=Math.max(0,Math.min(30,dx*.28));
+    const progress=Math.max(0,Math.min(1,dx/MIN_X));
+    current.hint.style.opacity=String(Math.max(0,Math.min(1,(dx-4)/20)));
+    current.hint.style.transform='translate3d('+(-8+x)+'px,-50%,0) scale('+(0.86+0.16*progress)+')';
+  }
+
+  function dismissHint(current,commit){
+    const hint=current&&current.hint;if(!hint)return;
+    hint.style.transition='transform .14s cubic-bezier(.22,.7,.3,1),opacity .14s ease';
+    if(commit){
+      hint.style.opacity='0';
+      hint.style.transform='translate3d(32px,-50%,0) scale(1.08)';
+    }else{
+      hint.style.opacity='0';
+      hint.style.transform='translate3d(-10px,-50%,0) scale(.84)';
+    }
+    setTimeout(()=>{if(hint.isConnected)hint.remove()},160);
+  }
+
   document.addEventListener('touchstart',e=>{
     gesture=null;
     if(e.touches.length!==1||interactiveStart(e.target))return;
@@ -103,7 +152,7 @@
     const t=e.touches[0];
     const left=window.visualViewport?window.visualViewport.offsetLeft:0;
     if(t.clientX-left>EDGE_PX)return;
-    gesture={action,startX:t.clientX,startY:t.clientY,lastX:t.clientX,lastY:t.clientY,started:Date.now(),valid:true};
+    gesture={action,startX:t.clientX,startY:t.clientY,lastX:t.clientX,lastY:t.clientY,started:Date.now(),valid:true,hint:createHint(t.clientY)};
   },{capture:true,passive:true});
 
   document.addEventListener('touchmove',e=>{
@@ -111,7 +160,12 @@
     const t=e.touches[0];
     gesture.lastX=t.clientX;gesture.lastY=t.clientY;
     const dx=t.clientX-gesture.startX,dy=t.clientY-gesture.startY;
-    if(dx<0||Math.abs(dy)>Math.max(24,Math.abs(dx)*1.15))gesture.valid=false;
+    if(dx<0||Math.abs(dy)>Math.max(24,Math.abs(dx)*1.15)){
+      gesture.valid=false;
+      dismissHint(gesture,false);
+      return;
+    }
+    updateHint(gesture,dx);
   },{capture:true,passive:true});
 
   document.addEventListener('touchend',e=>{
@@ -121,14 +175,20 @@
     const t=e.changedTouches&&e.changedTouches[0];
     const endX=t?t.clientX:current.lastX,endY=t?t.clientY:current.lastY;
     const dx=endX-current.startX,dy=endY-current.startY,elapsed=Date.now()-current.started;
-    if(dx<MIN_X||Math.abs(dx)<Math.abs(dy)*1.35||elapsed>MAX_MS)return;
+    const commit=dx>=MIN_X&&Math.abs(dx)>=Math.abs(dy)*1.35&&elapsed<=MAX_MS;
+    dismissHint(current,commit);
+    if(!commit)return;
 
     e.preventDefault();
     e.stopImmediatePropagation();
     requestAnimationFrame(()=>current.action());
   },{capture:true,passive:false});
 
-  document.addEventListener('touchcancel',()=>{gesture=null},{capture:true,passive:true});
+  document.addEventListener('touchcancel',()=>{
+    if(!gesture)return;
+    const current=gesture;gesture=null;
+    dismissHint(current,false);
+  },{capture:true,passive:true});
 
   injectTouchups();
   window.MedsiGestureNavigation={resolveAction};
