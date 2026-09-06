@@ -94,22 +94,23 @@
   observer.observe(document.body,{attributes:true,attributeFilter:['data-screen']});
   syncPushPanel();
 
-  if(!window.MedsiVideoLink&&!document.querySelector('script[data-medsi-video-link]')){
-    const s=document.createElement('script');s.async=false;s.src='/chat-overlay/video-link.js?v=1';s.dataset.medsiVideoLink='1';document.head.appendChild(s);
-  }
-  if(!document.querySelector('script[data-medsi-reaction-icons]')){
-    const s=document.createElement('script');s.async=false;s.src='/chat-overlay/reaction-icons.js?v=20260907-twemoji-2';s.dataset.medsiReactionIcons='1';document.head.appendChild(s);
-  }
+  /* Install final chat geometry before optional media helpers. */
   if(!document.querySelector('script[data-medsi-composer-experiment]')){
     const s=document.createElement('script');s.async=false;s.src='/chat-overlay/composer-experiment.js?v=20260907-3';s.dataset.medsiComposerExperiment='1';document.head.appendChild(s);
   }
   if(!document.querySelector('script[data-medsi-gesture-navigation]')){
     const s=document.createElement('script');s.async=false;s.src='/chat-overlay/gesture-navigation.js?v=20260907-2';s.dataset.medsiGestureNavigation='1';document.head.appendChild(s);
   }
+  if(!document.querySelector('script[data-medsi-reaction-icons]')){
+    const s=document.createElement('script');s.async=false;s.src='/chat-overlay/reaction-icons.js?v=20260907-twemoji-2';s.dataset.medsiReactionIcons='1';document.head.appendChild(s);
+  }
   if(!document.querySelector('script[data-medsi-message-enhancements]')){
     const s=document.createElement('script');s.async=false;s.src='/chat-overlay/message-enhancements.js?v=20260907-artifact-fix-1';s.dataset.medsiMessageEnhancements='1';document.head.appendChild(s);
   }
   if(!document.querySelector('script[data-medsi-bottom-lock]')){
     const s=document.createElement('script');s.async=false;s.src='/chat-overlay/bottom-lock.js?v=20260906-1';s.dataset.medsiBottomLock='1';document.head.appendChild(s);
+  }
+  if(!window.MedsiVideoLink&&!document.querySelector('script[data-medsi-video-link]')){
+    const s=document.createElement('script');s.async=false;s.src='/chat-overlay/video-link.js?v=1';s.dataset.medsiVideoLink='1';document.head.appendChild(s);
   }
 })();
