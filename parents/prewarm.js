@@ -1,6 +1,6 @@
 (function(){
   if(!document.querySelector('script[data-medsi-upload-ux]')){const s=document.createElement('script');s.src='/chat-overlay/upload-ux.js?v=20260905-uploadux1';s.dataset.medsiUploadUx='1';document.head.appendChild(s)}
-  if(!document.querySelector('script[data-medsi-chat-polish]')){const s=document.createElement('script');s.src='/chat-overlay/chat-polish.js?v=20260906-polish1';s.dataset.medsiChatPolish='1';document.head.appendChild(s)}
+  if(!document.querySelector('script[data-medsi-chat-polish]')){const s=document.createElement('script');s.src='/chat-overlay/chat-polish-v2.js?v=20260906-polish3';s.dataset.medsiChatPolish='1';document.head.appendChild(s)}
   if(!document.querySelector('script[data-medsi-terminology-fix]')){const s=document.createElement('script');s.src='/chat-overlay/terminology-fix.js?v=20260906-1';s.dataset.medsiTerminologyFix='1';document.head.appendChild(s)}
 
   if(!window.__medsiTimewebSessionFetchWrapped){
@@ -43,20 +43,8 @@
   let loginWarm=null;
   function extractSession(res){if(!res)return null;if(res.token)return res;if(res.session&&res.session.token)return res.session;if(res.d1Session&&res.d1Session.token)return res.d1Session;return null}
   function saveLoginSession(phone,session){if(!session||!session.token)return;try{localStorage.setItem('medsi_d1_parent_session_v1',JSON.stringify({phone:p10(phone),session}))}catch(_){};fetchThread(session,phone).catch(()=>{})}
-  function prewarmLogin(phone){
-    const ph=p10(phone);if(!ph)return Promise.resolve(null);
-    if(loginWarm&&loginWarm.phone===ph)return loginWarm.promise;
-    const promise=fetch('/__session/apps-script',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'api',method:'getD1ChatSession',args:['parent',ph,'']}),cache:'no-store'})
-      .then(r=>r.json()).then(p=>{const s=extractSession(p&&p.result);if(s)saveLoginSession(ph,s);return s}).catch(()=>null);
-    loginWarm={phone:ph,promise};return promise;
-  }
-  function installLoginWarm(){
-    const run=()=>{
-      const btn=document.getElementById('authBtn'),input=document.getElementById('phoneInputAuth');
-      if(btn&&input&&!btn.dataset.medsiSessionWarm){btn.dataset.medsiSessionWarm='1';btn.addEventListener('click',()=>prewarmLogin(input.value),true);input.addEventListener('keydown',e=>{if(e.key==='Enter')prewarmLogin(input.value)},true)}
-    };
-    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();
-  }
+  function prewarmLogin(phone){const ph=p10(phone);if(!ph)return Promise.resolve(null);if(loginWarm&&loginWarm.phone===ph)return loginWarm.promise;const promise=fetch('/__session/apps-script',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'api',method:'getD1ChatSession',args:['parent',ph,'']}),cache:'no-store'}).then(r=>r.json()).then(p=>{const s=extractSession(p&&p.result);if(s)saveLoginSession(ph,s);return s}).catch(()=>null);loginWarm={phone:ph,promise};return promise}
+  function installLoginWarm(){const run=()=>{const btn=document.getElementById('authBtn'),input=document.getElementById('phoneInputAuth');if(btn&&input&&!btn.dataset.medsiSessionWarm){btn.dataset.medsiSessionWarm='1';btn.addEventListener('click',()=>prewarmLogin(input.value),true);input.addEventListener('keydown',e=>{if(e.key==='Enter')prewarmLogin(input.value)},true)}};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run()}
   installLoginWarm();
 
   window.MedsiParentPrewarm={warm:(session,phone)=>fetchThread(session,phone).catch(()=>null),ready:phone=>pending.get(key(phone))||Promise.resolve((cache.get(key(phone))||readSession(phone))?.res||null),peek:phone=>((cache.get(key(phone))||readSession(phone))?.res||null),clear:()=>{cache.clear();clearSession()},prewarmLogin};
