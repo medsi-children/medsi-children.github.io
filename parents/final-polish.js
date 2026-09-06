@@ -1,4 +1,18 @@
 (function(){
+  const PUSH_ORIGIN='https://medsi-push-worker.medsi-children.workers.dev';
+  const nativeFetch=window.fetch.bind(window);
+  window.fetch=function(input,init){
+    let nextInput=input;
+    try{
+      const url=typeof input==='string'?input:String(input&&input.url||'');
+      if(url.startsWith(PUSH_ORIGIN)){
+        const parsed=new URL(url);
+        nextInput='/push'+parsed.pathname+parsed.search;
+      }
+    }catch(_){}
+    return nativeFetch(nextInput,init);
+  };
+
   function normalizeParentCopy(){
     const replacements=[
       ['воспитателями и психологами','воспитателями'],
