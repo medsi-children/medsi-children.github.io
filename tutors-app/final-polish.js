@@ -1,4 +1,28 @@
 (function(){
+  // iOS Safari sometimes restores an old scroll offset during the very first load,
+  // especially while the bottom browser bar is still settling. Keep the dashboard
+  // anchored at the top; chat/message scroll containers remain untouched.
+  try{if('scrollRestoration' in history)history.scrollRestoration='manual'}catch(_){}
+  function resetInitialPageScroll(){
+    if(document.body.classList.contains('medsi-chat-overlay-open'))return;
+    const screen=String(document.body.dataset.screen||'');
+    if(screen&&screen!=='screenChoose')return;
+    window.scrollTo(0,0);
+    document.documentElement.scrollTop=0;
+    document.body.scrollTop=0;
+  }
+  resetInitialPageScroll();
+  requestAnimationFrame(()=>requestAnimationFrame(resetInitialPageScroll));
+  window.addEventListener('pageshow',()=>{
+    resetInitialPageScroll();
+    setTimeout(resetInitialPageScroll,80);
+    setTimeout(resetInitialPageScroll,320);
+  });
+  window.addEventListener('load',()=>{
+    resetInitialPageScroll();
+    setTimeout(resetInitialPageScroll,120);
+  },{once:true});
+
   const hint=document.querySelector('#screenForm .report-hint');
   function syncHint(type){if(hint)hint.classList.toggle('hidden',type==='psychology')}
   const morning=document.getElementById('btnMorning');
@@ -37,6 +61,7 @@
   function syncPush(){
     initPush();
     if(pushReady&&window.MedsiPush)MedsiPush.setPanelVisible(panelShouldShow());
+    if(document.body.dataset.screen==='screenChoose')requestAnimationFrame(resetInitialPageScroll);
   }
 
   function normalizeTutorCallLinks(root){
