@@ -67,5 +67,12 @@
   observer.observe(document.documentElement,{childList:true,subtree:true});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>scan(document),{once:true});else scan(document);
 
+  if(!document.querySelector('script[data-medsi-gesture-navigation]')){
+    const s=document.createElement('script');
+    s.src='/chat-overlay/gesture-navigation.js?v=20260907-1';
+    s.dataset.medsiGestureNavigation='1';
+    document.head.appendChild(s);
+  }
+
   window.MedsiReactionIcons={paint,scan,source:'Twitter Twemoji'};
 })();
