@@ -228,12 +228,5 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule,{once:true});else schedule();
   new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true});
 
-  if(!document.querySelector('script[data-medsi-gesture-navigation]')){
-    const s=document.createElement('script');
-    s.src='/chat-overlay/gesture-navigation.js?v=20260907-1';
-    s.dataset.medsiGestureNavigation='1';
-    document.head.appendChild(s);
-  }
-
   window.MedsiChatListExperiment={install};
 })();
