@@ -1,7 +1,23 @@
 (function(){
-  // iOS Safari sometimes restores an old scroll offset during the very first load,
-  // especially while the bottom browser bar is still settling. Keep the dashboard
-  // anchored at the top; chat/message scroll containers remain untouched.
+  function normalizeTutorCopy(){
+    const replacements=[
+      ['воспитателями и психологами','воспитателями'],
+      ['воспитателей и психологов','воспитателей'],
+      ['Воспитатели и психологи','Воспитатели'],
+      ['воспитатели и психологи','воспитатели']
+    ];
+    const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+    const nodes=[];let node;
+    while((node=walker.nextNode()))nodes.push(node);
+    nodes.forEach(textNode=>{
+      let value=textNode.nodeValue||'';
+      let next=value;
+      replacements.forEach(([from,to])=>{next=next.split(from).join(to)});
+      if(next!==value)textNode.nodeValue=next;
+    });
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',normalizeTutorCopy,{once:true});else normalizeTutorCopy();
+
   try{if('scrollRestoration' in history)history.scrollRestoration='manual'}catch(_){}
   function resetInitialPageScroll(){
     if(document.body.classList.contains('medsi-chat-overlay-open'))return;
@@ -32,11 +48,11 @@
       #btnParentChats.medsi-chat-opening{opacity:.76!important;filter:saturate(.88)}
       .medsi-chat-opening-spinner{position:absolute;right:18px;bottom:16px;width:24px;height:24px;border:3px solid rgba(255,255,255,.42);border-top-color:#fff;border-radius:50%;animation:medsiChatOpenSpin .72s linear infinite;pointer-events:none;z-index:5}
       @keyframes medsiChatOpenSpin{to{transform:rotate(360deg)}}
-      .refresh-btn{display:grid!important;place-items:center!important;line-height:1!important;overflow:hidden!important;padding:0!important}
-      .refresh-btn .refresh-label{display:grid!important;place-items:center!important;width:100%!important;height:100%!important;line-height:1!important;margin:0!important;padding:0!important;transform:none!important}
-      .refresh-btn .refresh-label svg{display:block;width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2.25;stroke-linecap:round;stroke-linejoin:round}
+      .refresh-btn{position:relative!important;display:block!important;overflow:hidden!important;padding:0!important;line-height:1!important}
+      .refresh-btn .refresh-label{position:absolute!important;inset:0!important;display:flex!important;align-items:center!important;justify-content:center!important;width:auto!important;height:auto!important;margin:0!important;padding:0!important;line-height:0!important;transform:none!important}
+      .refresh-btn .refresh-label svg{display:block!important;width:26px!important;height:26px!important;overflow:visible!important}
       .refresh-btn.loading .refresh-label{display:none!important}
-      .refresh-btn .refresh-spinner{margin:auto!important}
+      .refresh-btn .refresh-spinner{position:absolute!important;left:50%!important;top:50%!important;margin:0!important;transform:translate(-50%,-50%)!important}
     `;
     document.head.appendChild(style);
 
@@ -61,8 +77,8 @@
       window.addEventListener('pageshow',clear);
     }
 
-    const refreshSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"></path><path d="M19.2 12A7.5 7.5 0 1 1 17 6.8L20 9"></path></svg>';
-    const repairRefresh=()=>document.querySelectorAll('.refresh-btn .refresh-label').forEach(el=>{if(el.dataset.medsiRefreshFixed==='1')return;el.dataset.medsiRefreshFixed='1';el.innerHTML=refreshSvg});
+    const refreshSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.6 8.2A7 7 0 1 0 19 15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M16.2 5.8h4.4v4.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const repairRefresh=()=>document.querySelectorAll('.refresh-btn .refresh-label').forEach(el=>{if(el.dataset.medsiRefreshFixed==='2')return;el.dataset.medsiRefreshFixed='2';el.innerHTML=refreshSvg});
     repairRefresh();
     new MutationObserver(repairRefresh).observe(document.body,{childList:true,subtree:true});
   }
