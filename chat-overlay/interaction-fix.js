@@ -28,9 +28,7 @@
     if(!p||!n)return'';
     const a=Date.UTC(n.year,n.month-1,n.day),b=Date.UTC(p.year,p.month-1,p.day);
     const diff=Math.round((a-b)/86400000),time=p.hour+':'+p.minute;
-    if(diff===0)return'сегодня • '+time;
-    if(diff===1)return'вчера • '+time;
-    return p.day+' '+MONTHS[p.month-1]+' • '+time;
+    return time;
   }
   function rowMs(row){
     const key=String(row&&row.messageKey||'');

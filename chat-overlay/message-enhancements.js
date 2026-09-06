@@ -10,6 +10,7 @@
          moves left, so long labels such as "сегодня 23:01" never overlap it. */
       .medsi-read-receipt{position:absolute;right:11px;bottom:7px;width:24px;text-align:right;font-size:12px;line-height:1;font-weight:900;letter-spacing:-2px;opacity:.72;user-select:none}
       .parent-chat-time,.msg-time{right:45px!important}
+      .medsi-date-separator{align-self:center;display:block;margin:8px auto;padding:6px 13px;border-radius:999px;background:rgba(244,250,246,.92);border:1px solid rgba(124,166,137,.24);box-shadow:0 4px 12px rgba(55,104,67,.08);color:#66816c;font-size:12px;font-weight:750;line-height:1;letter-spacing:.01em;text-align:center;pointer-events:none}
       .medsi-read-receipt.is-read{color:#10aeb8;opacity:1}
       .educator .medsi-read-receipt{color:rgba(255,255,255,.9)}
       .educator .medsi-read-receipt.is-read{color:#fff}
@@ -72,6 +73,20 @@
     });
   }
 
+  function moscowParts(value){
+    const d=new Date(Number(value)); if(Number.isNaN(d.getTime()))return null;
+    const p=Object.fromEntries(new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',year:'numeric',month:'numeric',day:'numeric'}).formatToParts(d).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+    return {year:Number(p.year),month:Number(p.month),day:Number(p.day)};
+  }
+  function decorateDates(){
+    for(const [selector,rows] of [['#parentChatMessages .parent-chat-msg',lastThread],['#chatThreadBox .msg',lastThread]]){
+      const nodes=[...document.querySelectorAll(selector)]; let previous='';
+      nodes.forEach((el,i)=>{const p=moscowParts(rows[i]&&rows[i].timestamp);if(!p)return;const key=`${p.year}-${p.month}-${p.day}`;if(key===previous)return;previous=key;
+        const separator=document.createElement('div');separator.className='medsi-date-separator';separator.textContent=new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'long',...(p.year!==new Date().getFullYear()?{year:'numeric'}:{})}).format(new Date(Number(rows[i].timestamp)));el.parentNode.insertBefore(separator,el);
+      });
+    }
+  }
+
   function ensureReplyPreview(){
     let p=document.getElementById('medsiParentReplyPreview');
     if(p)return p;
@@ -119,6 +134,7 @@
 
   const mo=new MutationObserver(()=>{
     decorateParent();decorateEducator();
+    document.querySelectorAll('.medsi-date-separator').forEach(x=>x.remove()); decorateDates();
     const menu=document.querySelector('.parent-chat-context:not(.hidden)');
     if(menu&&!menu.querySelector('.medsi-reply-action')){
       const m=selectedParentMessage();

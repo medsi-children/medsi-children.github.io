@@ -183,7 +183,7 @@
     document.head.appendChild(p);
   }
   if(!document.querySelector('script[data-medsi-message-enhancements]')){
-    const s=document.createElement('script');s.src='/chat-overlay/message-enhancements.js?v=20260906-receipt-layout';s.dataset.medsiMessageEnhancements='1';document.head.appendChild(s);
+    const s=document.createElement('script');s.src='/chat-overlay/message-enhancements.js?v=20260906-date-separators';s.dataset.medsiMessageEnhancements='1';document.head.appendChild(s);
   }
   if(!document.querySelector('script[data-medsi-bottom-lock]')){
     const s=document.createElement('script');s.src='/chat-overlay/bottom-lock.js?v=20260906-1';s.dataset.medsiBottomLock='1';document.head.appendChild(s);
