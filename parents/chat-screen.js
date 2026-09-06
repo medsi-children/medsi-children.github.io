@@ -23,12 +23,18 @@
     if(id.startsWith('kv:')||id.startsWith('r2:'))return t.baseUrl+'/media/'+encodeURIComponent(id.slice(3));
     return 'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1600';
   }
-  function readState(m){return [m&&m.readByEducator,m&&m.readByEducatorAt,m&&m.educatorRead,m&&m.educatorReadAt,m&&m.read_by_educator,m&&m.educator_read_at,m&&m.readByParent,m&&m.readByParentAt,m&&m.parentRead,m&&m.parentReadAt,m&&m.read_by_parent,m&&m.parent_read_at,m&&m.readByOther,m&&m.otherReadAt,m&&m.isRead,m&&m.read]}
+  function receiptState(m){
+    if(!m||String(m.side||'')!=='parent')return[];
+    return [
+      m.readByEducator,m.readByEducatorAt,m.educatorRead,m.educatorReadAt,m.read_by_educator,m.educator_read_at,
+      m.readByOther,m.otherReadAt,m.isRead,m.read
+    ]
+  }
   function threadSig(list){
     return JSON.stringify((list||[]).map(m=>[
       m&&m.messageKey||'',m&&m.side||'',m&&m.type||'',m&&m.text||'',m&&m.fileId||'',
       m&&m.reaction||'',m&&m.editedAt||'',m&&m.timestamp||'',
-      m&&m.replyToKey||'',m&&m.reply&&m.reply.messageKey||'',m&&m.reply&&m.reply.text||'',readState(m)
+      m&&m.replyToKey||'',m&&m.reply&&m.reply.messageKey||'',m&&m.reply&&m.reply.text||'',receiptState(m)
     ]))
   }
   function nearBottom(){const box=$('parentChatMessages');return !box||box.scrollHeight-box.scrollTop-box.clientHeight<90}
