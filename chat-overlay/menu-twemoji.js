@@ -28,7 +28,7 @@
 
   function paintOne(selector,emoji,file){
     const title=document.querySelector(selector);
-    if(!title||title.dataset.medsiMenuTwemoji==='1')return;
+    if(!title||title.dataset.medsiMenuTwemoji)return;
     const original=String(title.textContent||'');
     const trimmed=original.trimStart();
     if(!trimmed.startsWith(emoji))return;
@@ -37,7 +37,7 @@
     img.className='medsi-menu-twemoji';
     img.src=BASE+file;
     img.alt='';img.setAttribute('aria-hidden','true');
-    img.onerror=()=>{title.textContent=original;delete title.dataset.medsiMenuTwemoji};
+    img.onerror=()=>{title.textContent=original;title.dataset.medsiMenuTwemoji='fallback'};
     title.replaceChildren(img,document.createTextNode(text));
     title.dataset.medsiMenuTwemoji='1';
   }
