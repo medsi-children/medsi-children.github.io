@@ -1,6 +1,20 @@
 (function(){
   document.documentElement.classList.add('medsi-parent-ready');
 
+  if(!document.getElementById('medsi-date-chip-theme')){
+    const style=document.createElement('style');
+    style.id='medsi-date-chip-theme';
+    style.textContent=`
+      .medsi-date-separator{
+        background:#f2fcfd!important;
+        border-color:rgba(22,184,192,.25)!important;
+        box-shadow:0 3px 10px rgba(22,184,192,.06)!important;
+        color:#16aeb7!important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   const PUSH_ORIGIN='https://medsi-push-worker.medsi-children.workers.dev';
   const nativeFetch=window.fetch.bind(window);
   window.fetch=function(input,init){
