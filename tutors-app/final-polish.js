@@ -23,6 +23,51 @@
     setTimeout(resetInitialPageScroll,120);
   },{once:true});
 
+  function installChatOpeningUx(){
+    if(document.getElementById('medsi-chat-opening-style'))return;
+    const style=document.createElement('style');
+    style.id='medsi-chat-opening-style';
+    style.textContent=`
+      #btnParentChats{position:relative!important;transition:opacity .18s ease,filter .18s ease,transform .18s ease!important}
+      #btnParentChats.medsi-chat-opening{opacity:.76!important;filter:saturate(.88)}
+      .medsi-chat-opening-spinner{position:absolute;right:18px;bottom:16px;width:24px;height:24px;border:3px solid rgba(255,255,255,.42);border-top-color:#fff;border-radius:50%;animation:medsiChatOpenSpin .72s linear infinite;pointer-events:none;z-index:5}
+      @keyframes medsiChatOpenSpin{to{transform:rotate(360deg)}}
+      .refresh-btn{display:grid!important;place-items:center!important;line-height:1!important;overflow:hidden!important;padding:0!important}
+      .refresh-btn .refresh-label{display:grid!important;place-items:center!important;width:100%!important;height:100%!important;line-height:1!important;margin:0!important;padding:0!important;transform:none!important}
+      .refresh-btn .refresh-label svg{display:block;width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2.25;stroke-linecap:round;stroke-linejoin:round}
+      .refresh-btn.loading .refresh-label{display:none!important}
+      .refresh-btn .refresh-spinner{margin:auto!important}
+    `;
+    document.head.appendChild(style);
+
+    const btn=document.getElementById('btnParentChats');
+    if(btn&&!btn.dataset.medsiOpeningUx){
+      btn.dataset.medsiOpeningUx='1';
+      let timer=0;
+      const clear=()=>{
+        if(timer){clearTimeout(timer);timer=0}
+        btn.classList.remove('medsi-chat-opening');
+        const spin=btn.querySelector('.medsi-chat-opening-spinner');if(spin)spin.remove();
+      };
+      btn.addEventListener('click',()=>{
+        clear();
+        timer=setTimeout(()=>{
+          if(document.body.classList.contains('medsi-chat-overlay-open'))return;
+          btn.classList.add('medsi-chat-opening');
+          if(!btn.querySelector('.medsi-chat-opening-spinner')){const s=document.createElement('span');s.className='medsi-chat-opening-spinner';s.setAttribute('aria-hidden','true');btn.appendChild(s)}
+        },1000);
+      },true);
+      new MutationObserver(()=>{if(document.body.classList.contains('medsi-chat-overlay-open'))clear()}).observe(document.body,{attributes:true,attributeFilter:['class']});
+      window.addEventListener('pageshow',clear);
+    }
+
+    const refreshSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"></path><path d="M19.2 12A7.5 7.5 0 1 1 17 6.8L20 9"></path></svg>';
+    const repairRefresh=()=>document.querySelectorAll('.refresh-btn .refresh-label').forEach(el=>{if(el.dataset.medsiRefreshFixed==='1')return;el.dataset.medsiRefreshFixed='1';el.innerHTML=refreshSvg});
+    repairRefresh();
+    new MutationObserver(repairRefresh).observe(document.body,{childList:true,subtree:true});
+  }
+  installChatOpeningUx();
+
   const hint=document.querySelector('#screenForm .report-hint');
   function syncHint(type){if(hint)hint.classList.toggle('hidden',type==='psychology')}
   const morning=document.getElementById('btnMorning');
