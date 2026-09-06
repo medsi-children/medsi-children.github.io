@@ -4,9 +4,16 @@
 .parent-chat-time{bottom:7px!important;right:10px!important;font-size:10.5px!important}
 .parent-chat-reaction{position:absolute;left:9px;bottom:1px;width:28px;height:28px;min-width:28px;padding:0;border-radius:50%;background:rgba(255,255,255,.96);border:1px solid rgba(36,211,218,.22);box-shadow:0 4px 12px rgba(36,211,218,.10);display:inline-flex;align-items:center;justify-content:center;color:#11424a;line-height:1}
 
-/* Let unusually long child names grow their pill naturally, but cap the width so the header/menu layout cannot spread indefinitely. */
-#childChip,#parentChatChild{width:max-content;max-width:min(100%,22rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-#parentChatChild{flex:0 1 auto}
+/* Keep parent identity controls on one line. Name gets the flexible space; phone/logout stay compact. */
+.chips{flex-wrap:nowrap;align-items:center;gap:6px}
+.chips-left{flex-wrap:nowrap;gap:6px;min-width:0}
+#childChip{flex:1 1 auto;width:auto;max-width:none;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#phoneChip{flex:0 0 auto;white-space:nowrap;padding-left:10px;padding-right:10px}
+.logout-btn{white-space:nowrap;padding-left:11px!important;padding-right:11px!important}
+
+.parent-chat-chips{flex-wrap:nowrap!important;gap:6px!important}
+#parentChatChild{flex:1 1 auto!important;min-width:0!important;max-width:none!important;width:auto!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+#parentChatPhone{flex:0 0 auto!important;max-width:none!important;white-space:nowrap!important;padding-left:9px!important;padding-right:9px!important}
 
 .parent-chat-context{position:fixed;z-index:10020;display:flex;align-items:center;justify-content:space-between;gap:2px;padding:7px 8px;border-radius:999px;background:rgba(255,255,255,.98);border:1px solid rgba(36,211,218,.18);box-shadow:0 18px 34px rgba(17,66,74,.22);opacity:1;transform:translateY(0) scale(1);visibility:visible;transition:opacity .16s ease,transform .16s ease,visibility 0s linear 0s;transform-origin:center top}
 .parent-chat-context.hidden{display:flex!important;opacity:0;transform:translateY(5px) scale(.975);visibility:hidden;pointer-events:none;transition:opacity .16s ease,transform .16s ease,visibility 0s linear .16s}
@@ -16,4 +23,4 @@
 .report-disclaimer.report-disclaimer-morning{background:linear-gradient(135deg,#ffd867 0%,#ffbf3a 54%,#f5a623 100%);border-color:rgba(191,132,16,.18);box-shadow:0 16px 34px rgba(217,158,25,.20)}
 .report-disclaimer.report-disclaimer-evening{background:linear-gradient(135deg,#9fd5ff 0%,#5fa8f0 54%,#4a8ee3 100%);border-color:rgba(63,111,190,.18);box-shadow:0 16px 34px rgba(74,142,227,.20)}
 .report-disclaimer.report-disclaimer-psychology{background:linear-gradient(135deg,#f5b8c8 0%,#e98ba7 48%,#d97898 100%);border-color:rgba(190,85,121,.18);box-shadow:0 16px 34px rgba(217,120,152,.18)}
-@media(max-width:560px){.parent-chat-media-frame{width:min(290px,100%)!important}.parent-chat-context{max-width:calc(100vw - 24px)}}
+@media(max-width:560px){.parent-chat-media-frame{width:min(290px,100%)!important}.parent-chat-context{max-width:calc(100vw - 24px)}#phoneChip{font-size:.88rem;padding-left:8px;padding-right:8px}.logout-btn{padding-left:10px!important;padding-right:10px!important}.parent-chat-chip{font-size:.8rem!important}#parentChatPhone{font-size:.76rem!important;padding-left:7px!important;padding-right:7px!important}}
