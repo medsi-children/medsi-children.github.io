@@ -3,6 +3,7 @@
   const t=window.MedsiOverlayTransport;
   if(!t)return;
   const REACTIONS=['❤️','👍','👌','🙏','🥰','😁','🔥'];
+  const LIVE_REFRESH_MS=5000;
   const p10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
   const fmt=v=>{
     const d=new Date(Number(v));if(Number.isNaN(d.getTime()))return'';
@@ -14,7 +15,7 @@
     const months=['янв.','февр.','мар.','апр.','мая','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
     return d.getDate()+' '+months[d.getMonth()]+' • '+time;
   };
-  let state=null,rows=[],busy=false,dead=false,chatClosed=false,lightbox=null,reactionMenu=null;
+  let state=null,rows=[],busy=false,dead=false,chatClosed=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false;
 
   function mediaUrl(m){
     const id=String(m&&m.fileId||'');if(!id)return'';
@@ -22,14 +23,37 @@
     if(id.startsWith('kv:')||id.startsWith('r2:'))return t.baseUrl+'/media/'+encodeURIComponent(id.slice(3));
     return 'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1600';
   }
+  function readState(m){return [m&&m.readByEducator,m&&m.readByEducatorAt,m&&m.educatorRead,m&&m.educatorReadAt,m&&m.read_by_educator,m&&m.educator_read_at,m&&m.readByParent,m&&m.readByParentAt,m&&m.parentRead,m&&m.parentReadAt,m&&m.read_by_parent,m&&m.parent_read_at,m&&m.readByOther,m&&m.otherReadAt,m&&m.isRead,m&&m.read]}
+  function threadSig(list){
+    return JSON.stringify((list||[]).map(m=>[
+      m&&m.messageKey||'',m&&m.side||'',m&&m.type||'',m&&m.text||'',m&&m.fileId||'',
+      m&&m.reaction||'',m&&m.editedAt||'',m&&m.timestamp||'',
+      m&&m.replyToKey||'',m&&m.reply&&m.reply.messageKey||'',m&&m.reply&&m.reply.text||'',readState(m)
+    ]))
+  }
   function nearBottom(){const box=$('parentChatMessages');return !box||box.scrollHeight-box.scrollTop-box.clientHeight<90}
   function scrollBottom(smooth){const box=$('parentChatMessages');if(!box)return;requestAnimationFrame(()=>box.scrollTo({top:box.scrollHeight,behavior:smooth?'smooth':'auto'}))}
   function showError(msg){const e=$('parentChatError');if(!e)return;e.textContent=String(msg||'Не удалось открыть чат.');e.classList.remove('hidden')}
   function clearError(){const e=$('parentChatError');if(!e)return;e.textContent='';e.classList.add('hidden')}
   function setBusy(v){busy=!!v;const disabled=busy||chatClosed;$('parentChatInput').disabled=disabled;$('parentChatSend').disabled=disabled;$('parentChatAttach').disabled=disabled}
   function isChatClosedError(error){return !!(error&&(error.code==='CHAT_CLOSED'||Number(error.status)===410))}
+  function stopLive(){if(liveTimer){clearTimeout(liveTimer);liveTimer=0}liveRunning=false}
+  function chatVisible(){const screen=$('screenChat');return !!state&&!dead&&!chatClosed&&!document.hidden&&document.body.dataset.screen==='screenChat'&&screen&&!screen.classList.contains('hidden')}
+  function scheduleLive(delay){
+    if(liveTimer)clearTimeout(liveTimer);
+    if(!state||dead||chatClosed)return;
+    liveTimer=setTimeout(async()=>{
+      liveTimer=0;
+      if(chatVisible()&&!liveRunning){
+        liveRunning=true;
+        try{await refresh({fresh:true,silent:true,background:true})}catch(err){if(isChatClosedError(err))showClosedChat()}
+        finally{liveRunning=false}
+      }
+      scheduleLive(LIVE_REFRESH_MS);
+    },Math.max(150,Number(delay)||LIVE_REFRESH_MS))
+  }
   function showClosedChat(){
-    chatClosed=true;rows=[];clearError();closeReactionMenu();
+    chatClosed=true;rows=[];stopLive();clearError();closeReactionMenu();
     const box=$('parentChatMessages');
     if(box){box.replaceChildren();const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Чат с воспитателями закрыт.';box.appendChild(e)}
     $('parentChatInput').value='';setBusy(false);
@@ -56,7 +80,7 @@
     const menu=ensureReactionMenu();menu.replaceChildren();
     REACTIONS.forEach(reaction=>{
       const b=document.createElement('button');b.type='button';b.className='parent-chat-reaction-btn';b.textContent=reaction;b.setAttribute('aria-label','Поставить реакцию '+reaction);
-      b.onclick=async ev=>{ev.preventDefault();ev.stopPropagation();closeReactionMenu();try{await t.react(state.session,m.messageKey,reaction);await refresh({stick:false})}catch(err){if(isChatClosedError(err))showClosedChat();else showError(err&&err.message||'Не удалось поставить реакцию.')}};
+      b.onclick=async ev=>{ev.preventDefault();ev.stopPropagation();closeReactionMenu();try{await t.react(state.session,m.messageKey,reaction);await refresh({stick:false,fresh:true})}catch(err){if(isChatClosedError(err))showClosedChat();else showError(err&&err.message||'Не удалось поставить реакцию.')}};
       menu.appendChild(b);
     });
     const r=el.getBoundingClientRect();
@@ -72,21 +96,24 @@
     const box=$('parentChatMessages');if(!box)return;
     closeReactionMenu();
     const stick=opts&&opts.stick!==undefined?!!opts.stick:nearBottom();
+    const preserveExact=!!(opts&&opts.preserveExact);
+    const silent=!!(opts&&opts.silent);
     const oldHeight=box.scrollHeight,oldTop=box.scrollTop;
     rows=Array.isArray(list)?list:[];box.replaceChildren();
     if(!rows.length){const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Сообщений пока нет.';box.appendChild(e);return}
     rows.forEach(m=>{
       const el=document.createElement('article');el.className='parent-chat-msg '+(m.side==='parent'?'parent':'educator');
+      if(silent)el.dataset.medsiAnimated='1';
       if(m.side!=='parent'){const a=document.createElement('div');a.className='parent-chat-author';a.textContent='Воспитатель';el.appendChild(a)}
       const u=mediaUrl(m);
       if(u){
         const frame=document.createElement('div');frame.className='parent-chat-media-frame';
         const md=document.createElement(m.type==='video'?'video':'img');md.className='parent-chat-media';md.src=u;
         if(m.type==='video'){
-          frame.style.cursor='default';md.controls=true;md.preload='metadata';md.onloadedmetadata=()=>{md.classList.add('is-loaded');if(stick)scrollBottom(false)}
+          frame.style.cursor='default';md.controls=true;md.preload='metadata';md.onloadedmetadata=()=>{md.classList.add('is-loaded');if(stick&&nearBottom())scrollBottom(false)}
         } else {
           md.alt='Фотография из чата';
-          md.onload=()=>{md.classList.add('is-loaded');if(stick)scrollBottom(false)};
+          md.onload=()=>{md.classList.add('is-loaded');if(stick&&nearBottom())scrollBottom(false)};
           frame.onclick=e=>{e.preventDefault();e.stopPropagation();openLightbox(u,md.alt)};
         }
         frame.appendChild(md);el.appendChild(frame)
@@ -99,37 +126,53 @@
     });
     requestAnimationFrame(()=>{
       if(stick)box.scrollTop=box.scrollHeight;
+      else if(preserveExact)box.scrollTop=Math.max(0,oldTop);
       else box.scrollTop=Math.max(0,oldTop+(box.scrollHeight-oldHeight));
     })
   }
 
-  async function fetchThread(){
-    const res=await t.thread(state.session,state.phone,'',100);
+  async function fetchThread(fresh){
+    const res=await t.thread(state.session,state.phone,'',100,fresh?{fresh:true}:undefined);
     return Array.isArray(res&&res.messages)?res.messages:[];
   }
   async function refresh(opts){
-    const list=await fetchThread();if(dead)return;render(list,opts||{});t.markRead(state.session,'parent',state.phone).catch(err=>{if(isChatClosedError(err))showClosedChat()});return list
+    opts=opts||{};
+    const list=await fetchThread(!!opts.fresh);if(dead||!state)return list;
+    const changed=threadSig(list)!==threadSig(rows);
+    const shouldRender=!!opts.force||changed;
+    if(shouldRender){
+      const stick=opts.stick!==undefined?!!opts.stick:nearBottom();
+      render(list,{stick,silent:!!opts.silent,preserveExact:!!opts.background&&!stick});
+    }else rows=list;
+    if((changed||opts.forceRead)&&!chatClosed){
+      t.markRead(state.session,'parent',state.phone).catch(err=>{if(isChatClosedError(err))showClosedChat()});
+    }
+    return list
   }
 
   async function open(next){
-    dead=false;chatClosed=false;state={...next,phone:p10(next&&next.phone)};clearError();closeReactionMenu();setBusy(false);
+    stopLive();dead=false;chatClosed=false;state={...next,phone:p10(next&&next.phone)};rows=[];clearError();closeReactionMenu();setBusy(false);
     $('parentChatChild').textContent=state.childName||state.parentName||'Ребёнок';
     $('parentChatPhone').textContent=state.phone?'8'+state.phone:'';
     $('parentChatInput').value='';
     const cached=window.MedsiParentPrewarm?await MedsiParentPrewarm.ready(state.phone).catch(()=>null):null;
-    if(cached&&Array.isArray(cached.messages))render(cached.messages,{stick:true});
+    const hasCached=!!(cached&&Array.isArray(cached.messages));
+    if(hasCached)render(cached.messages,{stick:true});
     else $('parentChatMessages').innerHTML='<div class="parent-chat-empty">Загружаем сообщения…</div>';
-    try{await refresh({stick:true})}catch(e){if(isChatClosedError(e))showClosedChat();else showError(e&&e.message||'Не удалось загрузить сообщения.')}
+    try{await refresh({stick:true,fresh:true,force:!hasCached,forceRead:true})}catch(e){if(isChatClosedError(e))showClosedChat();else showError(e&&e.message||'Не удалось загрузить сообщения.')}
+    if(!chatClosed)scheduleLive(LIVE_REFRESH_MS)
   }
-  function close(){dead=true;state=null;rows=[];chatClosed=false;setBusy(false);clearError();closeLightbox();closeReactionMenu()}
+  function close(){stopLive();dead=true;state=null;rows=[];chatClosed=false;setBusy(false);clearError();closeLightbox();closeReactionMenu()}
+
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state&&!dead&&!chatClosed)scheduleLive(250)});
 
   $('parentChatBack').onclick=()=>{if(state&&typeof state.onBack==='function')state.onBack()};
   $('parentChatCompose').onsubmit=async e=>{
     e.preventDefault();if(!state||busy||chatClosed)return;const text=$('parentChatInput').value.trim();if(!text)return;
     setBusy(true);const optimistic={side:'parent',type:'text',text,timestamp:Date.now(),messageKey:'pending-'+Date.now().toString(36)};
     render(rows.concat(optimistic),{stick:true});$('parentChatInput').value='';
-    try{await t.sendMessage(state.session,'parent',state.phone,{type:'text',text});await refresh({stick:true})}
-    catch(err){if(isChatClosedError(err))showClosedChat();else{showError(err&&err.message||'Не удалось отправить сообщение.');await refresh({stick:true}).catch(()=>{})}}
+    try{await t.sendMessage(state.session,'parent',state.phone,{type:'text',text});await refresh({stick:true,fresh:true})}
+    catch(err){if(isChatClosedError(err))showClosedChat();else{showError(err&&err.message||'Не удалось отправить сообщение.');await refresh({stick:true,fresh:true}).catch(()=>{})}}
     finally{setBusy(false);if(!chatClosed)$('parentChatInput').focus()}
   };
   $('parentChatInput').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('parentChatCompose').requestSubmit()}};
@@ -139,7 +182,7 @@
     if(!/^image\//i.test(f.type)&&!/^video\//i.test(f.type)){showError('Можно прикреплять только фото или видео.');return}
     const maxBytes=Number(t.maxUploadBytes||100*1024*1024);if(f.size>maxBytes){showError('Размер файла не должен превышать 100 МБ.');return}
     setBusy(true);clearError();
-    try{const up=await t.upload(state.session,state.phone,f);await t.sendMessage(state.session,'parent',state.phone,{type:up.type||(f.type.startsWith('video/')?'video':'image'),text:'',fileId:up.fileId});await refresh({stick:true})}
+    try{const up=await t.upload(state.session,state.phone,f);await t.sendMessage(state.session,'parent',state.phone,{type:up.type||(f.type.startsWith('video/')?'video':'image'),text:'',fileId:up.fileId});await refresh({stick:true,fresh:true})}
     catch(err){if(isChatClosedError(err))showClosedChat();else showError(err&&err.message||'Не удалось отправить файл.')}
     finally{setBusy(false)}
   };
