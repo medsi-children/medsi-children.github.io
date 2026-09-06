@@ -1,6 +1,23 @@
 (function(){
   document.documentElement.classList.add('medsi-tutor-ready');
 
+  if(!document.getElementById('medsi-tutor-visual-tweaks')){
+    const style=document.createElement('style');
+    style.id='medsi-tutor-visual-tweaks';
+    style.textContent=`
+      .medsi-date-separator{
+        background:#f2fcfd!important;
+        border-color:rgba(22,184,192,.25)!important;
+        box-shadow:0 3px 10px rgba(22,184,192,.06)!important;
+        color:#16aeb7!important;
+      }
+      @media(min-width:561px){
+        #screenPhones .medsi-phone-call-mini svg{transform:translateX(1px)!important}
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function normalizeTutorCopy(){
     const replacements=[
       ['воспитателями и психологами','воспитателями'],
