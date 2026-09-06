@@ -12,8 +12,8 @@
   if(!transport.__medsiForcedParentWrapped){
     transport.__medsiForcedParentWrapped=true;
     const originalChats=transport.chats.bind(transport);
-    transport.chats=async function(session,bucket){
-      const res=await originalChats(session,bucket);
+    transport.chats=async function(session,bucket,options){
+      const res=await originalChats(session,bucket,options);
       const forced=window.__medsiForcedEducatorParent;
       if(forced&&res&&Array.isArray(res.chats)&&!res.chats.some(x=>phone10(x&&x.phone)===phone10(forced.phone))){
         res.chats.push({
