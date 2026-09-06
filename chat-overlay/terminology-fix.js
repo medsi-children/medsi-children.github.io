@@ -41,6 +41,8 @@
       padding:0 !important;
       line-height:1 !important;
       transform:none !important;
+      font-weight:700 !important;
+      -webkit-text-stroke:.35px currentColor;
     }
     #btnRefreshChats.loading .refresh-label{display:none !important;}
   `;
