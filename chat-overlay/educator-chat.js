@@ -137,7 +137,7 @@
         if(toggle.classList.contains('is-busy'))return;
         toggle.classList.add('is-busy');
         try{
-          if(isRead){await appApi('markParentMessagesAsUnreadByEducator',[chat.phone,tutorToken()])}
+          if(isRead){await transport.markUnread(session,chat.phone)}
           else{await transport.markRead(session,'educator',chat.phone)}
           await loadChats(false);
         }catch(err){overlay.showError(err.message)}finally{toggle.classList.remove('is-busy')}
