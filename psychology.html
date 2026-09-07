@@ -12,7 +12,7 @@
   <title>Групповая психотерапия — Медси Бот</title>
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
-  <link rel="stylesheet" href="/psychology/style.css?v=20260905-production">
+  <link rel="stylesheet" href="/psychology/style.css?v=20260907-auth-1">
 </head>
 <body>
   <main id="app" class="page">
@@ -25,7 +25,16 @@
           <p>Отправка отчёта для родителей.</p>
         </div>
 
-        <section id="formScreen">
+        <section id="authScreen" class="auth-screen hidden">
+          <h2>Вход для психологов</h2>
+          <p>Введите тот же логин и пароль, которые используются для входа воспитателей.</p>
+          <label class="auth-field">Логин<input id="authLogin" type="text" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+          <label class="auth-field">Пароль<input id="authPassword" type="password" autocomplete="current-password"></label>
+          <p id="authError" class="status error hidden" role="alert"></p>
+          <button id="authBtn" class="btn btn-teal" type="button">Войти</button>
+        </section>
+
+        <section id="formScreen" class="hidden">
           <textarea id="text" class="report-area" placeholder="Вставьте отчёт по групповой психотерапии сюда…"></textarea>
           <p id="reportError" class="status error hidden" role="alert"></p>
           <div class="actions">
@@ -41,6 +50,6 @@
     </article>
   </main>
 
-  <script src="/psychology/app.js?v=20260905-production"></script>
+  <script src="/psychology/app.js?v=20260907-auth-1"></script>
 </body>
 </html>
