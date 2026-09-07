@@ -18,7 +18,7 @@
     const parent=document.getElementById('parentChatInput');
     if(parent&&parent.placeholder!=='Введите сообщение…')parent.placeholder='Введите сообщение…';
     const tutor=document.getElementById('chatReplyInput');
-    if(tutor&&tutor.placeholder!=='Введите сообщение…')tutor.placeholder='Введите сообщение…';
+    if(tutor&&tutor.dataset.placeholder!=='Введите сообщение…')tutor.dataset.placeholder='Введите сообщение…';
   }
 
   function scan(root){normalizeNativeParentTime(root);syncPlaceholders()}
