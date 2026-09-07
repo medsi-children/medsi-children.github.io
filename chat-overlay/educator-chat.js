@@ -202,7 +202,11 @@
     function renderThreadHeader(chat){chatThreadHeader.replaceChildren();['Родитель: '+(chat.parentName||'—'),'Ребёнок: '+(chat.childName||'—'),'Номер телефона: '+displayPhone(chat.phone||'')].forEach(text=>{const d=document.createElement('div');d.textContent=text;chatThreadHeader.appendChild(d)})}
     function messageNode(m){
       const el=document.createElement('div');el.className='msg '+(m.side==='educator'?'educator':'parent');
-      if(m.side==='parent'){const a=document.createElement('div');a.className='msg-author';a.textContent='Родитель';el.appendChild(a)}
+      const author=document.createElement('div');author.className='msg-author';
+      author.textContent=m.side==='parent'
+        ?'Родитель'+(activeChat&&activeChat.parentName?' '+activeChat.parentName:'')
+        :'Детское Отделение Медси';
+      el.appendChild(author);
       if(m.reply){const q=document.createElement('div');q.className='msg-reply-quote';q.textContent=replyLabel(m.reply);el.appendChild(q)}
       const url=mediaUrl(m);if(url){const wrap=document.createElement('div');wrap.className='msg-image-wrap';const media=document.createElement(m.type==='video'?'video':'img');media.src=url;if(m.type==='video'){media.controls=true;media.preload='metadata'}wrap.appendChild(media);el.appendChild(wrap)}
       if(m.text){const body=document.createElement('div');body.className='msg-body';body.textContent=String(m.text);el.appendChild(body)}

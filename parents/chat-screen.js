@@ -121,7 +121,11 @@
       if(chip&&chip.key!==previousDay){const sep=document.createElement('div');sep.className='medsi-date-separator';sep.dataset.dateKey=chip.key;sep.textContent=chip.label;box.appendChild(sep);previousDay=chip.key}
       const el=document.createElement('article');el.className='parent-chat-msg '+(m.side==='parent'?'parent':'educator');
       if(silent)el.dataset.medsiAnimated='1';
-      if(m.side!=='parent'){const a=document.createElement('div');a.className='parent-chat-author';a.textContent='Воспитатель';el.appendChild(a)}
+      const author=document.createElement('div');author.className='parent-chat-author';
+      author.textContent=m.side==='parent'
+        ?'Родитель'+(state.parentName?' '+state.parentName:'')
+        :'Детское Отделение Медси';
+      el.appendChild(author);
       const u=mediaUrl(m);
       if(u){
         const frame=document.createElement('div');frame.className='parent-chat-media-frame';

@@ -23,9 +23,6 @@
   `;
   document.head.appendChild(style);
 
-  function parentName(){try{return String(localStorage.getItem('medsi_parent')||'').trim()}catch(_){return''}}
-  function activeEducatorParentName(){const lines=[...document.querySelectorAll('#chatThreadHeader > div')].map(x=>String(x.textContent||''));const line=lines.find(x=>x.startsWith('Родитель:'))||'';return line.replace(/^Родитель:\s*/,'').trim()}
-
   function redrawRefresh(){const btn=document.getElementById('btnRefreshChats');if(!btn||btn.dataset.medsiRefreshV3==='1')return;btn.dataset.medsiRefreshV3='1';const label=btn.querySelector('.refresh-label');if(label)label.textContent='⟳'}
 
   function markMedia(frame){
@@ -36,13 +33,6 @@
     const fail=()=>{const tries=Number(media.dataset.medsiRetry||0);if(tries<1&&media.src){media.dataset.medsiRetry=String(tries+1);const src=media.src;setTimeout(()=>{media.src=src+(src.includes('?')?'&':'?')+'retry='+Date.now()},320)}else frame.classList.add('medsi-media-error')};
     if(media.tagName==='VIDEO'){media.addEventListener('loadeddata',ready,{once:true});media.addEventListener('loadedmetadata',ready,{once:true});media.addEventListener('error',fail);if(media.readyState>=1)ready()}
     else{media.addEventListener('load',ready,{once:true});media.addEventListener('error',fail);if(media.complete&&media.naturalWidth>0)ready()}
-  }
-
-  function fixAuthors(){
-    const educatorParent=activeEducatorParentName();
-    document.querySelectorAll('#chatThreadBox .msg').forEach(el=>{let author=el.querySelector('.msg-author');const text=el.classList.contains('parent')?'Родитель'+(educatorParent?' '+educatorParent:''):'Детское Отделение Медси';if(!author){author=document.createElement('div');author.className='msg-author';el.prepend(author)}if(author.textContent!==text)author.textContent=text});
-    const ownParent=parentName();
-    document.querySelectorAll('#parentChatMessages .parent-chat-msg').forEach(el=>{let author=el.querySelector('.parent-chat-author');const text=el.classList.contains('parent')?'Родитель'+(ownParent?' '+ownParent:''):'Детское Отделение Медси';if(!author){author=document.createElement('div');author.className='parent-chat-author';el.prepend(author)}if(author.textContent!==text)author.textContent=text});
   }
 
   function animateMessages(){
@@ -59,7 +49,7 @@
   }
 
   let polishQueued=false;
-  function polish(){polishQueued=false;document.querySelectorAll('.msg-image-wrap,.parent-chat-media-frame').forEach(markMedia);redrawRefresh();fixAuthors();animateScreens();animateMessages()}
+  function polish(){polishQueued=false;document.querySelectorAll('.msg-image-wrap,.parent-chat-media-frame').forEach(markMedia);redrawRefresh();animateScreens();animateMessages()}
   function queuePolish(){if(polishQueued)return;polishQueued=true;requestAnimationFrame(polish)}
 
   const contentObserver=new MutationObserver(queuePolish);
