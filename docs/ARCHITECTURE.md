@@ -93,10 +93,9 @@
    - renderer `educator-chat.js` явно инициализирует этот модуль после создания DOM;
    - прежние `chat-list-experiment.js` и `chat-list-cascade.js` удалены после ручной проверки.
 
-4. `chat-overlay/chat-polish.js` / `chat-polish-v2.js`
-   - провести аудит каждого оставшегося поведения;
-   - полезные части перенести к владельцам;
-   - мёртвые части удалить.
+4. `chat-overlay/chat-polish-v2.js`
+   - перенести placeholder вложений, подписи авторов и анимации к владельцам;
+   - после проверки удалить поздний observer.
 
 5. `educator-unread-fix.js`, `full-web-polish.js` и другие исторические fix-файлы
    - не удалять по названию;
