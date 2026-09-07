@@ -1,0 +1,7 @@
+/* Production dashboard layout refinements. */
+body>.wrap{animation:medsiParentShellIn .14s ease .06s both}
+@keyframes medsiParentShellIn{from{opacity:0}to{opacity:1}}
+.chips{flex-wrap:nowrap;align-items:center;gap:6px}.chips-left{flex-wrap:nowrap;gap:6px;min-width:0}#childChip{flex:1 1 auto;width:auto;max-width:none;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#phoneChip{flex:0 0 auto;white-space:nowrap;padding-left:10px;padding-right:10px}.logout-btn{white-space:nowrap;padding-left:11px!important;padding-right:11px!important}
+@media(min-width:561px){.chips-left{flex:1 1 auto;justify-content:flex-start}#childChip{flex:0 1 auto!important;width:auto!important;max-width:min(520px,55vw)!important}}
+.report-disclaimer.report-disclaimer-morning{background:linear-gradient(135deg,#ffd867 0%,#ffbf3a 54%,#f5a623 100%);border-color:rgba(191,132,16,.18);box-shadow:0 16px 34px rgba(217,158,25,.20)}.report-disclaimer.report-disclaimer-evening{background:linear-gradient(135deg,#9fd5ff 0%,#5fa8f0 54%,#4a8ee3 100%);border-color:rgba(63,111,190,.18);box-shadow:0 16px 34px rgba(74,142,227,.20)}.report-disclaimer.report-disclaimer-psychology{background:linear-gradient(135deg,#f5b8c8 0%,#e98ba7 48%,#d97898 100%);border-color:rgba(190,85,121,.18);box-shadow:0 16px 34px rgba(217,120,152,.18)}
+@media(max-width:560px){#phoneChip{font-size:.88rem;padding-left:8px;padding-right:8px}.logout-btn{padding-left:10px!important;padding-right:10px!important}}
