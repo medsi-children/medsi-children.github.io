@@ -36,7 +36,8 @@
   function saveIdentity(identity) {
     const next = {
       role: String(identity && identity.role || '').trim(),
-      phone: onlyDigits(identity && identity.phone || '')
+      phone: onlyDigits(identity && identity.phone || ''),
+      parentSession: String(identity && identity.parentSession || '')
     };
 
     if (!next.role) return;
@@ -97,6 +98,7 @@
       action: 'save',
       role: state.identity.role,
       phone: state.identity.phone || '',
+      parentSession: state.identity.parentSession || '',
       subscription: subscription ? subscription.toJSON() : null,
       userAgent: navigator.userAgent || ''
     };
@@ -127,6 +129,7 @@
       sendPushRequest(state.pushServiceUrl + '/subscribe', {
         role: message.role,
         phone: message.phone,
+        parentSession: message.parentSession,
         subscription: message.subscription,
         userAgent: message.userAgent
       });
@@ -143,6 +146,7 @@
       action: message.action,
       role: message.role,
       phone: message.phone,
+      parentSession: message.parentSession,
       endpoint: message.endpoint,
       subscription: message.subscription,
       userAgent: message.userAgent

@@ -10,13 +10,13 @@
   <link rel="stylesheet" href="/parents/full-web.css?v=20260905-production">
   <link rel="stylesheet" href="/parents/chat-screen.css?v=20260905-production">
   <link rel="stylesheet" href="/parents/psychology-format.css?v=20260905-production" data-medsi-psych-format="1">
-  <link rel="stylesheet" href="/parents/dashboard-ui.css?v=20260907-1">
+  <link rel="stylesheet" href="/parents/dashboard-ui.css?v=20260907-parent-auth-2">
   <link rel="stylesheet" href="/parents/chat-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/composer-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/media-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/chat-motion-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/chat-surface-ui.css?v=20260907-1">
-  <script src="/notify-client.js?v=20260905-production"></script>
+  <script src="/notify-client.js?v=20260907-parent-auth-2"></script>
   <script src="/chat-overlay/transport.js?v=20260907-media-preview-1"></script>
   <script src="/chat-overlay/media-preload.js?v=20260907-1"></script>
   <script src="/chat-overlay/upload-ux.js?v=20260907-1"></script>
@@ -39,7 +39,12 @@
 
   <section id="screenPhoneReg" class="hidden"><h2 class="form-title">Телефон для входа</h2><p class="form-subtitle">Введите номер, с которым будете входить в систему.</p><div class="field-block"><label for="phoneInputReg">Номер телефона</label><input id="phoneInputReg" type="tel" inputmode="tel" autocomplete="tel" placeholder="88005553535"></div><p class="registration-note">Введите только цифры, без пробелов и скобок.</p><p id="phoneErrorReg" class="error hidden"></p><p id="alreadyRegistered" class="info hidden"></p><div class="grid2" style="margin-top:12px"><button id="phoneRegBackBtn" class="btn">Назад</button><button id="registerBtn" class="btn primary">Зарегистрироваться</button></div></section>
 
-  <section id="screenAuth" class="hidden"><h2 class="form-title">Авторизация</h2><p class="form-subtitle">Введите номер телефона, который вы указывали при регистрации.</p><div class="field-block"><label for="phoneInputAuth">Номер телефона</label><input id="phoneInputAuth" type="tel" inputmode="tel" autocomplete="tel" placeholder="88005553535"></div><p id="phoneErrorAuth" class="error hidden"></p><div class="grid2" style="margin-top:12px"><button id="authBackBtn" class="btn">Назад</button><button id="authBtn" class="btn btn-teal">Войти в систему</button></div></section>
+  <section id="screenAuth" class="hidden"><h2 class="form-title">Авторизация</h2><p class="form-subtitle">Введите номер телефона и временный пароль.</p><div class="registration-fields">
+    <div class="field-block"><label for="phoneInputAuth">Номер телефона</label><input id="phoneInputAuth" type="tel" inputmode="tel" autocomplete="tel" placeholder="88005553535"></div>
+    <div class="field-block"><label for="passwordInputAuth">Временный пароль</label><input id="passwordInputAuth" type="text" inputmode="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="7" placeholder="7 символов"></div>
+  </div><p class="registration-note">Если вы регистрировались раньше и пароль вам не выдавался, оставьте поле пустым.</p><p id="phoneErrorAuth" class="error hidden"></p><div class="grid2" style="margin-top:12px"><button id="authBackBtn" class="btn">Назад</button><button id="authBtn" class="btn btn-teal">Войти в систему</button></div></section>
+
+  <section id="screenRegistrationDone" class="hidden registration-success"><div class="registration-success-icon" aria-hidden="true">✓</div><h2 class="form-title">Регистрация завершена</h2><p class="form-subtitle">Сохраните данные для повторного входа.</p><div class="credential-card"><div class="credential-row"><span>Номер телефона</span><strong id="registeredPhone"></strong></div><div class="credential-row password"><span>Временный пароль</span><strong id="registeredPassword"></strong><button id="copyPasswordBtn" class="credential-copy" type="button" aria-label="Скопировать пароль">Скопировать</button></div></div><p class="credential-hint">Пароль действует всё время, пока ребёнок находится в боте. Он понадобится после выхода из аккаунта.</p><label class="credential-confirm"><input id="passwordSavedCheck" type="checkbox"><span>Я сохранил временный пароль</span></label><button id="registrationContinueBtn" class="btn primary" type="button" disabled>Перейти в Медси Бот</button></section>
 
   <section id="screenChoose" class="hidden"><div id="waitNote" class="info hidden">Отлично! Мы добавили вас в систему ☺️</div><div class="menu-dashboard"><div class="start-brand menu-brand"><div class="medsi-logo" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div><h1 class="start-title">Медси Бот</h1><p class="start-subtitle">Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.</p></div><div class="menu-actions">
     <button id="btnChat" class="btn menu-card menu-card-primary start-cascade start-cascade-1"><span class="menu-card-title">💬 Чат с воспитателями</span><span class="menu-card-text">Задать вопрос, оставить пожелания и согласовать звонки.</span><span id="newMsgBanner" class="chat-newmsg hidden">✦ Новое сообщение</span></button>
@@ -64,10 +69,11 @@
       <form id="parentChatCompose" class="parent-chat-compose"><button id="parentChatAttach" class="btn parent-chat-attach" type="button">📎</button><input id="parentChatFile" type="file" accept="image/*,video/*" hidden><textarea id="parentChatInput" class="parent-chat-input" placeholder="Введите сообщение…" maxlength="4000"></textarea><button id="parentChatSend" class="btn parent-chat-send" type="submit">Отправить</button></form>
     </div>
   </section>
+  <div id="logoutModal" class="parent-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="logoutModalTitle"><div class="parent-confirm-card"><div class="parent-confirm-icon">!</div><h2 id="logoutModalTitle">Выйти из аккаунта?</h2><p>Для повторного входа понадобятся номер телефона и временный пароль.</p><div class="grid2"><button id="logoutCancelBtn" class="btn" type="button">Остаться</button><button id="logoutConfirmBtn" class="btn parent-confirm-danger" type="button">Выйти</button></div></div></div>
 </article></div>
 <script src="/parents/chat-screen.js?v=20260907-media-2"></script>
 <script src="/chat-overlay/composer-ui.js?v=20260907-1"></script>
-<script src="/parents/full-web.js?v=20260907-audit-fix-1"></script>
+<script src="/parents/full-web.js?v=20260907-parent-auth-1"></script>
 <script src="/parents/psychology-format.js?v=20260905-production" data-medsi-psych-format="1"></script>
 <script src="/parents/chat-opening.js?v=20260907-1"></script>
 <script src="/parents/report-disclaimer.js?v=20260907-1"></script>
