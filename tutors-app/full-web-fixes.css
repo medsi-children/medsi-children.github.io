@@ -58,7 +58,7 @@
 .educator-exact-clone .msg-image-wrap>img{cursor:pointer}
 
 /* One restrained motion language for every test screen. */
-.web-screen-enter,.web-polish-enter{animation:webScreenEnter .28s cubic-bezier(.2,.82,.24,1) both}
+.web-screen-enter{animation:webScreenEnter .28s cubic-bezier(.2,.82,.24,1) both}
 @keyframes webScreenEnter{from{opacity:0;transform:translateY(5px) scale(.996)}to{opacity:1;transform:none}}
 #screenForm:not(.hidden),#screenPhones:not(.hidden),#screenDone:not(.hidden){animation:webScreenEnter .28s cubic-bezier(.2,.82,.24,1) both}
 .educator-exact-clone #screenChats:not(.hidden),
