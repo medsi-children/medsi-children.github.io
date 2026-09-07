@@ -32,6 +32,12 @@
   .educator-exact-clone #screenChatThread .quick-panel{max-height:32dvh!important;overflow-y:auto!important;overscroll-behavior:contain;margin-top:2px!important}
 }
 
+/* The chat surface keeps its own complete rounded contour; there is no separate divider above the composer. */
+body .educator-exact-clone #screenChatThread #chatThreadBox{border-bottom-color:var(--stroke2)!important}
+body .educator-exact-clone #screenChatThread #chatReplyInput{scrollbar-width:none!important;color:#4e747b!important}
+body .educator-exact-clone #screenChatThread #chatReplyInput::placeholder{color:#9aa9ad!important;opacity:1!important}
+body .educator-exact-clone #screenChatThread #chatReplyInput::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}
+
 /* Desktop phone action: center the SVG by its box, then apply a tiny optical correction
    for the handset drawing itself. This intentionally outranks the late JS tweak. */
 @media(min-width:561px){
