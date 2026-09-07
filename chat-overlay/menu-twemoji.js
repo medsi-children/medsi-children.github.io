@@ -29,6 +29,12 @@
         filter:brightness(0) invert(1) drop-shadow(0 1px 1px rgba(17,66,74,.12));
         opacity:.98;
       }
+      /* Phones card uses the same idea, but tinted to a vivid violet that
+         harmonizes with the card instead of turning the icon white. */
+      #btnParentPhones .menu-card-title .medsi-menu-twemoji{
+        filter:brightness(0) saturate(100%) invert(43%) sepia(35%) saturate(1478%) hue-rotate(218deg) brightness(96%) contrast(94%) drop-shadow(0 1px 1px rgba(63,45,110,.10));
+        opacity:.98;
+      }
     `;
     document.head.appendChild(style);
   }
