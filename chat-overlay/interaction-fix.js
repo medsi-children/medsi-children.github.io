@@ -2,17 +2,7 @@
   const MONTHS=['янв.','февр.','мар.','апр.','мая','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
   let lastMessage=null,lastThreadRows=[];
   let settleTimer=null;
-  let bgPending=2;
   let parentWaitTimer=null;
-
-  function preloadBackground(src){
-    const img=new Image();
-    const done=()=>{bgPending=Math.max(0,bgPending-1);scheduleFix()};
-    img.onload=done;img.onerror=done;img.src=src;
-    if(img.complete)setTimeout(done,0);
-  }
-  preloadBackground('/background.png');
-  preloadBackground('https://medsi-children.github.io/background.png');
 
   function partsInMoscow(ms){
     const d=new Date(Number(ms));
@@ -143,7 +133,7 @@
     if(settleTimer)return;
     settleTimer=setTimeout(()=>{settleTimer=null;scheduleFix()},55);
   }
-  function revealWhenReady(el,needsBackground){
+  function revealWhenReady(el){
     if(!el)return;
     if(el.classList.contains('hidden')){
       el.classList.remove('overlay-screen-ready');
@@ -154,7 +144,7 @@
     if(hasLoading(el)){el._medsiReadySince=0;return}
     if(!el._medsiReadySince)el._medsiReadySince=Date.now();
     const waited=Date.now()-el._medsiReadySince;
-    if((needsBackground&&bgPending>0)||(!mediaSettled(el)&&waited<420)){
+    if(!mediaSettled(el)&&waited<420){
       queueSettle();return;
     }
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
@@ -164,11 +154,11 @@
   function settleOverlayScreens(){
     const educator=document.querySelector('.educator-exact-clone');
     if(educator){
-      revealWhenReady(educator.querySelector('#screenChats'),false);
-      revealWhenReady(educator.querySelector('#screenChatThread'),true);
+      revealWhenReady(educator.querySelector('#screenChats'));
+      revealWhenReady(educator.querySelector('#screenChatThread'));
     }
     const parentCard=document.querySelector('.parent-role .medsi-legacy-card');
-    if(parentCard)revealWhenReady(parentCard,true);
+    if(parentCard)revealWhenReady(parentCard);
   }
 
   function ensureParentWait(){

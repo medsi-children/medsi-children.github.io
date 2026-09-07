@@ -336,10 +336,7 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
   display:flex;
   flex-direction:column;
   gap:10px;
-  background:linear-gradient(rgba(255,255,255,.66),rgba(255,255,255,.66)),url('https://medsi-children.github.io/background.png');
-  background-size:cover;
-  background-position:center;
-  background-repeat:no-repeat;
+  background:linear-gradient(135deg,#f4fdfe 0%,#e7fafb 100%);
   border:1px solid var(--stroke2);
   border-radius:14px;
   padding:12px;

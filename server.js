@@ -400,13 +400,12 @@ const publicStatic = express.static(ROOT, publicStaticOptions);
 // such as bottom-lock.js from disappearing while still hiding the repository.
 app.use('/parents', express.static(path.join(ROOT, 'parents'), publicStaticOptions));
 app.use('/chat-overlay', express.static(path.join(ROOT, 'chat-overlay'), publicStaticOptions));
-app.use('/tutors-app', express.static(path.join(ROOT, 'tutors-app'), publicStaticOptions));
-app.use('/psychology-app', express.static(path.join(ROOT, 'psychology-app'), publicStaticOptions));
+app.use('/tutors', express.static(path.join(ROOT, 'tutors'), publicStaticOptions));
+app.use('/psychology', express.static(path.join(ROOT, 'psychology'), publicStaticOptions));
 app.get([
   '/favicon.ico',
   '/apple-touch-icon.png',
   '/apple-touch-icon2.png',
-  '/background.png',
   '/manifest.json',
   '/tutors-manifest.json',
   '/notify-client.js',

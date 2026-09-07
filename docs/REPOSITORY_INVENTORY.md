@@ -6,9 +6,9 @@
 
 - Корень: `index.html`, `tutors.html`, `psychology.html`, `server.js`, PWA-ассеты и `notify-client.js`.
 - Родительская панель: `parents/`.
-- Панель воспитателей: `tutors-app/`.
+- Панель воспитателей: `tutors/`.
 - Общие чат-модули: `chat-overlay/`.
-- Психологическая панель: `psychology-app/`.
+- Психологическая панель: `psychology/`.
 - Server runtime: `lib/`.
 
 Timeweb явно раздаёт только эти production-ресурсы. `archive/`, документация, диагностические файлы и серверный исходный код не доступны по публичному URL.

@@ -46,24 +46,24 @@
 ## Панель воспитателей
 
 Основная логика:
-- `tutors-app/full-web.js` — основная панель, отчёты, телефоны.
+- `tutors/full-web.js` — основная панель, отчёты, телефоны.
 - `chat-overlay/educator-chat.js` — renderer чатов воспитателей.
 - `chat-overlay/educator-new-chat.js` — новый чат.
-- `tutors-app/chat-prewarm.js` — прогрев.
-- `tutors-app/live-chat-refresh.js` — live refresh.
+- `tutors/chat-prewarm.js` — прогрев.
+- `tutors/live-chat-refresh.js` — live refresh.
 
 Основные стили:
-- `tutors-app/full-web.css` — базовый layout панели.
+- `tutors/full-web.css` — базовый layout панели.
 - `chat-overlay/educator-exact.css` — базовый layout чатов.
-- `tutors-app/dashboard-ui.css` — статический layout главной панели.
-- `tutors-app/chat-ui.css` — статический layout чата воспитателя.
-- `tutors-app/report-ui.css` — статичные цвета формы отчёта и плашки дат.
+- `tutors/dashboard-ui.css` — статический layout главной панели.
+- `tutors/chat-ui.css` — статический layout чата воспитателя.
+- `tutors/report-ui.css` — статичные цвета формы отчёта и плашки дат.
 
 Поддерживающая логика:
-- `tutors-app/chat-opening.js` — delayed spinner открытия чата.
-- `tutors-app/chat-context-menu.js` — позиционирование меню сообщения.
-- `tutors-app/page-scroll.js` — безопасный initial/page-show scroll reset.
-- `tutors-app/tutor-push-panel.js` — lifecycle push-панели.
+- `tutors/chat-opening.js` — delayed spinner открытия чата.
+- `tutors/chat-context-menu.js` — позиционирование меню сообщения.
+- `tutors/page-scroll.js` — безопасный initial/page-show scroll reset.
+- `tutors/tutor-push-panel.js` — lifecycle push-панели.
 
 ## Общие самостоятельные модули, которые можно оставлять отдельными
 
