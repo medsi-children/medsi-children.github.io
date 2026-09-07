@@ -38,6 +38,14 @@
 .educator-exact-clone #quickRepliesPanel{margin-top:8px!important}
 .educator-exact-clone #chatThreadBox{border-bottom-color:transparent!important}
 
+/* Reply previews are independent full-width rows above the composer. They must never widen or offset the composer columns. */
+.medsi-parent-reply-preview{box-sizing:border-box!important;width:100%!important;max-width:100%!important;min-width:0!important;margin-left:0!important;margin-right:0!important;align-self:stretch!important}
+.medsi-parent-reply-preview>div{min-width:0!important;flex:1 1 auto!important}
+.medsi-parent-reply-text{box-sizing:border-box!important;width:100%!important;max-width:none!important;min-width:0!important}
+.educator-exact-clone #screenChatThread #chatReplyPreview{box-sizing:border-box!important;width:100%!important;max-width:100%!important;min-width:0!important;margin:0 0 8px!important;justify-self:stretch!important}
+.educator-exact-clone #screenChatThread #chatReplyPreview .chat-reply-preview-text{min-width:0!important;max-width:100%!important}
+.educator-exact-clone #screenChatThread,.educator-exact-clone #screenChatThread .chat-compose,#screenChat,.parent-chat-screen,#parentChatCompose{min-width:0!important;max-width:100%!important}
+
 @media(max-width:560px){
   #parentChatCompose{grid-template-columns:42px minmax(0,1fr) 42px!important;gap:7px!important}
   #parentChatAttach,#parentChatSend{width:42px!important;min-width:42px!important;max-width:42px!important;height:42px!important;min-height:42px!important;max-height:42px!important;flex-basis:42px!important}
