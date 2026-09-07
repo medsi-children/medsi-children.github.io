@@ -18,8 +18,8 @@
   style.id='medsi-reaction-icons-style';
   style.textContent=`
     .medsi-reaction-icon{display:block;width:1.5em;height:1.5em;object-fit:contain;pointer-events:none;user-select:none;-webkit-user-drag:none}
-    .parent-chat-reaction .medsi-reaction-icon,.msg-reaction .medsi-reaction-icon{width:23px;height:23px}
-    .parent-chat-reaction-btn .medsi-reaction-icon,.msg-reaction-btn .medsi-reaction-icon{width:28px;height:28px}
+    .parent-chat-reaction .medsi-reaction-icon,.msg-reaction .medsi-reaction-icon{width:20px;height:20px}
+    .parent-chat-reaction-btn .medsi-reaction-icon,.msg-reaction-btn .medsi-reaction-icon{width:24px;height:24px}
     .parent-chat-reaction-btn,.msg-reaction-btn{display:inline-flex!important;align-items:center!important;justify-content:center!important}
   `;
   document.head.appendChild(style);
