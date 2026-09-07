@@ -129,15 +129,17 @@
       const u=mediaUrl(m);
       if(u){
         const frame=document.createElement('div');frame.className='parent-chat-media-frame';
-        const md=document.createElement(m.type==='video'?'video':'img');md.className='parent-chat-media';md.src=u;
+        const md=document.createElement(m.type==='video'?'video':'img');md.className='parent-chat-media';
+        const markReady=()=>{md.classList.add('is-loaded','medsi-media-ready');if(stick&&nearBottom())scrollBottom(false)};
         if(m.type==='video'){
-          frame.style.cursor='default';md.controls=true;md.preload='metadata';md.onloadedmetadata=()=>{md.classList.add('is-loaded');if(stick&&nearBottom())scrollBottom(false)}
+          frame.style.cursor='default';md.controls=true;md.preload='metadata';md.onloadedmetadata=markReady;
         } else {
           md.alt='Фотография из чата';
-          md.onload=()=>{md.classList.add('is-loaded');if(stick&&nearBottom())scrollBottom(false)};
+          md.onload=markReady;
           frame.onclick=e=>{e.preventDefault();e.stopPropagation();openLightbox(u,md.alt)};
         }
-        frame.appendChild(md);el.appendChild(frame)
+        frame.appendChild(md);el.appendChild(frame);md.src=u;
+        if((md.tagName==='IMG'&&md.complete&&md.naturalWidth>0)||(md.tagName==='VIDEO'&&md.readyState>=1))markReady();
       }
       if(m.text){const b=document.createElement('div');b.textContent=String(m.text);el.appendChild(b)}
       if(m.reaction){const r=document.createElement('span');r.className='parent-chat-reaction';r.textContent=String(m.reaction);el.appendChild(r)}

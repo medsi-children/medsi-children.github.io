@@ -208,7 +208,7 @@
         :'Детское Отделение Медси';
       el.appendChild(author);
       if(m.reply){const q=document.createElement('div');q.className='msg-reply-quote';q.textContent=replyLabel(m.reply);el.appendChild(q)}
-      const url=mediaUrl(m);if(url){const wrap=document.createElement('div');wrap.className='msg-image-wrap';const media=document.createElement(m.type==='video'?'video':'img');media.src=url;if(m.type==='video'){media.controls=true;media.preload='metadata'}wrap.appendChild(media);el.appendChild(wrap)}
+      const url=mediaUrl(m);if(url){const wrap=document.createElement('div');wrap.className='msg-image-wrap';const media=document.createElement(m.type==='video'?'video':'img');const markReady=()=>wrap.classList.add('loaded','medsi-media-ready');media.addEventListener('load',markReady,{once:true});media.addEventListener('loadedmetadata',markReady,{once:true});media.addEventListener('error',()=>wrap.classList.add('medsi-media-error'),{once:true});if(m.type==='video'){media.controls=true;media.preload='metadata'}wrap.appendChild(media);el.appendChild(wrap);media.src=url;if((media.tagName==='IMG'&&media.complete&&media.naturalWidth>0)||(media.tagName==='VIDEO'&&media.readyState>=1))markReady()}
       if(m.text){const body=document.createElement('div');body.className='msg-body';body.textContent=String(m.text);el.appendChild(body)}
       if(m.reaction){const r=document.createElement('span');r.className='msg-reaction';r.textContent=m.reaction;el.appendChild(r)}
       const time=document.createElement('span');time.className='msg-time';time.textContent=[fmt(m.timestamp),m.editedAt?'изм.':''].filter(Boolean).join(' · ');el.appendChild(time);
