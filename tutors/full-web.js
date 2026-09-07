@@ -25,6 +25,8 @@
   function parentSig(rows){return (rows||[]).map(r=>[phone10(r.phone),r.parentName||'',r.childName||''].join('|')).sort().join('~')}
 
   function timeoutPromise(ms){return new Promise((_,reject)=>setTimeout(()=>reject(new Error('TIMEOUT')),ms))}
+  function delay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+  function isTransientNetworkError(error){const text=String(error&&error.message||error||'');return text==='TIMEOUT'||/networkerror|failed to fetch|load failed|network request failed/i.test(text)}
   async function callApi(method,args,timeoutMs){
     const run=async()=>{
       const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});
@@ -106,10 +108,27 @@
   }
   function showMenu(){setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge();scheduleD1Warm()}
   function openReport(type){$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Психотерапия','Вставьте отчёт по психотерапии.'];setScreen('screenForm',spec[0],spec[1])}
+  async function appendReportWithRecovery(payload,btn){
+    try{return await callApi('appendReport',[payload,tutorToken],30000)}
+    catch(firstError){
+      if(!isTransientNetworkError(firstError))throw firstError;
+      btn.textContent='Проверяем…';
+      await delay(700);
+      try{return await callApi('appendReport',[payload,tutorToken],10000)}
+      catch(secondError){
+        if(isTransientNetworkError(secondError)){
+          const uncertain=new Error('Связь прервалась после отправки. Отчёт мог сохраниться — проверьте лист перед повторной отправкой.');
+          uncertain.code='REPORT_DELIVERY_UNKNOWN';
+          throw uncertain;
+        }
+        throw secondError;
+      }
+    }
+  }
   async function sendReport(){
     const type=$('btnSend').dataset.type,text=$('text').value,btn=$('btnSend');$('reportError').classList.add('hidden');if(!text.trim()){showReportError('Пустой текст отчёта.');return}
     btn.disabled=true;btn.textContent='Отправляем…';
-    try{const res=await callApi('appendReport',[{reportType:type,text},tutorToken],30000);if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось отправить отчёт.');$('doneText').textContent='Готово.';setScreen('screenDone','Готово','Отчёт отправлен.')}
+    try{const res=await appendReportWithRecovery({reportType:type,text},btn);if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось отправить отчёт.');$('doneText').textContent='Готово.';setScreen('screenDone','Готово','Отчёт отправлен.')}
     catch(e){showReportError(String(e&&e.message||e))}finally{btn.disabled=false;btn.textContent='Отправить'}
   }
   function showReportError(text){const el=$('reportError');el.textContent=text;el.classList.remove('hidden')}
