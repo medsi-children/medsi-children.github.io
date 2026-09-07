@@ -79,10 +79,10 @@
    - эти значения должны задаваться правильно непосредственно в `parents/chat-screen.js`, `index.html` и `educator-chat.js`;
    - после переноса удалить.
 
-3. `chat-overlay/chat-list-experiment.js`
-   - общий список чатов, поиск, новый toolbar и карточки уже являются фактическим новым UI;
-   - перенести в `educator-chat.js` + штатный CSS;
-   - после проверки удалить экспериментальный слой.
+3. Список чатов воспитателей
+   - production-владельцы: `chat-overlay/chat-list-ui.css` и `chat-overlay/chat-list-ui.js`;
+   - renderer `educator-chat.js` явно инициализирует этот модуль после создания DOM;
+   - прежние `chat-list-experiment.js` и `chat-list-cascade.js` удалены после ручной проверки.
 
 4. `chat-overlay/chat-polish.js` / `chat-polish-v2.js`
    - провести аудит каждого оставшегося поведения;
