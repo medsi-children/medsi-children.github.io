@@ -25,22 +25,4 @@
   #screenChoose .menu-card-chat .menu-card-title{font-size:1rem!important}
   #screenChoose .menu-card-text{font-size:.76rem!important;line-height:1.34!important}
 
-  /* Keep the composer as one coherent block when quick replies are expanded. */
-  .educator-exact-clone #screenChatThread:not(.hidden){grid-template-rows:auto minmax(170px,1fr) auto auto auto auto auto auto!important;gap:4px!important}
-  .educator-exact-clone #screenChatThread .chat-compose{position:relative;z-index:2;background:#fff;padding-top:2px;border-top:1px solid rgba(36,211,218,.16)}
-  .educator-exact-clone #screenChatThread>.row{margin-top:3px!important}
-  .educator-exact-clone #screenChatThread .quick-panel{max-height:32dvh!important;overflow-y:auto!important;overscroll-behavior:contain;margin-top:2px!important}
 }
-
-/* The chat surface keeps its own complete rounded contour; there is no separate divider above the composer. */
-body .educator-exact-clone #screenChatThread #chatThreadBox{border-bottom-color:var(--stroke2)!important}
-body .educator-exact-clone #screenChatThread #chatReplyInput{scrollbar-width:none!important;color:#4e747b!important}
-body .educator-exact-clone #screenChatThread #chatReplyInput::placeholder{color:#9aa9ad!important;opacity:1!important}
-body .educator-exact-clone #screenChatThread #chatReplyInput::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}
-
-/* Reaction badge: a true circle, a couple of pixels lower. */
-.educator-exact-clone .msg-reaction{left:10px!important;bottom:2px!important;width:28px!important;min-width:28px!important;height:28px!important;padding:0!important;border-radius:50%!important;line-height:1!important}
-
-/* The message context menu stays mounted while hidden so both opening and closing can animate. */
-.chat-context-menu{opacity:1;transform:translateY(0) scale(1);visibility:visible;transition:opacity .16s ease,transform .16s ease,visibility 0s linear 0s;transform-origin:center top}
-.chat-context-menu.hidden{display:block!important;opacity:0;transform:translateY(5px) scale(.975);visibility:hidden;pointer-events:none;transition:opacity .16s ease,transform .16s ease,visibility 0s linear .16s}

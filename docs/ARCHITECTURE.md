@@ -55,7 +55,15 @@
 Основные стили:
 - `tutors-app/full-web.css` — базовый layout панели.
 - `chat-overlay/educator-exact.css` — базовый layout чатов.
-- `tutors-app/final-polish.css` — принятые финальные визуальные уточнения; также подлежит постепенному поглощению владельцами.
+- `tutors-app/dashboard-ui.css` — статический layout главной панели.
+- `tutors-app/chat-ui.css` — статический layout чата воспитателя.
+- `tutors-app/report-ui.css` — статичные цвета формы отчёта и плашки дат.
+
+Поддерживающая логика:
+- `tutors-app/chat-opening.js` — delayed spinner открытия чата.
+- `tutors-app/chat-context-menu.js` — позиционирование меню сообщения.
+- `tutors-app/page-scroll.js` — безопасный initial/page-show scroll reset.
+- `tutors-app/tutor-push-panel.js` — lifecycle push-панели.
 
 ## Общие самостоятельные модули, которые можно оставлять отдельными
 
@@ -90,7 +98,7 @@
    - полезные части перенести к владельцам;
    - мёртвые части удалить.
 
-5. `educator-unread-fix.js`, `full-web-polish.js`, `parents/final-polish.js` и другие исторические fix-файлы
+5. `educator-unread-fix.js`, `full-web-polish.js` и другие исторические fix-файлы
    - не удалять по названию;
    - сначала проверить, какие функции реально используются production;
    - затем распределить их по функциональным владельцам.
