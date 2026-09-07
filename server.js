@@ -6,6 +6,7 @@ const express = require('express');
 const path = require('path');
 const database = require('./lib/database');
 const storage = require('./lib/s3-storage');
+const mediaPreviews = require('./lib/media-previews');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -176,7 +177,9 @@ app.get('/media/s3/:key', async (req, res) => {
     return;
   }
   try {
-    const object = await storage.getObject(req.params.key, req.headers.range);
+    const wantsPreview = String(req.query.variant || '') === 'preview';
+    const previewKey = wantsPreview ? await mediaPreviews.ensure(req.params.key) : null;
+    const object = await storage.getObject(previewKey || req.params.key, previewKey ? undefined : req.headers.range);
     if (object.ContentType) res.setHeader('content-type', object.ContentType);
     if (object.ContentDisposition) res.setHeader('content-disposition', object.ContentDisposition);
     if (object.ContentLength != null) res.setHeader('content-length', String(object.ContentLength));
@@ -232,6 +235,7 @@ app.post('/chat-upload', async (req, res) => {
       contentLength: length,
       fileName: req.get('X-File-Name') || 'attachment'
     });
+    if (uploaded.mediaType === 'image') await mediaPreviews.ensure(uploaded.key);
     res.setHeader('cache-control', 'no-store');
     res.json({
       ok: true,

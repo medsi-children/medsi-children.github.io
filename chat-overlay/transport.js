@@ -19,6 +19,12 @@
     return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=' + encodeURIComponent(driveSize || 'w1600');
   }
 
+  function mediaPreviewUrl(fileId, driveSize) {
+    const id = String(fileId || '');
+    const original = mediaUrl(id, driveSize);
+    return id.startsWith('s3:') ? original + '?variant=preview' : original;
+  }
+
   async function request(session, path, options) {
     const auth = requireSession(session);
     let response;
@@ -307,6 +313,7 @@
     baseUrl: BASE_URL,
     maxUploadBytes: MAX_UPLOAD_BYTES,
     mediaUrl,
+    mediaPreviewUrl,
     request,
     thread,
     chats,

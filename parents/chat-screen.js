@@ -127,10 +127,11 @@
         :'Детское Отделение Медси';
       el.appendChild(author);
       const u=mediaUrl(m);
+      const previewUrl=m.type==='image'&&typeof t.mediaPreviewUrl==='function'?t.mediaPreviewUrl(m.fileId,'w960'):u;
       if(u){
         const frame=document.createElement('div');frame.className='parent-chat-media-frame';
         const md=document.createElement(m.type==='video'?'video':'img');md.className='parent-chat-media';
-        const markReady=()=>{md.classList.add('is-loaded','medsi-media-ready');if(stick&&nearBottom())scrollBottom(false)};
+        const markReady=()=>{md.classList.add('is-loaded','medsi-media-ready');if(m.type==='image'&&window.MedsiMediaPreload)window.MedsiMediaPreload.queueOriginal(u);if(stick&&nearBottom())scrollBottom(false)};
         if(m.type==='video'){
           frame.style.cursor='default';md.controls=true;md.preload='metadata';md.onloadedmetadata=markReady;
         } else {
@@ -138,7 +139,7 @@
           md.onload=markReady;
           frame.onclick=e=>{e.preventDefault();e.stopPropagation();openLightbox(u,md.alt)};
         }
-        frame.appendChild(md);el.appendChild(frame);md.src=u;
+        frame.appendChild(md);el.appendChild(frame);md.src=previewUrl;
         if((md.tagName==='IMG'&&md.complete&&md.naturalWidth>0)||(md.tagName==='VIDEO'&&md.readyState>=1))markReady();
       }
       if(m.text){const b=document.createElement('div');b.textContent=String(m.text);el.appendChild(b)}
@@ -174,7 +175,7 @@
   }
 
   async function open(next){
-    stopLive();dead=false;chatClosed=false;state={...next,phone:p10(next&&next.phone)};rows=[];clearError();closeReactionMenu();setBusy(false);
+    stopLive();dead=false;chatClosed=false;state={...next,phone:p10(next&&next.phone)};rows=[];clearError();closeReactionMenu();setBusy(false);if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
     $('parentChatChild').textContent=state.childName||state.parentName||'Ребёнок';
     $('parentChatPhone').textContent=state.phone?'8'+state.phone:'';
     $('parentChatInput').value='';
