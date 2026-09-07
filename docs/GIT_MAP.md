@@ -16,6 +16,8 @@
 - `legacy-overlay-prototype` — ранний прототип чатового overlay.
 - `legacy-cloudflare-ui` — ранняя Cloudflare UI-версия.
 - `legacy-chat-list-experiment` — независимый эксперимент списка чатов.
+- `legacy-github-frontend` — ранняя независимая GitHub frontend-версия.
+- `before-new-chat-ui` — состояние до нового интерфейса чатов.
 
 Технические ветки вида `pre-*` создавались только как краткие checkpoint’ы.
 После появления тегов они удалены: их коммиты остаются в истории `timeweb-next`.
