@@ -1,0 +1,4 @@
+#btnParentChats{position:relative!important;transition:opacity .18s ease,filter .18s ease,transform .18s ease!important}
+#btnParentChats.medsi-chat-opening{opacity:.76!important;filter:saturate(.88)}
+.medsi-chat-opening-spinner{position:absolute;right:18px;bottom:16px;width:24px;height:24px;border:3px solid rgba(255,255,255,.42);border-top-color:#fff;border-radius:50%;animation:medsiChatOpenSpin .72s linear infinite;pointer-events:none;z-index:5}
+@keyframes medsiChatOpenSpin{to{transform:rotate(360deg)}}
