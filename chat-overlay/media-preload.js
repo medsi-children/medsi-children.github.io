@@ -19,7 +19,16 @@
     });
   }
 
-  function startEmojiSkinEarly() {
+  function startMenuSkinEarly() {
+    if (window.MedsiMenuTwemoji || document.querySelector('script[data-medsi-menu-twemoji]')) return;
+    const script = document.createElement('script');
+    script.async = false;
+    script.src = '/chat-overlay/menu-twemoji.js?v=20260907-prewarm-2';
+    script.dataset.medsiMenuTwemoji = '1';
+    document.head.appendChild(script);
+  }
+
+  function startReactionSkinEarly() {
     if (window.MedsiReactionIcons || document.querySelector('script[data-medsi-reaction-icons-early]')) return;
     const script = document.createElement('script');
     script.async = false;
@@ -29,7 +38,8 @@
   }
 
   warmEmojiAssets();
-  startEmojiSkinEarly();
+  startMenuSkinEarly();
+  startReactionSkinEarly();
 
   // Preloads only a small number of full-size originals after their compact
   // chat previews have rendered. It never blocks the initial chat paint.
