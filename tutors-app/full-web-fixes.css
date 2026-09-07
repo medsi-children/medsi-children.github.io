@@ -1,4 +1,4 @@
-/* tutors_test only: preserve the production visual language while the full GitHub UI is built. */
+/* Compatibility rules that keep the production tutor shell and chat clone aligned. */
 
 /* Safari paint fallback: keep dashboard cards colored even while a transformed
    gradient layer is being composited during the first entrance animation. */

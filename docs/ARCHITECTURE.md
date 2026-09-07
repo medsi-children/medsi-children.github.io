@@ -103,8 +103,8 @@
 
 ## Legacy / rollback
 
-- `backups/` не участвует в production, если явно не подключён.
-- `appscript_test/` содержит исторические/аварийные веб-страницы Apps Script и не должен использоваться как источник production UI.
+- `archive/` не участвует в production и не раздаётся Timeweb.
+- `archive/appscript-recovery-tools/` содержит исторические/аварийные Apps Script-страницы и не должен использоваться как источник production UI.
 - Старые Apps Script страницы имеет смысл сохранить как аварийный rollback, но позднее перенести в явно названный legacy-раздел.
 
 ## Безопасный порядок консолидации

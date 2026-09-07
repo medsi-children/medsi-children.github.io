@@ -11,16 +11,16 @@ These blob SHAs are immutable Git objects and are the authoritative rollback ref
 
 ## New GitHub UI candidate
 Canonical test entry points:
-- `/parents_test/`
-- `/tutors_test/`
+- `archive/ui-prototypes-before-production-2026-09/parents/`
+- `archive/ui-prototypes-before-production-2026-09/tutors/`
 
 Parent candidate checkpoint:
-- `parents_test/index.html` — commit `6b5269d6cb8beadad905ba3ae45078334d2fe0a9`
-- `parents_test/chat-screen.css` instant positioning fix — commit `c2e7cb1f7de6667e63e2c4a84a2339533b5f4048`
+- `archive/ui-prototypes-before-production-2026-09/parents/index.html` — commit `6b5269d6cb8beadad905ba3ae45078334d2fe0a9`
+- `archive/ui-prototypes-before-production-2026-09/parents/chat-screen.css` instant positioning fix — commit `c2e7cb1f7de6667e63e2c4a84a2339533b5f4048`
 - psychology formatter simplification — commit `eab18f3ff5d882e0432e11aa6b4b3683d96d5507`
 
 Tutor candidate checkpoint:
-- `tutors_test/index.html` — commit `bdcffd1f08536e4c358400aca21683247543550e`
+- `archive/ui-prototypes-before-production-2026-09/tutors/index.html` — commit `bdcffd1f08536e4c358400aca21683247543550e`
 - tutor media loading-state fix — commit `8ef46ff8f47c9d8ac263a4a71208ea7f1ce2cd12`
 
 Unused failed `full-web-runtime-v6.*` tutor experiment was deleted before this checkpoint. It was never loaded by the accepted tutor test page.

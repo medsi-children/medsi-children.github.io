@@ -1,4 +1,4 @@
-/* tutors_test only: reserve the final layout before async chat data arrives. */
+/* Reserve the production tutor layout before async chat data arrives. */
 body>.wrap,.auth-gate .educator-start-brand{animation:medsiTutorShellIn .14s ease .06s both}
 @keyframes medsiTutorShellIn{from{opacity:0}to{opacity:1}}
 

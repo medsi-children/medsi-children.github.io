@@ -1,4 +1,4 @@
-/* Final mobile polish for the accepted tutors_test UI. */
+/* Production mobile dashboard refinements. */
 @media(max-width:560px){
   /* The reference screen uses the same outer frame, but its dashboard cards are
      about 12px closer to each side. Keep the shell and widen only the content. */

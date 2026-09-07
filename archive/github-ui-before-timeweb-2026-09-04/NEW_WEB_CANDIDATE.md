@@ -2,8 +2,8 @@
 
 Canonical test pages:
 
-- `/parents_test/`
-- `/tutors_test/`
+- `archive/ui-prototypes-before-production-2026-09/parents/`
+- `archive/ui-prototypes-before-production-2026-09/tutors/`
 
 Pinned repository snapshot after the final tutor loader/media cleanup:
 
