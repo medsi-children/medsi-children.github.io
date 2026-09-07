@@ -74,10 +74,10 @@
    - production-владельцы: `chat-overlay/composer-ui.css` и `chat-overlay/composer-ui.js`;
    - прежний `composer-experiment.js` удалён после ручной проверки.
 
-2. `chat-overlay/chat-copy-polish.js`
-   - временно нормализует старые timestamp strings и placeholders;
-   - эти значения должны задаваться правильно непосредственно в `parents/chat-screen.js`, `index.html` и `educator-chat.js`;
-   - после переноса удалить.
+2. Текст и время сообщений
+   - renderer родителя `parents/chat-screen.js` сразу выводит только время;
+   - placeholder’ы задаются в `index.html` и `educator-chat.js`;
+   - прежний поздний `chat-copy-polish.js` удалён после ручной проверки.
 
 3. Список чатов воспитателей
    - production-владельцы: `chat-overlay/chat-list-ui.css` и `chat-overlay/chat-list-ui.js`;
