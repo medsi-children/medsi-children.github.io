@@ -74,13 +74,6 @@
     s.dataset.medsiMenuTwemoji='1';
     document.head.appendChild(s);
   }
-  if(!document.querySelector('script[data-medsi-chat-copy-polish]')){
-    const s=document.createElement('script');
-    s.async=false;
-    s.src='/chat-overlay/chat-copy-polish.js?v=20260907-2';
-    s.dataset.medsiChatCopyPolish='1';
-    document.head.appendChild(s);
-  }
 
   window.MedsiReactionIcons={paint,scan,source:'Twitter Twemoji'};
 })();

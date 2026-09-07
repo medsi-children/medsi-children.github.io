@@ -5,16 +5,7 @@
   const REACTIONS=['❤️','👍','👌','🙏','🥰','😁','🔥'];
   const LIVE_REFRESH_MS=5000;
   const p10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
-  const fmt=v=>{
-    const d=new Date(Number(v));if(Number.isNaN(d.getTime()))return'';
-    const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate()),day=new Date(d.getFullYear(),d.getMonth(),d.getDate());
-    const diff=Math.round((today-day)/86400000);
-    const time=d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
-    if(diff===0)return'сегодня • '+time;
-    if(diff===1)return'вчера • '+time;
-    const months=['янв.','февр.','мар.','апр.','мая','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
-    return d.getDate()+' '+months[d.getMonth()]+' • '+time;
-  };
+  const fmt=v=>{const d=new Date(Number(v));return Number.isNaN(d.getTime())?'':d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})};
   function moscowDay(value){
     const d=new Date(Number(value));if(Number.isNaN(d.getTime()))return null;
     const parts=Object.fromEntries(new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',year:'numeric',month:'numeric',day:'numeric'}).formatToParts(d).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
