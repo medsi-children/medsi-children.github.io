@@ -223,9 +223,6 @@
     p.dataset.medsiVideoPreview='1';
     document.head.appendChild(p);
   }
-  if(!document.querySelector('script[data-medsi-chat-list-experiment]')){
-    const s=document.createElement('script');s.async=false;s.src='/chat-overlay/chat-list-experiment.js?v=20260907-cascade-1';s.dataset.medsiChatListExperiment='1';document.head.appendChild(s);
-  }
   if(!document.querySelector('script[data-medsi-gesture-navigation]')){
     const s=document.createElement('script');s.async=false;s.src='/chat-overlay/gesture-navigation.js?v=20260907-hint-1';s.dataset.medsiGestureNavigation='1';document.head.appendChild(s);
   }

@@ -87,6 +87,7 @@
     screenChatThread.append(chatThreadHeader,chatThreadBox,chatThreadError,chatReplyPreview,chatCompose,imagePreview,threadRow,quickPanel);
 
     scene.append(title,meta,screenChats,screenChatThread);frame.append(rim,scene);wrap.appendChild(frame);overlay.body.appendChild(wrap);
+    if(window.MedsiChatListUI)window.MedsiChatListUI.install();
 
     const childDeleteModal=document.createElement('div');childDeleteModal.id='childDeleteModal';childDeleteModal.className='link-modal-overlay hidden';childDeleteModal.setAttribute('role','dialog');childDeleteModal.setAttribute('aria-modal','true');childDeleteModal.innerHTML='<div class="link-modal" style="border-color:rgba(244,63,94,.38);"><h3 class="link-modal-title" style="color:#b91c35;">Внимание!</h3><p id="childDeleteText" class="link-modal-text"></p><div class="link-modal-actions child-delete-actions"><button id="childDeleteCancel" class="link-modal-cancel" type="button">Отмена</button><button id="childDeleteConfirm" class="link-modal-save link-modal-delete" type="button">Удалить</button></div></div>';
     document.body.appendChild(childDeleteModal);
