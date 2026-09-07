@@ -296,6 +296,7 @@ app.post('/__migration/media', async (req, res) => {
       res.status(422).json({ ok: false, code: 'SOURCE_HASH_MISMATCH' });
       return;
     }
+    if (uploaded.mediaType === 'image') await mediaPreviews.ensure(uploaded.key);
     res.setHeader('cache-control', 'no-store');
     res.json({
       ok: true,
