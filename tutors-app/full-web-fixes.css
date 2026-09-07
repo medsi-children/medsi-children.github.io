@@ -54,7 +54,7 @@
 .educator-exact-clone .msg-image-wrap{position:relative;display:block;width:min(280px,64vw);max-width:280px;aspect-ratio:1/1;border-radius:10px;overflow:hidden;margin-bottom:4px;background:rgba(255,255,255,.42);border:1px solid rgba(36,211,218,.14);contain:layout style paint}
 .educator-exact-clone .msg-image-wrap::before{display:none!important}
 .educator-exact-clone .msg-image-wrap>img,.educator-exact-clone .msg-image-wrap>video{display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;object-fit:cover!important;object-position:center!important;border-radius:0!important;opacity:0;transition:opacity .14s ease}
-.educator-exact-clone .msg-image-wrap.loaded>img,.educator-exact-clone .msg-image-wrap.loaded>video,.educator-exact-clone .msg-image-wrap>img.loaded,.educator-exact-clone .msg-image-wrap>video.loaded{opacity:1}
+.educator-exact-clone .msg-image-wrap.loaded>img,.educator-exact-clone .msg-image-wrap.loaded>video,.educator-exact-clone .msg-image-wrap>img.loaded,.educator-exact-clone .msg-image-wrap>video.loaded,.educator-exact-clone .msg-image-wrap.medsi-media-ready>img,.educator-exact-clone .msg-image-wrap.medsi-media-ready>video{opacity:1}
 .educator-exact-clone .msg-image-wrap>img{cursor:pointer}
 
 /* One restrained motion language for every test screen. */

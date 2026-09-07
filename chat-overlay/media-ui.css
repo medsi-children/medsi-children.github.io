@@ -1,0 +1,7 @@
+/* Shared media placeholder: the frame exists before its file is decoded. */
+@keyframes medsiMediaShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.msg-image-wrap,.parent-chat-media-frame{position:relative;overflow:hidden;width:min(270px,68vw);max-width:100%;aspect-ratio:1/1;border-radius:12px;background:linear-gradient(100deg,rgba(223,244,245,.78) 20%,rgba(248,253,253,.98) 38%,rgba(223,244,245,.78) 56%);background-size:220% 100%;animation:medsiMediaShimmer 1.15s linear infinite}
+.msg-image-wrap.medsi-media-ready,.parent-chat-media-frame.medsi-media-ready{animation:none;background:rgba(230,247,248,.72)}
+.msg-image-wrap img,.msg-image-wrap video,.parent-chat-media-frame img,.parent-chat-media-frame video{display:block!important;width:100%!important;height:100%!important;object-fit:cover!important;opacity:0;transform:scale(.985);transition:opacity .22s ease,transform .28s ease}
+.msg-image-wrap.medsi-media-ready img,.msg-image-wrap.medsi-media-ready video,.parent-chat-media-frame.medsi-media-ready img,.parent-chat-media-frame.medsi-media-ready video{opacity:1;transform:none}
+.medsi-media-error::after{content:'Не удалось загрузить вложение';position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:16px;color:#6d969a;font-size:13px;font-weight:700;background:#eef9fa}

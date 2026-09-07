@@ -7,14 +7,8 @@
   style.textContent=`
     @keyframes medsiScreenIn{from{opacity:0;transform:translateY(8px) scale(.996)}to{opacity:1;transform:none}}
     @keyframes medsiMessageIn{from{opacity:0;transform:translateY(8px) scale(.992)}to{opacity:1;transform:none}}
-    @keyframes medsiShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
     #screenChats.medsi-screen-enter,#screenChatThread.medsi-screen-enter,#screenChat.medsi-screen-enter{animation:medsiScreenIn .26s cubic-bezier(.22,.72,.28,1) both}
     #chatThreadBox .msg.medsi-message-enter,#parentChatMessages .parent-chat-msg.medsi-message-enter{animation:medsiMessageIn .24s cubic-bezier(.22,.72,.28,1) both;animation-delay:var(--medsi-message-delay,0ms)}
-    .msg-image-wrap,.parent-chat-media-frame{position:relative;overflow:hidden;width:min(270px,68vw);max-width:100%;aspect-ratio:1/1;border-radius:12px;background:linear-gradient(100deg,rgba(223,244,245,.78) 20%,rgba(248,253,253,.98) 38%,rgba(223,244,245,.78) 56%);background-size:220% 100%;animation:medsiShimmer 1.15s linear infinite}
-    .msg-image-wrap.medsi-media-ready,.parent-chat-media-frame.medsi-media-ready{animation:none;background:rgba(230,247,248,.72)}
-    .msg-image-wrap img,.msg-image-wrap video,.parent-chat-media-frame img,.parent-chat-media-frame video{display:block!important;width:100%!important;height:100%!important;object-fit:cover!important;opacity:0;transform:scale(.985);transition:opacity .22s ease,transform .28s ease}
-    .msg-image-wrap.medsi-media-ready img,.msg-image-wrap.medsi-media-ready video,.parent-chat-media-frame.medsi-media-ready img,.parent-chat-media-frame.medsi-media-ready video{opacity:1;transform:none}
-    .medsi-media-error::after{content:'Не удалось загрузить вложение';position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:16px;color:#6d969a;font-size:13px;font-weight:700;background:#eef9fa}
     .msg-author,.parent-chat-author{letter-spacing:.01em}
     #btnRefreshChats{display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:0!important;line-height:1!important}
     #btnRefreshChats .refresh-label{position:absolute!important;inset:0!important;display:flex!important;align-items:center!important;justify-content:center!important;width:auto!important;height:auto!important;font-size:2rem!important;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-weight:500;line-height:1!important;transform:translateY(-1px)!important}
@@ -24,16 +18,6 @@
   document.head.appendChild(style);
 
   function redrawRefresh(){const btn=document.getElementById('btnRefreshChats');if(!btn||btn.dataset.medsiRefreshV3==='1')return;btn.dataset.medsiRefreshV3='1';const label=btn.querySelector('.refresh-label');if(label)label.textContent='⟳'}
-
-  function markMedia(frame){
-    if(!frame||frame.dataset.medsiPolishedV2==='1')return;
-    frame.dataset.medsiPolishedV2='1';
-    const media=frame.querySelector('img,video');if(!media)return;
-    const ready=()=>{frame.classList.add('medsi-media-ready');frame.classList.remove('medsi-media-error')};
-    const fail=()=>{const tries=Number(media.dataset.medsiRetry||0);if(tries<1&&media.src){media.dataset.medsiRetry=String(tries+1);const src=media.src;setTimeout(()=>{media.src=src+(src.includes('?')?'&':'?')+'retry='+Date.now()},320)}else frame.classList.add('medsi-media-error')};
-    if(media.tagName==='VIDEO'){media.addEventListener('loadeddata',ready,{once:true});media.addEventListener('loadedmetadata',ready,{once:true});media.addEventListener('error',fail);if(media.readyState>=1)ready()}
-    else{media.addEventListener('load',ready,{once:true});media.addEventListener('error',fail);if(media.complete&&media.naturalWidth>0)ready()}
-  }
 
   function animateMessages(){
     for(const box of [document.getElementById('chatThreadBox'),document.getElementById('parentChatMessages')]){
@@ -49,7 +33,7 @@
   }
 
   let polishQueued=false;
-  function polish(){polishQueued=false;document.querySelectorAll('.msg-image-wrap,.parent-chat-media-frame').forEach(markMedia);redrawRefresh();animateScreens();animateMessages()}
+  function polish(){polishQueued=false;redrawRefresh();animateScreens();animateMessages()}
   function queuePolish(){if(polishQueued)return;polishQueued=true;requestAnimationFrame(polish)}
 
   const contentObserver=new MutationObserver(queuePolish);

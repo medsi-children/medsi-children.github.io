@@ -64,11 +64,21 @@
     if(!media||media.dataset.medsiMediaUx==='1')return;
     media.dataset.medsiMediaUx='1';
     const wrap=media.closest('.parent-chat-media-frame,.msg-image-wrap');if(!wrap)return;
-    const ready=()=>wrap.classList.add('medsi-media-ready');
+    const ready=()=>{wrap.classList.add('medsi-media-ready');wrap.classList.remove('medsi-media-error')};
+    const fail=()=>{
+      const tries=Number(media.dataset.medsiRetry||0);
+      if(tries<1&&media.src){
+        media.dataset.medsiRetry=String(tries+1);
+        const src=media.src;
+        setTimeout(()=>{media.src=src+(src.includes('?')?'&':'?')+'retry='+Date.now()},320);
+      }else wrap.classList.add('medsi-media-error');
+    };
     if(media.tagName==='IMG'){
       if(media.complete&&media.naturalWidth>0)ready();else media.addEventListener('load',ready,{once:true});
+      media.addEventListener('error',fail);
     }else{
       if(media.readyState>=1)ready();else media.addEventListener('loadedmetadata',ready,{once:true});
+      media.addEventListener('error',fail);
     }
   }
 
