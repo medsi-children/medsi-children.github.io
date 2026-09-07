@@ -103,6 +103,7 @@
     let sending=false;
     let disposed=false;
     let deleteTarget=null;
+    let threadRequestId=0;
 
     function tutorToken(){try{return String(localStorage.getItem('medsi_tutor_session_v1')||'')}catch(_){return''}}
     async function appApi(method,args){
@@ -215,8 +216,33 @@
       el.onclick=e=>openMessageMenu(m,el,e);el.oncontextmenu=e=>openMessageMenu(m,el,e);return el;
     }
     function renderRows(rows,stick=true){activeRows=Array.isArray(rows)?rows:[];chatThreadBox.replaceChildren();if(!activeRows.length){const e=document.createElement('div');e.className='chat-empty';e.textContent='Сообщений пока нет.';chatThreadBox.appendChild(e)}else activeRows.forEach(m=>chatThreadBox.appendChild(messageNode(m)));if(stick)requestAnimationFrame(()=>chatThreadBox.scrollTop=chatThreadBox.scrollHeight)}
-    async function refreshThread(preserve){if(!activeChat)return;const gap=chatThreadBox.scrollHeight-chatThreadBox.scrollTop-chatThreadBox.clientHeight;try{const res=await transport.thread(session,activeChat.phone,'',100);if(disposed)return;setCached(activeChat.phone,res.messages||[]);renderRows(res.messages||[],!preserve||gap<80);if(preserve&&gap>80)chatThreadBox.scrollTop=Math.max(0,chatThreadBox.scrollHeight-chatThreadBox.clientHeight-gap)}catch(err){overlay.showError(err.message||'Не удалось загрузить чат.')}}
-    async function openThread(chat){activeChat=chat;if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();showThreadScreen();renderThreadHeader(chat);const cached=getCached(chat.phone);if(cached)renderRows(cached.rows);else chatThreadBox.innerHTML='<div class="chat-empty">Загрузка...</div>';await refreshThread(false);transport.markRead(session,'educator',chat.phone).catch(()=>{});chat.hasUnread=false}
+    async function refreshThread(preserve){
+      if(!activeChat)return;
+      const targetPhone=phone10(activeChat.phone);
+      const requestId=++threadRequestId;
+      const gap=chatThreadBox.scrollHeight-chatThreadBox.scrollTop-chatThreadBox.clientHeight;
+      try{
+        const res=await transport.thread(session,targetPhone,'',100);
+        if(disposed)return;
+        setCached(targetPhone,res.messages||[]);
+        if(requestId!==threadRequestId||!activeChat||phone10(activeChat.phone)!==targetPhone)return;
+        renderRows(res.messages||[],!preserve||gap<80);
+        if(preserve&&gap>80)chatThreadBox.scrollTop=Math.max(0,chatThreadBox.scrollHeight-chatThreadBox.clientHeight-gap)
+      }catch(err){
+        if(requestId===threadRequestId&&activeChat&&phone10(activeChat.phone)===targetPhone)overlay.showError(err.message||'Не удалось загрузить чат.')
+      }
+    }
+    async function openThread(chat){
+      threadRequestId++;
+      setReply(null);editing=null;clearFile();editor.textContent='';
+      activeChat=chat;
+      if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
+      showThreadScreen();renderThreadHeader(chat);
+      const cached=getCached(chat.phone);if(cached)renderRows(cached.rows);else chatThreadBox.innerHTML='<div class="chat-empty">Загрузка...</div>';
+      await refreshThread(false);
+      if(!activeChat||phone10(activeChat.phone)!==phone10(chat.phone))return;
+      transport.markRead(session,'educator',chat.phone).catch(()=>{});chat.hasUnread=false
+    }
 
     const contextMenu=document.createElement('div');contextMenu.id='chatContextMenu';contextMenu.className='chat-context-menu hidden';contextMenu.innerHTML='<div class="chat-context-reactions"></div><div class="chat-context-actions"></div>';document.body.appendChild(contextMenu);
     function closeMessageMenu(){contextMenu.classList.add('hidden');contextMenu.querySelector('.chat-context-reactions').replaceChildren();contextMenu.querySelector('.chat-context-actions').replaceChildren()}
@@ -234,17 +260,35 @@
     function setSending(v){sending=!!v;send.disabled=sending;attach.disabled=sending;editor.contentEditable=sending?'false':'true'}
     async function submit(){
       if(!activeChat||sending)return;const value=String(editor.textContent||'').trim();if(!value&&!pendingFile)return;setSending(true);
+      const targetChat=activeChat;
+      const targetPhone=phone10(targetChat.phone);
+      const targetFile=pendingFile;
+      const targetReply=replyTo;
+      const targetEditing=editing;
       try{
-        if(editing){await transport.edit(session,'educator',editing.messageKey,value);editing=null;editor.textContent='';await refreshThread(false)}
-        else if(pendingFile){const up=await transport.upload(session,activeChat.phone,pendingFile);await transport.sendMessage(session,'educator',activeChat.phone,{type:up.type||(pendingFile.type.startsWith('video/')?'video':'image'),text:value,fileId:up.fileId,replyToKey:replyTo&&replyTo.messageKey||''});editor.textContent='';setReply(null);clearFile();await refreshThread(false)}
-        else{const optimistic={side:'educator',type:'text',text:value,timestamp:Date.now(),messageKey:'pending-'+Date.now().toString(36)};renderRows(activeRows.concat(optimistic));editor.textContent='';await transport.sendMessage(session,'educator',activeChat.phone,{type:'text',text:value,replyToKey:replyTo&&replyTo.messageKey||''});setReply(null);setSending(false);refreshThread(false);return}
+        if(targetEditing){
+          await transport.edit(session,'educator',targetEditing.messageKey,value);
+          if(activeChat===targetChat){editing=null;editor.textContent='';await refreshThread(false)}
+        }
+        else if(targetFile){
+          const up=await transport.upload(session,targetPhone,targetFile);
+          await transport.sendMessage(session,'educator',targetPhone,{type:up.type||(targetFile.type.startsWith('video/')?'video':'image'),text:value,fileId:up.fileId,replyToKey:targetReply&&targetReply.messageKey||''});
+          if(activeChat===targetChat){editor.textContent='';setReply(null);clearFile();await refreshThread(false)}
+        }
+        else{
+          const optimistic={side:'educator',type:'text',text:value,timestamp:Date.now(),messageKey:'pending-'+Date.now().toString(36)};
+          renderRows(activeRows.concat(optimistic));editor.textContent='';
+          await transport.sendMessage(session,'educator',targetPhone,{type:'text',text:value,replyToKey:targetReply&&targetReply.messageKey||''});
+          if(activeChat===targetChat){setReply(null);setSending(false);refreshThread(false)}
+          return
+        }
       }catch(err){overlay.showError(err.message||'Не удалось отправить сообщение.')}finally{setSending(false);editor.focus()}
     }
 
     btnChatsBack.onclick=()=>overlay.close();
     btnNewChat.onclick=()=>overlay.showError('Экран выбора нового родителя перенесём следующим блоком из оригинала.');
     btnRefreshChats.onclick=()=>loadChats(true);
-    btnThreadBack.onclick=()=>{activeChat=null;bucket='unread';loadChats(false)};
+    btnThreadBack.onclick=()=>{threadRequestId++;activeChat=null;setReply(null);editing=null;clearFile();editor.textContent='';bucket='unread';loadChats(false)};
     btnQuickReplies.onclick=()=>quickPanel.classList.toggle('hidden');
     quickDoctors.onclick=()=>doctorButtons.classList.toggle('hidden');
     btnVideo.onclick=()=>fileInput.click();
