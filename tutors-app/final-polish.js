@@ -29,9 +29,6 @@
         color:#fff!important;
         box-shadow:0 10px 22px rgba(217,120,152,.18)!important;
       }
-      @media(min-width:561px){
-        #screenPhones .medsi-phone-call-mini svg{transform:translateX(1px)!important}
-      }
     `;
     document.head.appendChild(style);
   }
