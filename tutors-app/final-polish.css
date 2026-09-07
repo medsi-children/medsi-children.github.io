@@ -38,11 +38,11 @@ body .educator-exact-clone #screenChatThread #chatReplyInput{scrollbar-width:non
 body .educator-exact-clone #screenChatThread #chatReplyInput::placeholder{color:#9aa9ad!important;opacity:1!important}
 body .educator-exact-clone #screenChatThread #chatReplyInput::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}
 
-/* Desktop phone action: center the SVG by its box, then apply a tiny optical correction
-   for the handset drawing itself. This intentionally outranks the late JS tweak. */
+/* Desktop phone action: center the button box, then compensate for the handset's
+   strongly left-heavy visual mass. Mobile is intentionally untouched. */
 @media(min-width:561px){
   body #screenPhones .medsi-phone-call-mini{display:grid!important;place-items:center!important;padding:0!important}
-  body #screenPhones .medsi-phone-call-mini svg{display:block!important;width:24px!important;height:24px!important;margin:0!important;transform:translateX(2.5px)!important;transform-origin:center!important}
+  body #screenPhones .medsi-phone-call-mini svg{display:block!important;width:24px!important;height:24px!important;margin:0!important;transform:translateX(7.5px)!important;transform-origin:center!important}
 }
 
 /* Reaction badge: a true circle, a couple of pixels lower. */
