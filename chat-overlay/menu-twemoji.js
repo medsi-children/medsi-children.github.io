@@ -27,7 +27,7 @@
       #btnChat .menu-card-title .medsi-menu-twemoji,
       #btnParentChats .menu-card-title .medsi-menu-twemoji{
         filter:brightness(0) invert(1) drop-shadow(0 1px 1px rgba(17,66,74,.12));
-        opacity:.98;
+        opacity:.80;
       }
       /* Phones card uses the same idea, but tinted to a vivid violet that
          harmonizes with the card instead of turning the icon white. */

@@ -70,10 +70,9 @@
 
 Приоритет консолидации:
 
-1. `chat-overlay/composer-experiment.js`
-   - перенесён в production-модули `chat-overlay/composer-ui.css` и `chat-overlay/composer-ui.js`;
-   - больше не подключается в production;
-   - оставить только до ручной проверки нового модуля, затем удалить отдельным коммитом.
+1. Composer
+   - production-владельцы: `chat-overlay/composer-ui.css` и `chat-overlay/composer-ui.js`;
+   - прежний `composer-experiment.js` удалён после ручной проверки.
 
 2. `chat-overlay/chat-copy-polish.js`
    - временно нормализует старые timestamp strings и placeholders;
