@@ -67,7 +67,7 @@
     const fileInput=document.createElement('input');fileInput.id='chatImageInput';fileInput.type='file';fileInput.accept='image/*,video/*';fileInput.className='hidden';
     const attach=document.createElement('button');attach.id='chatAttachBtn';attach.type='button';attach.className='btn chat-attach-btn';attach.textContent='📎';
     const editorWrap=document.createElement('div');editorWrap.id='chatReplyEditor';editorWrap.className='chat-reply-editor';
-    const editor=document.createElement('div');editor.id='chatReplyInput';editor.contentEditable='true';editor.setAttribute('role','textbox');editor.setAttribute('aria-multiline','true');editor.dataset.placeholder='Введите ответ родителю...';editorWrap.appendChild(editor);
+    const editor=document.createElement('div');editor.id='chatReplyInput';editor.contentEditable='true';editor.setAttribute('role','textbox');editor.setAttribute('aria-multiline','true');editor.dataset.placeholder='Введите сообщение…';editorWrap.appendChild(editor);
     const send=document.createElement('button');send.id='chatReplySendBtn';send.type='button';send.className='btn btn-mint chat-send-btn';send.textContent='Отправить';
     chatCompose.append(fileInput,attach,editorWrap,send);
     const imagePreview=document.createElement('div');imagePreview.id='chatImagePreview';imagePreview.className='chat-image-preview hidden';imagePreview.innerHTML='<div class="preview-item"><img id="chatImagePreviewImg" src="" alt="Превью фото"><button id="chatImageRemoveBtn" class="preview-remove-btn" type="button" title="Удалить фото">✕</button></div>';

@@ -109,9 +109,6 @@
   syncPushPanel();
 
   /* Install final chat geometry before optional media helpers. */
-  if(!document.querySelector('script[data-medsi-composer-experiment]')){
-    const s=document.createElement('script');s.async=false;s.src='/chat-overlay/composer-experiment.js?v=20260907-3';s.dataset.medsiComposerExperiment='1';document.head.appendChild(s);
-  }
   if(!document.querySelector('script[data-medsi-gesture-navigation]')){
     const s=document.createElement('script');s.async=false;s.src='/chat-overlay/gesture-navigation.js?v=20260907-hint-1';s.dataset.medsiGestureNavigation='1';document.head.appendChild(s);
   }

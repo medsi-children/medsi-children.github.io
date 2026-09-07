@@ -71,10 +71,9 @@
 Приоритет консолидации:
 
 1. `chat-overlay/composer-experiment.js`
-   - новый composer уже принят визуально;
-   - перенести постоянные CSS-правила в штатные chat styles;
-   - перенести создание/перестановку DOM в соответствующие renderers;
-   - после проверки удалить loader и сам файл.
+   - перенесён в production-модули `chat-overlay/composer-ui.css` и `chat-overlay/composer-ui.js`;
+   - больше не подключается в production;
+   - оставить только до ручной проверки нового модуля, затем удалить отдельным коммитом.
 
 2. `chat-overlay/chat-copy-polish.js`
    - временно нормализует старые timestamp strings и placeholders;
