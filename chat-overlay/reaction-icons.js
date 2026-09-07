@@ -49,14 +49,17 @@
       delete el.dataset.medsiReactionLoading;
       if(!el.isConnected)return;
       el.dataset.medsiReactionIcon='1';
-      el.replaceChildren(img);
     };
     img.onerror=()=>{
       delete el.dataset.medsiReactionLoading;
+      delete el.dataset.medsiReactionIcon;
       el.dataset.medsiReactionFallback='1';
-      if(el.isConnected&&!String(el.textContent||'').trim())el.textContent=reaction;
+      if(el.isConnected)el.replaceChildren(document.createTextNode(reaction));
     };
     img.src=REACTIONS[reaction];
+    // Replace Unicode immediately. The SVG request is already warmed during app
+    // startup, so reaction badges and picker buttons no longer visibly morph.
+    el.replaceChildren(img);
   }
 
   function scan(root){
