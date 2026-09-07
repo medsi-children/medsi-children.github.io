@@ -6,3 +6,8 @@ body>.wrap{animation:medsiParentShellIn .14s ease .06s both}
 .report-disclaimer.report-disclaimer-morning{background:linear-gradient(135deg,#ffd867 0%,#ffbf3a 54%,#f5a623 100%);border-color:rgba(191,132,16,.18);box-shadow:0 16px 34px rgba(217,158,25,.20)}.report-disclaimer.report-disclaimer-evening{background:linear-gradient(135deg,#9fd5ff 0%,#5fa8f0 54%,#4a8ee3 100%);border-color:rgba(63,111,190,.18);box-shadow:0 16px 34px rgba(74,142,227,.20)}.report-disclaimer.report-disclaimer-psychology{background:linear-gradient(135deg,#f5b8c8 0%,#e98ba7 48%,#d97898 100%);border-color:rgba(190,85,121,.18);box-shadow:0 16px 34px rgba(217,120,152,.18)}
 #btnChat .menu-card-title{font-size:calc(1em + 2px)}
 @media(max-width:560px){#phoneChip{font-size:.88rem;padding-left:8px;padding-right:8px}.logout-btn{padding-left:10px!important;padding-right:10px!important}}
+/* Static parent-screen visibility rules formerly inserted after page load. */
+#rim{display:none!important}
+body[data-screen="screenStart"] #chips,body[data-screen="screenNames"] #chips,body[data-screen="screenPhoneReg"] #chips,body[data-screen="screenAuth"] #chips{display:none!important}
+body[data-screen="screenStart"] #headerBlock,body[data-screen="screenNames"] #headerBlock,body[data-screen="screenPhoneReg"] #headerBlock,body[data-screen="screenAuth"] #headerBlock,body[data-screen="screenChoose"] #headerBlock,body[data-screen="screenChat"] #headerBlock{display:none!important}
+#boot.hidden{display:none!important}
