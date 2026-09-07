@@ -2,7 +2,7 @@
   if(window.MedsiMenuTwemoji)return;
   window.MedsiMenuTwemoji=true;
 
-  const BASE='https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/';
+  const BASE='/chat-overlay/assets/twemoji/';
   const ITEMS=[
     ['#btnChat .menu-card-title','💬','1f4ac.svg'],
     ['#btnParentChats .menu-card-title','💬','1f4ac.svg'],
@@ -38,6 +38,9 @@
     `;
     document.head.appendChild(style);
   }
+
+  // Start the six tiny same-origin asset requests immediately so menu paint is normally cache-hot.
+  [...new Set(ITEMS.map(item=>item[2]))].forEach(file=>{const img=new Image();img.decoding='async';img.src=BASE+file});
 
   function paintOne(selector,emoji,file){
     const title=document.querySelector(selector);

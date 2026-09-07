@@ -2,15 +2,16 @@
   if(window.MedsiReactionIcons)return;
 
   // Visual-only reaction skin. The chat still stores/sends normal Unicode reactions.
-  // Preview source: Twitter Twemoji graphics (CC BY 4.0).
+  // Twitter Twemoji graphics are vendored locally under CC BY 4.0.
+  const BASE='/chat-overlay/assets/twemoji/';
   const REACTIONS={
-    '❤️':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/2764.svg',
-    '👍':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f44d.svg',
-    '👌':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f44c.svg',
-    '🙏':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f64f.svg',
-    '🥰':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f970.svg',
-    '😁':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f601.svg',
-    '🔥':'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f525.svg'
+    '❤️':BASE+'2764.svg',
+    '👍':BASE+'1f44d.svg',
+    '👌':BASE+'1f44c.svg',
+    '🙏':BASE+'1f64f.svg',
+    '🥰':BASE+'1f970.svg',
+    '😁':BASE+'1f601.svg',
+    '🔥':BASE+'1f525.svg'
   };
   const selector='.parent-chat-reaction,.parent-chat-reaction-btn,.msg-reaction,.msg-reaction-btn';
 
@@ -23,6 +24,9 @@
     .parent-chat-reaction-btn,.msg-reaction-btn{display:inline-flex!important;align-items:center!important;justify-content:center!important}
   `;
   document.head.appendChild(style);
+
+  // Warm the tiny same-origin SVG set as soon as the module is evaluated.
+  [...new Set(Object.values(REACTIONS))].forEach(src=>{const img=new Image();img.decoding='async';img.src=src});
 
   function getReaction(el){
     const saved=String(el&&el.dataset&&el.dataset.medsiReaction||'');
@@ -70,10 +74,10 @@
   if(!document.querySelector('script[data-medsi-menu-twemoji]')){
     const s=document.createElement('script');
     s.async=false;
-    s.src='/chat-overlay/menu-twemoji.js?v=20260907-3';
+    s.src='/chat-overlay/menu-twemoji.js?v=20260907-local-1';
     s.dataset.medsiMenuTwemoji='1';
     document.head.appendChild(s);
   }
 
-  window.MedsiReactionIcons={paint,scan,source:'Twitter Twemoji'};
+  window.MedsiReactionIcons={paint,scan,source:'Twitter Twemoji local assets'};
 })();
