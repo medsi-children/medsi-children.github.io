@@ -74,6 +74,7 @@
 - `chat-overlay/message-enhancements.js` — метаданные сообщения: время, receipts, date separators, reply UI. После стабилизации нужно проверить, какие части можно перенести непосредственно в renderers.
 - `chat-overlay/media-ui.css` и `upload-ux.js` — placeholder и готовность фото/видео.
 - `chat-overlay/chat-motion-ui.css` и `chat-motion.js` — анимации появления экранов и сообщений.
+- `chat-overlay/chat-surface-ui.css` — общий статичный фон чатов.
 - `chat-overlay/gesture-navigation.js` — фиксированная иерархия свайпов.
 - `chat-overlay/video-link.js` / `video-link-preview.js` — видео/ссылки.
 
@@ -95,11 +96,7 @@
    - renderer `educator-chat.js` явно инициализирует этот модуль после создания DOM;
    - прежние `chat-list-experiment.js` и `chat-list-cascade.js` удалены после ручной проверки.
 
-4. `chat-overlay/terminology-fix.js`
-   - перенести фон чата и оставшиеся статичные подписи к владельцам;
-   - убрать позднюю замену текста после окончательной сверки формулировок.
-
-5. Другие исторические fix-файлы
+4. Другие исторические fix-файлы
    - не удалять по названию;
    - сначала проверить, какие функции реально используются production;
    - затем распределить их по функциональным владельцам.

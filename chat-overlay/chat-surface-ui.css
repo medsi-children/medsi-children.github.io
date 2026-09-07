@@ -1,0 +1,4 @@
+#chatThreadBox.chat-box,.parent-chat-messages{background:radial-gradient(circle at 18% 12%,rgba(36,211,218,.10),transparent 30%),radial-gradient(circle at 82% 88%,rgba(15,199,206,.08),transparent 32%),linear-gradient(180deg,#fbfefe 0%,#f5fbfc 100%)!important;background-size:auto!important;background-position:initial!important;background-repeat:no-repeat!important}
+#btnRefreshChats{display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;line-height:1!important}
+#btnRefreshChats .refresh-label{position:static!important;inset:auto!important;display:flex!important;flex:1 1 auto!important;align-items:center!important;justify-content:center!important;width:100%!important;height:100%!important;margin:0!important;padding:0!important;line-height:1!important;transform:none!important;font-weight:700!important;-webkit-text-stroke:.35px currentColor}
+#btnRefreshChats.loading .refresh-label{display:none!important}
