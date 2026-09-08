@@ -45,6 +45,10 @@
       m&&m.replyToKey||'',m&&m.reply&&m.reply.messageKey||'',m&&m.reply&&m.reply.text||'',receiptState(m)
     ]))
   }
+  function messageKey(m){const key=String(m&&m.messageKey||'').trim();return key||['fallback',m&&m.side||'',m&&m.timestamp||'',m&&m.type||'',m&&m.fileId||'',m&&m.text||''].join('|')}
+  function messageSig(m){return JSON.stringify([m&&m.side||'',m&&m.type||'',m&&m.text||'',m&&m.fileId||'',m&&m.reaction||'',m&&m.editedAt||'',m&&m.timestamp||'',m&&m.replyToKey||'',m&&m.reply&&m.reply.messageKey||'',m&&m.reply&&m.reply.text||'',receiptState(m)])}
+  function isPending(m){return String(m&&m.messageKey||'').startsWith('pending-')}
+  function samePendingMessage(pending,confirmed){return isPending(pending)&&!isPending(confirmed)&&String(pending&&pending.side||'')===String(confirmed&&confirmed.side||'')&&String(pending&&pending.type||'')===String(confirmed&&confirmed.type||'')&&String(pending&&pending.text||'')===String(confirmed&&confirmed.text||'')&&String(pending&&pending.fileId||'')===String(confirmed&&confirmed.fileId||'')&&Math.abs(Number(pending&&pending.timestamp||0)-Number(confirmed&&confirmed.timestamp||0))<120000}
   function nearBottom(){const box=$('parentChatMessages');return !box||box.scrollHeight-box.scrollTop-box.clientHeight<90}
   function scrollBottom(smooth){const box=$('parentChatMessages');if(!box)return;requestAnimationFrame(()=>box.scrollTo({top:box.scrollHeight,behavior:smooth?'smooth':'auto'}))}
   function showError(msg){const e=$('parentChatError');if(!e)return;e.textContent=String(msg||'Не удалось открыть чат.');e.classList.remove('hidden')}
@@ -106,21 +110,9 @@
   document.addEventListener('click',e=>{if(reactionMenu&&!reactionMenu.classList.contains('hidden')&&!e.target.closest('.parent-chat-context,.parent-chat-msg'))closeReactionMenu()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLightbox();closeReactionMenu()}});
 
-  function render(list,opts){
-    const box=$('parentChatMessages');if(!box)return;
-    closeReactionMenu();
-    const stick=opts&&opts.stick!==undefined?!!opts.stick:nearBottom();
-    const preserveExact=!!(opts&&opts.preserveExact);
-    const silent=!!(opts&&opts.silent);
-    const oldHeight=box.scrollHeight,oldTop=box.scrollTop;
-    rows=Array.isArray(list)?list:[];box.replaceChildren();
-    if(!rows.length){const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Сообщений пока нет.';box.appendChild(e);return}
-    let previousDay='';
-    rows.forEach(m=>{
-      const chip=dateChip(m&&m.timestamp);
-      if(chip&&chip.key!==previousDay){const sep=document.createElement('div');sep.className='medsi-date-separator';sep.dataset.dateKey=chip.key;sep.textContent=chip.label;box.appendChild(sep);previousDay=chip.key}
-      const el=document.createElement('article');el.className='parent-chat-msg '+(m.side==='parent'?'parent':'educator');
-      if(silent)el.dataset.medsiAnimated='1';
+  function messageNode(m,quiet){
+      const el=document.createElement('article');el.className='parent-chat-msg '+(m.side==='parent'?'parent':'educator');el.dataset.medsiMessageKey=messageKey(m);el.dataset.medsiMessageSignature=messageSig(m);
+      if(quiet)el.dataset.medsiAnimated='1';
       const author=document.createElement('div');author.className='parent-chat-author';
       author.textContent=m.side==='parent'
         ?'Родитель'+(state.parentName?' '+state.parentName:'')
@@ -146,10 +138,39 @@
       if(m.reaction){const r=document.createElement('span');r.className='parent-chat-reaction';r.textContent=String(m.reaction);el.appendChild(r)}
       const tm=document.createElement('span');tm.className='parent-chat-time';tm.textContent=fmt(m.timestamp);el.appendChild(tm);
       el.onclick=e=>{if(e.target.closest('img,video,button,.parent-chat-reaction'))return;e.preventDefault();e.stopPropagation();openReactionMenu(m,el)};
-      box.appendChild(el)
+      return el
+  }
+  function render(list,opts){
+    const box=$('parentChatMessages');if(!box)return;
+    closeReactionMenu();
+    const stick=opts&&opts.stick!==undefined?!!opts.stick:nearBottom();
+    const preserveExact=!!(opts&&opts.preserveExact);
+    const oldHeight=box.scrollHeight,oldTop=box.scrollTop;
+    const previousRows=rows,updatedRows=Array.isArray(list)?list:[];
+    const existing=new Map([...box.children].filter(el=>el.matches&&el.matches('.parent-chat-msg')&&el.dataset.medsiMessageKey).map(el=>[el.dataset.medsiMessageKey,el]));
+    const hadMessages=existing.size>0;
+    const hasStableOverlap=updatedRows.some(m=>existing.has(messageKey(m)));
+    const quietAllNew=hadMessages&&!hasStableOverlap;
+    const pendingRows=previousRows.filter(isPending),usedPending=new Set();
+    let addedAnimated=0;
+    const messageNodes=updatedRows.map((m,index)=>{
+      const key=messageKey(m),sig=messageSig(m),old=existing.get(key);
+      if(old&&old.dataset.medsiMessageSignature===sig)return old;
+      if(old)return messageNode(m,true);
+      const pending=pendingRows.find(row=>!usedPending.has(messageKey(row))&&samePendingMessage(row,m));
+      if(pending)usedPending.add(messageKey(pending));
+      const quiet=quietAllNew||!!pending||(!hadMessages&&index<updatedRows.length-14);
+      if(!quiet)addedAnimated++;
+      return messageNode(m,quiet)
     });
+    rows=updatedRows;
+    if(!rows.length){const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Сообщений пока нет.';box.replaceChildren(e);return}
+    const fragment=document.createDocumentFragment();
+    let previousDay='';
+    rows.forEach((m,i)=>{const chip=dateChip(m&&m.timestamp);if(chip&&chip.key!==previousDay){const sep=document.createElement('div');sep.className='medsi-date-separator';sep.dataset.dateKey=chip.key;sep.textContent=chip.label;fragment.appendChild(sep);previousDay=chip.key}fragment.appendChild(messageNodes[i])});
+    box.replaceChildren(fragment);
     requestAnimationFrame(()=>{
-      if(stick)box.scrollTop=box.scrollHeight;
+      if(stick)box.scrollTo({top:box.scrollHeight,behavior:hadMessages&&addedAnimated?'smooth':'auto'});
       else if(preserveExact)box.scrollTop=Math.max(0,oldTop);
       else box.scrollTop=Math.max(0,oldTop+(box.scrollHeight-oldHeight));
     })
@@ -166,7 +187,7 @@
     const shouldRender=!!opts.force||changed;
     if(shouldRender){
       const stick=opts.stick!==undefined?!!opts.stick:nearBottom();
-      render(list,{stick,silent:!!opts.silent,preserveExact:!!opts.background&&!stick});
+      render(list,{stick,preserveExact:!!opts.background&&!stick});
     }else rows=list;
     if((changed||opts.forceRead)&&!chatClosed){
       t.markRead(state.session,'parent',state.phone).catch(err=>{if(isChatClosedError(err))showClosedChat()});

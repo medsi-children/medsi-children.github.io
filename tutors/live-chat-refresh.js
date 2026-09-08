@@ -153,6 +153,9 @@
     if(next===previous)return;
     threadSignatures.set(phone,next);
 
+    const applyRows=window.__medsiEducatorApplyThreadRefresh;
+    if(typeof applyRows==='function'&&applyRows(phone,messagesFrom(res)))return;
+
     const card=activeCard(phone);if(!card)return;
     const box=document.getElementById('chatThreadBox');
     const oldTop=box?box.scrollTop:0;

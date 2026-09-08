@@ -8,7 +8,7 @@
     for(const box of [document.getElementById('chatThreadBox'),document.getElementById('parentChatMessages')]){
       if(!box||!box.isConnected)continue;
       const nodes=[...box.children].filter(el=>el.matches&&el.matches('.msg,.parent-chat-msg')&&!el.dataset.medsiAnimated);
-      nodes.slice(-14).forEach((el,i)=>{el.dataset.medsiAnimated='1';el.style.setProperty('--medsi-message-delay',Math.min(i*22,154)+'ms');el.classList.add('medsi-message-enter')});
+      nodes.forEach((el,i)=>{el.dataset.medsiAnimated='1';el.style.setProperty('--medsi-message-delay',Math.min(i*22,154)+'ms');el.classList.add('medsi-message-enter')});
     }
   }
 

@@ -21,6 +21,10 @@
   const setCached=(p,rows)=>threadCache.set(phone10(p),{rows:Array.isArray(rows)?rows:[],at:Date.now()});
 
   function fmt(v){const d=new Date(Number(v));return Number.isNaN(d.getTime())?'':d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}
+  function messageKey(m){const key=String(m&&m.messageKey||'').trim();return key||['fallback',m&&m.side||'',m&&m.timestamp||'',m&&m.type||'',m&&m.fileId||'',m&&m.text||''].join('|')}
+  function messageSig(m){return JSON.stringify([m&&m.side||'',m&&m.type||'',m&&m.text||'',m&&m.fileId||'',m&&m.reaction||'',m&&m.editedAt||'',m&&m.timestamp||'',m&&m.replyToKey||'',m&&m.reply&&m.reply.messageKey||'',m&&m.reply&&m.reply.text||'',m&&m.readByParent,m&&m.readByParentAt,m&&m.parentRead,m&&m.parentReadAt,m&&m.read_by_parent,m&&m.parent_read_at])}
+  function isPending(m){return String(m&&m.messageKey||'').startsWith('pending-')}
+  function samePendingMessage(pending,confirmed){return isPending(pending)&&!isPending(confirmed)&&String(pending&&pending.side||'')===String(confirmed&&confirmed.side||'')&&String(pending&&pending.type||'')===String(confirmed&&confirmed.type||'')&&String(pending&&pending.text||'')===String(confirmed&&confirmed.text||'')&&String(pending&&pending.fileId||'')===String(confirmed&&confirmed.fileId||'')&&Math.abs(Number(pending&&pending.timestamp||0)-Number(confirmed&&confirmed.timestamp||0))<120000}
   function preview(c){if(!c)return'';if(c.lastType==='image')return c.lastText||'[Фотография]';if(c.lastType==='video')return c.lastText||'[Видео]';return c.lastText||'Нет сообщений'}
   function replyLabel(r){if(!r)return'';if(r.text)return String(r.text).slice(0,120);if(r.type==='image')return'Фотография';if(r.type==='video')return'Видео';return'Сообщение'}
   function mediaUrl(m){const id=String(m&&m.fileId||'');if(!id)return'';const transport=window.MedsiOverlayTransport;if(transport&&typeof transport.mediaUrl==='function')return transport.mediaUrl(id,'w1200');if(id.startsWith('kv:')||id.startsWith('r2:'))return window.MedsiOverlayTransport.baseUrl+'/media/'+encodeURIComponent(id.slice(3));return'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1200'}
@@ -201,8 +205,8 @@
     }
 
     function renderThreadHeader(chat){chatThreadHeader.replaceChildren();['Родитель: '+(chat.parentName||'—'),'Ребёнок: '+(chat.childName||'—'),'Номер телефона: '+displayPhone(chat.phone||'')].forEach(text=>{const d=document.createElement('div');d.textContent=text;chatThreadHeader.appendChild(d)})}
-    function messageNode(m){
-      const el=document.createElement('div');el.className='msg '+(m.side==='educator'?'educator':'parent');
+    function messageNode(m,quiet){
+      const el=document.createElement('div');el.className='msg '+(m.side==='educator'?'educator':'parent');el.dataset.medsiMessageKey=messageKey(m);el.dataset.medsiMessageSignature=messageSig(m);if(quiet)el.dataset.medsiAnimated='1';
       const author=document.createElement('div');author.className='msg-author';
       author.textContent=m.side==='parent'
         ?'Родитель'+(activeChat&&activeChat.parentName?' '+activeChat.parentName:'')
@@ -215,7 +219,16 @@
       const time=document.createElement('span');time.className='msg-time';time.textContent=[fmt(m.timestamp),m.editedAt?'изм.':''].filter(Boolean).join(' · ');el.appendChild(time);
       el.onclick=e=>openMessageMenu(m,el,e);el.oncontextmenu=e=>openMessageMenu(m,el,e);return el;
     }
-    function renderRows(rows,stick=true){activeRows=Array.isArray(rows)?rows:[];chatThreadBox.replaceChildren();if(!activeRows.length){const e=document.createElement('div');e.className='chat-empty';e.textContent='Сообщений пока нет.';chatThreadBox.appendChild(e)}else activeRows.forEach(m=>chatThreadBox.appendChild(messageNode(m)));if(stick)requestAnimationFrame(()=>chatThreadBox.scrollTop=chatThreadBox.scrollHeight)}
+    function renderRows(nextRows,stick=true,opts){
+      const previousRows=activeRows,updatedRows=Array.isArray(nextRows)?nextRows:[],oldTop=chatThreadBox.scrollTop;
+      const existing=new Map([...chatThreadBox.children].filter(el=>el.matches&&el.matches('.msg')&&el.dataset.medsiMessageKey).map(el=>[el.dataset.medsiMessageKey,el]));
+      const hadMessages=existing.size>0,hasStableOverlap=updatedRows.some(m=>existing.has(messageKey(m))),quietAllNew=hadMessages&&!hasStableOverlap;
+      const pendingRows=previousRows.filter(isPending),usedPending=new Set();let addedAnimated=0;
+      const nodes=updatedRows.map((m,index)=>{const key=messageKey(m),sig=messageSig(m),old=existing.get(key);if(old&&old.dataset.medsiMessageSignature===sig)return old;if(old)return messageNode(m,true);const pending=pendingRows.find(row=>!usedPending.has(messageKey(row))&&samePendingMessage(row,m));if(pending)usedPending.add(messageKey(pending));const quiet=quietAllNew||!!pending||(!hadMessages&&index<updatedRows.length-14);if(!quiet)addedAnimated++;return messageNode(m,quiet)});
+      activeRows=updatedRows;
+      if(!activeRows.length){const e=document.createElement('div');e.className='chat-empty';e.textContent='Сообщений пока нет.';chatThreadBox.replaceChildren(e)}else{const fragment=document.createDocumentFragment();nodes.forEach(node=>fragment.appendChild(node));chatThreadBox.replaceChildren(fragment)}
+      requestAnimationFrame(()=>{if(stick)chatThreadBox.scrollTo({top:chatThreadBox.scrollHeight,behavior:hadMessages&&addedAnimated?'smooth':'auto'});else if(opts&&opts.preserveExact)chatThreadBox.scrollTop=Math.max(0,oldTop)})
+    }
     async function refreshThread(preserve){
       if(!activeChat)return;
       const targetPhone=phone10(activeChat.phone);
@@ -226,8 +239,7 @@
         if(disposed)return;
         setCached(targetPhone,res.messages||[]);
         if(requestId!==threadRequestId||!activeChat||phone10(activeChat.phone)!==targetPhone)return;
-        renderRows(res.messages||[],!preserve||gap<80);
-        if(preserve&&gap>80)chatThreadBox.scrollTop=Math.max(0,chatThreadBox.scrollHeight-chatThreadBox.clientHeight-gap)
+        renderRows(res.messages||[],!preserve||gap<80,{preserveExact:preserve&&gap>80});
       }catch(err){
         if(requestId===threadRequestId&&activeChat&&phone10(activeChat.phone)===targetPhone)overlay.showError(err.message||'Не удалось загрузить чат.')
       }
@@ -243,6 +255,13 @@
       if(!activeChat||phone10(activeChat.phone)!==phone10(chat.phone))return;
       transport.markRead(session,'educator',chat.phone).catch(()=>{});chat.hasUnread=false
     }
+    function applyLiveRows(phone,nextRows){
+      if(disposed||!activeChat||phone10(activeChat.phone)!==phone10(phone))return false;
+      const stick=chatThreadBox.scrollHeight-chatThreadBox.scrollTop-chatThreadBox.clientHeight<90;
+      setCached(phone,nextRows);renderRows(nextRows,stick,{preserveExact:!stick});
+      transport.markRead(session,'educator',phone).catch(()=>{});activeChat.hasUnread=false;return true
+    }
+    window.__medsiEducatorApplyThreadRefresh=applyLiveRows;
 
     const contextMenu=document.createElement('div');contextMenu.id='chatContextMenu';contextMenu.className='chat-context-menu hidden';contextMenu.innerHTML='<div class="chat-context-reactions"></div><div class="chat-context-actions"></div>';document.body.appendChild(contextMenu);
     function closeMessageMenu(){contextMenu.classList.add('hidden');contextMenu.querySelector('.chat-context-reactions').replaceChildren();contextMenu.querySelector('.chat-context-actions').replaceChildren()}
@@ -306,6 +325,7 @@
     loadChats(false);
     return()=>{
       disposed=true;
+      if(window.__medsiEducatorApplyThreadRefresh===applyLiveRows)delete window.__medsiEducatorApplyThreadRefresh;
       if(pendingUrl)URL.revokeObjectURL(pendingUrl);
       contextMenu.remove();childDeleteModal.remove();
       overlay.root.classList.remove('educator-exact-clone');
