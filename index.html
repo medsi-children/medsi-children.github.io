@@ -39,9 +39,9 @@
 
   <section id="screenPhoneReg" class="hidden"><h2 class="form-title">Номер телефона</h2><p class="form-subtitle">Введите номер, который будет привязан к вашему Медси Боту.</p><div class="registration-fields"><div class="field-block"><label for="phoneInputReg">Номер телефона</label><input id="phoneInputReg" type="tel" inputmode="tel" autocomplete="tel" placeholder="88005553535"></div></div><p class="registration-note">После регистрации вход сохранится на этом устройстве.</p><p id="phoneErrorReg" class="error hidden"></p><p id="alreadyRegistered" class="info hidden"></p><div class="grid2" style="margin-top:12px"><button id="phoneRegBackBtn" class="btn">Назад</button><button id="registerBtn" class="btn primary">Зарегистрироваться</button></div></section>
 
-  <section id="screenAuth" class="hidden"><h2 class="form-title">Повторная авторизация</h2><p class="form-subtitle">Введите номер телефона, который вы указывали при регистрации.</p><div class="registration-fields">
+  <section id="screenAuth" class="hidden"><h2 class="form-title">Авторизация</h2><p class="form-subtitle">Введите номер телефона, который вы указывали при регистрации.</p><div class="registration-fields">
     <div class="field-block"><label for="phoneInputAuth">Номер телефона</label><input id="phoneInputAuth" type="tel" inputmode="tel" autocomplete="tel" placeholder="88005553535"></div>
-  </div><p class="registration-note">Воспитателю придёт запрос на подтверждение входа.</p><p id="phoneErrorAuth" class="error hidden"></p><div class="grid2" style="margin-top:12px"><button id="authBackBtn" class="btn">Назад</button><button id="authBtn" class="btn btn-teal">Запросить вход</button></div></section>
+  </div><p class="registration-note">После авторизации, ожидайте подтверждения от воспитателя.</p><p id="phoneErrorAuth" class="error hidden"></p><div class="grid2" style="margin-top:12px"><button id="authBackBtn" class="btn">Назад</button><button id="authBtn" class="btn btn-teal">Запросить вход</button></div></section>
 
   <section id="screenRegistrationPending" class="hidden access-wait-screen"><div class="access-spinner" aria-hidden="true"></div><h2 class="form-title">Регистрация…</h2><p id="registrationPendingText" class="form-subtitle">Пожалуйста, подождите. Мы сохраняем данные и готовим Медси Бот.</p></section>
 
@@ -77,7 +77,7 @@
 </article></div>
 <script src="/parents/chat-screen.js?v=20260908-incremental-1"></script>
 <script src="/chat-overlay/composer-ui.js?v=20260907-1"></script>
-<script src="/parents/full-web.js?v=20260909-report-history-1"></script>
+<script src="/parents/full-web.js?v=20260909-auth-copy-1"></script>
 <script src="/parents/psychology-format.js?v=20260908-group-start-1" data-medsi-psych-format="1"></script>
 <script src="/parents/chat-opening.js?v=20260907-1"></script>
 <script src="/parents/report-disclaimer.js?v=20260907-1"></script>
