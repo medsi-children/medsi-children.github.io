@@ -151,6 +151,13 @@
     const hadMessages=existing.size>0;
     const hasStableOverlap=updatedRows.some(m=>existing.has(messageKey(m)));
     const quietAllNew=hadMessages&&!hasStableOverlap;
+    const existingOrder=[...box.children].filter(el=>el.matches&&el.matches('.parent-chat-msg')).map(el=>el.dataset.medsiMessageKey||'');
+    const sameOrder=existingOrder.length===updatedRows.length&&updatedRows.every((m,index)=>existingOrder[index]===messageKey(m));
+    if(sameOrder){
+      updatedRows.forEach(m=>{const old=existing.get(messageKey(m));if(old&&old.dataset.medsiMessageSignature!==messageSig(m))old.replaceWith(messageNode(m,true))});
+      rows=updatedRows;
+      return;
+    }
     const pendingRows=previousRows.filter(isPending),usedPending=new Set();
     let addedAnimated=0;
     const messageNodes=updatedRows.map((m,index)=>{

@@ -223,6 +223,13 @@
       const previousRows=activeRows,updatedRows=Array.isArray(nextRows)?nextRows:[],oldTop=chatThreadBox.scrollTop;
       const existing=new Map([...chatThreadBox.children].filter(el=>el.matches&&el.matches('.msg')&&el.dataset.medsiMessageKey).map(el=>[el.dataset.medsiMessageKey,el]));
       const hadMessages=existing.size>0,hasStableOverlap=updatedRows.some(m=>existing.has(messageKey(m))),quietAllNew=hadMessages&&!hasStableOverlap;
+      const existingOrder=[...chatThreadBox.children].filter(el=>el.matches&&el.matches('.msg')).map(el=>el.dataset.medsiMessageKey||'');
+      const sameOrder=existingOrder.length===updatedRows.length&&updatedRows.every((m,index)=>existingOrder[index]===messageKey(m));
+      if(sameOrder){
+        updatedRows.forEach(m=>{const old=existing.get(messageKey(m));if(old&&old.dataset.medsiMessageSignature!==messageSig(m))old.replaceWith(messageNode(m,true))});
+        activeRows=updatedRows;
+        return;
+      }
       const pendingRows=previousRows.filter(isPending),usedPending=new Set();let addedAnimated=0;
       const nodes=updatedRows.map((m,index)=>{const key=messageKey(m),sig=messageSig(m),old=existing.get(key);if(old&&old.dataset.medsiMessageSignature===sig)return old;if(old)return messageNode(m,true);const pending=pendingRows.find(row=>!usedPending.has(messageKey(row))&&samePendingMessage(row,m));if(pending)usedPending.add(messageKey(pending));const quiet=quietAllNew||!!pending||(!hadMessages&&index<updatedRows.length-14);if(!quiet)addedAnimated++;return messageNode(m,quiet)});
       activeRows=updatedRows;
