@@ -220,7 +220,6 @@
     catch(err){if(isChatClosedError(err))showClosedChat();else{showError(err&&err.message||'Не удалось отправить сообщение.');await refresh({stick:true,fresh:true}).catch(()=>{})}}
     finally{setBusy(false);if(!chatClosed)$('parentChatInput').focus()}
   };
-  $('parentChatInput').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('parentChatCompose').requestSubmit()}};
   $('parentChatAttach').onclick=()=>{if(!chatClosed)$('parentChatFile').click()};
   $('parentChatFile').onchange=async()=>{
     if(!state||busy||chatClosed)return;const input=$('parentChatFile'),f=input.files&&input.files[0];input.value='';if(!f)return;

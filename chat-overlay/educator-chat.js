@@ -313,7 +313,6 @@
     btnVideo.onclick=()=>fileInput.click();
     attach.onclick=()=>fileInput.click();
     send.onclick=submit;
-    editor.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submit()}};
     fileInput.onchange=()=>{const f=fileInput.files&&fileInput.files[0];fileInput.value='';if(!f)return;if(f.size>20*1024*1024){overlay.showError('Размер файла не должен превышать 20 МБ.');return}clearFile();pendingFile=f;pendingUrl=URL.createObjectURL(f);imagePreview.querySelector('img').src=pendingUrl;imagePreview.classList.remove('hidden')};
     imagePreview.querySelector('#chatImageRemoveBtn').onclick=clearFile;
     chatReplyPreview.querySelector('#chatReplyCancel').onclick=()=>setReply(null);
