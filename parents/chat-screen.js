@@ -147,6 +147,7 @@
     const preserveExact=!!(opts&&opts.preserveExact);
     const oldHeight=box.scrollHeight,oldTop=box.scrollTop;
     const previousRows=rows,updatedRows=Array.isArray(list)?list:[];
+    if(!updatedRows.length){rows=updatedRows;const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Сообщений пока нет.';box.replaceChildren(e);return}
     const existing=new Map([...box.children].filter(el=>el.matches&&el.matches('.parent-chat-msg')&&el.dataset.medsiMessageKey).map(el=>[el.dataset.medsiMessageKey,el]));
     const hadMessages=existing.size>0;
     const hasStableOverlap=updatedRows.some(m=>existing.has(messageKey(m)));
@@ -171,7 +172,6 @@
       return messageNode(m,quiet)
     });
     rows=updatedRows;
-    if(!rows.length){const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Сообщений пока нет.';box.replaceChildren(e);return}
     const fragment=document.createDocumentFragment();
     let previousDay='';
     rows.forEach((m,i)=>{const chip=dateChip(m&&m.timestamp);if(chip&&chip.key!==previousDay){const sep=document.createElement('div');sep.className='medsi-date-separator';sep.dataset.dateKey=chip.key;sep.textContent=chip.label;fragment.appendChild(sep);previousDay=chip.key}fragment.appendChild(messageNodes[i])});
