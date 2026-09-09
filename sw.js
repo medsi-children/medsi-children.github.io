@@ -18,6 +18,14 @@ self.addEventListener('push', event => {
     };
   }
 
+  if (payload.action === 'close-notification') {
+    event.waitUntil(
+      self.registration.getNotifications({ tag: payload.tag || 'medsi-message' })
+        .then(items => items.forEach(item => item.close()))
+    );
+    return;
+  }
+
   const title = payload.title || 'Медси Бот';
   const options = {
     body: payload.body || 'Новое сообщение',

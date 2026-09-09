@@ -29,6 +29,7 @@
   <link rel="stylesheet" href="/chat-overlay/chat-surface-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/chat-list-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/tutors/phone-cards-ui.css?v=20260907-3">
+  <link rel="stylesheet" href="/tutors/access-requests.css?v=20260909-1">
   <style>
     .educator-logo{width:96px!important;height:45px!important;margin-bottom:2px!important}
     .educator-logo span:nth-child(1){width:28px!important;height:28px!important;left:0!important;bottom:0!important;top:auto!important}
@@ -39,7 +40,7 @@
     .auth-gate.checking .auth-card{width:auto!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
     .auth-gate.checking .educator-start-brand,.auth-gate.checking #authForm,.auth-gate.checking #authChecking{display:none!important}
   </style>
-  <script src="/notify-client.js?v=20260905-production"></script>
+  <script src="/notify-client.js?v=20260909-auth-close-1"></script>
   <script src="/tutors/push-auth.js?v=20260906-timeweb-1"></script>
   <script src="/chat-overlay/transport.js?v=20260907-media-preview-1"></script>
   <script src="/chat-overlay/media-preload.js?v=20260907-1"></script>
@@ -145,7 +146,18 @@
     </article>
   </div>
 
-  <script src="/tutors/full-web.js?v=20260905-production"></script>
+  <aside id="accessRequestToast" class="access-request-toast hidden" aria-live="polite">
+    <div class="access-request-toast-head"><span>Новая авторизация</span><span id="accessRequestCount" class="access-request-count hidden"></span></div>
+    <p id="accessRequestText"></p>
+    <div class="access-request-code">Код: <strong id="accessRequestCode"></strong></div>
+    <div class="access-request-actions"><button id="accessRequestApprove" class="btn access-approve" type="button">Подтвердить</button><button id="accessRequestDeny" class="btn access-deny" type="button">Отклонить</button></div>
+  </aside>
+  <div id="accessRequestConfirm" class="access-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="accessConfirmTitle">
+    <div class="access-confirm-card"><div id="accessConfirmIcon" class="access-confirm-icon">?</div><h2 id="accessConfirmTitle"></h2><p id="accessConfirmText"></p><div class="access-confirm-actions"><button id="accessConfirmBack" class="btn" type="button">Вернуться</button><button id="accessConfirmApply" class="btn" type="button"></button></div><p id="accessConfirmError" class="status error hidden"></p></div>
+  </div>
+
+  <script src="/tutors/access-requests.js?v=20260909-1"></script>
+  <script src="/tutors/full-web.js?v=20260909-passwordless-1"></script>
   <script src="/tutors/page-scroll.js?v=20260907-1"></script>
   <script src="/tutors/report-ui.js?v=20260907-1"></script>
   <script src="/tutors/chat-opening.js?v=20260907-1"></script>
