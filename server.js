@@ -144,7 +144,7 @@ function sessionToken(req) {
 
 async function validateSessionForPhone(req, phone) {
   const token = sessionToken(req);
-  if (!token || !phone) return false;
+  if (!token || !phone) return { ok: false, status: 401, transient: false };
   try {
     const response = await fetch(
       CHAT_UPSTREAM + '/lab/threads/' + encodeURIComponent(String(phone)) + '?before=&limit=1',
@@ -155,10 +155,15 @@ async function validateSessionForPhone(req, phone) {
         signal: AbortSignal.timeout(8000)
       }
     );
+    const status = response.status;
     try { await response.body?.cancel(); } catch (_) {}
-    return response.ok;
-  } catch (_) {
-    return false;
+    return {
+      ok: response.ok,
+      status,
+      transient: status === 408 || status === 425 || status === 429 || status >= 500
+    };
+  } catch (error) {
+    return { ok: false, status: 503, transient: true, message: error && error.message };
   }
 }
 
@@ -217,13 +222,23 @@ app.post('/chat-upload', async (req, res) => {
 
   const phone = String(req.get('X-Medsi-Phone') || '').replace(/\D+/g, '').slice(-10);
   const length = Number(req.headers['content-length'] || 0);
+  const rawUploadId = String(req.get('X-Medsi-Upload-Id') || '').trim();
+  const uploadId = /^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$/.test(rawUploadId) ? rawUploadId : '';
+  if (rawUploadId && !uploadId) {
+    res.status(400).json({ ok: false, code: 'INVALID_UPLOAD_ID', message: 'Некорректный идентификатор загрузки.' });
+    return;
+  }
   if (length > MAX_UPLOAD_BYTES) {
     res.status(413).json({ ok: false, code: 'FILE_TOO_LARGE', message: 'Размер файла не должен превышать 100 МБ.' });
     return;
   }
 
-  const allowed = await validateSessionForPhone(req, phone);
-  if (!allowed) {
+  const validation = await validateSessionForPhone(req, phone);
+  if (!validation.ok) {
+    if (validation.transient) {
+      res.status(503).json({ ok: false, code: 'SESSION_CHECK_UNAVAILABLE', message: 'Сервер временно не смог проверить сессию. Повторяем загрузку.' });
+      return;
+    }
     res.status(401).json({ ok: false, code: 'UNAUTHORIZED', message: 'Сессия чата истекла. Откройте чат заново.' });
     return;
   }
@@ -233,9 +248,9 @@ app.post('/chat-upload', async (req, res) => {
       body: req,
       contentType: req.get('content-type') || '',
       contentLength: length,
-      fileName: req.get('X-File-Name') || 'attachment'
+      fileName: req.get('X-File-Name') || 'attachment',
+      uploadId
     });
-    if (uploaded.mediaType === 'image') await mediaPreviews.ensure(uploaded.key);
     res.setHeader('cache-control', 'no-store');
     res.json({
       ok: true,
@@ -243,6 +258,7 @@ app.post('/chat-upload', async (req, res) => {
       fileId: 's3:' + uploaded.key,
       url: '/media/s3/' + encodeURIComponent(uploaded.key)
     });
+    if (uploaded.mediaType === 'image') void mediaPreviews.ensure(uploaded.key);
   } catch (error) {
     console.error('S3_UPLOAD_FAILED', error);
     const unsupported = error && error.code === 'UNSUPPORTED_MEDIA';
