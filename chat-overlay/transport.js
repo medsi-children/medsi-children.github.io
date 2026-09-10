@@ -2,6 +2,8 @@
   const BASE_URL = window.location.origin;
   const UPLOAD_URL = window.location.origin + '/chat-upload';
   const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+  const UPLOAD_TIMEOUT_MS = 90000;
+  const TRANSIENT_UPLOAD_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
   function requireSession(session) {
     if (!session || !session.token) throw new Error('Нет активной сессии чата.');
@@ -132,12 +134,21 @@
     return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + '-' + Math.random().toString(36).slice(2);
   }
 
+  function isTransientUploadError(error) {
+    if (!error) return false;
+    if (error.code === 'NETWORK' || error.code === 'TIMEOUT' || error.code === 'SESSION_CHECK_UNAVAILABLE') return true;
+    return TRANSIENT_UPLOAD_STATUSES.has(Number(error.status || 0));
+  }
+
   async function uploadAttempt(auth, phone, file, uploadId) {
     let response;
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS) : null;
     try {
       response = await fetch(UPLOAD_URL, {
         method: 'POST',
         body: file,
+        signal: controller ? controller.signal : undefined,
         headers: {
           'X-Medsi-Upload-Id': uploadId,
           'X-Medsi-Chat-Session': auth.token,
@@ -147,9 +158,14 @@
         }
       });
     } catch (error) {
-      const wrapped = new Error((error && error.message) || 'Не удалось загрузить файл.');
-      wrapped.code = 'NETWORK';
+      const timedOut = !!(controller && controller.signal.aborted);
+      const wrapped = new Error(timedOut
+        ? 'Загрузка заняла слишком много времени. Проверьте интернет и попробуйте ещё раз.'
+        : ((error && error.message) || 'Не удалось загрузить файл.'));
+      wrapped.code = timedOut ? 'TIMEOUT' : 'NETWORK';
       throw wrapped;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
 
     let payload;
@@ -157,6 +173,7 @@
     catch (_) {
       const error = new Error('Сервер загрузки вернул некорректный ответ.');
       error.code = 'BAD_RESPONSE';
+      error.status = response.status;
       throw error;
     }
 
@@ -182,8 +199,8 @@
     try {
       return await uploadAttempt(auth, phone, file, uploadId);
     } catch (error) {
-      if (!error || error.code !== 'NETWORK') throw error;
-      await new Promise(resolve => setTimeout(resolve, 500));
+      if (!isTransientUploadError(error)) throw error;
+      await new Promise(resolve => setTimeout(resolve, 700));
       return uploadAttempt(auth, phone, file, uploadId);
     }
   }
