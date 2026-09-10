@@ -320,7 +320,7 @@
     btnVideo.onclick=()=>fileInput.click();
     attach.onclick=()=>fileInput.click();
     send.onclick=submit;
-    fileInput.onchange=()=>{const f=fileInput.files&&fileInput.files[0];fileInput.value='';if(!f)return;if(f.size>20*1024*1024){overlay.showError('Размер файла не должен превышать 20 МБ.');return}clearFile();pendingFile=f;pendingUrl=URL.createObjectURL(f);imagePreview.querySelector('img').src=pendingUrl;imagePreview.classList.remove('hidden')};
+    fileInput.onchange=()=>{const f=fileInput.files&&fileInput.files[0];fileInput.value='';if(!f)return;const maxBytes=Number(transport.maxUploadBytes||100*1024*1024);if(f.size>maxBytes){overlay.showError('Размер файла не должен превышать 100 МБ.');return}clearFile();pendingFile=f;pendingUrl=URL.createObjectURL(f);imagePreview.querySelector('img').src=pendingUrl;imagePreview.classList.remove('hidden')};
     imagePreview.querySelector('#chatImageRemoveBtn').onclick=clearFile;
     chatReplyPreview.querySelector('#chatReplyCancel').onclick=()=>setReply(null);
     childDeleteModal.querySelector('#childDeleteCancel').onclick=()=>{deleteTarget=null;childDeleteModal.classList.add('hidden')};
