@@ -197,7 +197,7 @@
       showListScreen();if(spinner)setRefresh(true);
       if(!chatList.childElementCount)chatList.innerHTML='<div class="chat-empty">Загрузка...</div>';
       try{
-        const res=await transport.chats(session,bucket);
+        const res=await transport.chats(session,bucket,spinner?{fresh:true}:undefined);
         if(disposed)return;
         currentChats=(res&&res.chats||[]).slice().sort((a,b)=>Number(b&&b.pinnedBucket===bucket)-Number(a&&a.pinnedBucket===bucket));
         renderList();
@@ -328,9 +328,12 @@
     childDeleteModal.onclick=e=>{if(e.target===childDeleteModal){deleteTarget=null;childDeleteModal.classList.add('hidden')}};
     document.addEventListener('click',closeMessageMenu);
 
+    const removePullRefresh=window.MedsiPullToRefresh?MedsiPullToRefresh.register({id:'educator-chat-list',isActive:()=>!disposed&&document.body.dataset.screen==='screenChats'&&!screenChats.classList.contains('hidden'),getScroller:()=>scene,onRefresh:()=>loadChats(true)}):null;
+
     loadChats(false);
     return()=>{
       disposed=true;
+      if(removePullRefresh)removePullRefresh();
       if(window.__medsiEducatorApplyThreadRefresh===applyLiveRows)delete window.__medsiEducatorApplyThreadRefresh;
       if(pendingUrl)URL.revokeObjectURL(pendingUrl);
       contextMenu.remove();childDeleteModal.remove();
