@@ -2,7 +2,8 @@
   const registrations=[];
   const READY_OFFSET=46;
   const MAX_OFFSET=78;
-  let active=null,startY=0,startX=0,pulling=false,refreshing=false,suppressClick=false;
+  const READY_DISTANCE=Math.ceil(READY_OFFSET/.82);
+  let active=null,startY=0,startX=0,lastY=0,lastX=0,pulling=false,refreshing=false,suppressClick=false;
   const indicator=document.createElement('div');
   indicator.className='medsi-pull-refresh';
   indicator.setAttribute('aria-live','polite');
@@ -33,6 +34,8 @@
     }
     return null;
   }
+  function holdPage(){document.documentElement.classList.add('medsi-pull-active')}
+  function releasePage(){document.documentElement.classList.remove('medsi-pull-active')}
   function setPull(distance){
     const eased=Math.min(MAX_OFFSET,Math.max(0,distance)*.82);
     const progress=Math.min(1,eased/READY_OFFSET);
@@ -44,14 +47,14 @@
     indicator.classList.toggle('is-ready',eased>=READY_OFFSET);
   }
   function hide(){
-    pulling=false;active=null;indicator.classList.remove('is-pulling','is-ready','is-refreshing');
+    pulling=false;active=null;releasePage();indicator.classList.remove('is-pulling','is-ready','is-refreshing');
     indicator.style.setProperty('--medsi-pull-offset','0px');
     indicator.style.setProperty('--medsi-pull-opacity','0');
     indicator.style.setProperty('--medsi-pull-rotation','0deg');
     indicator.setAttribute('aria-hidden','true');
   }
   async function runRefresh(registration){
-    refreshing=true;suppressClick=true;
+    refreshing=true;suppressClick=true;releasePage();
     indicator.classList.remove('is-pulling','is-ready');indicator.classList.add('is-refreshing');
     indicator.setAttribute('aria-label','Обновляем');
     indicator.setAttribute('aria-hidden','false');
@@ -64,16 +67,15 @@
   function touchStart(event){
     if(refreshing||event.touches.length!==1)return;
     const registration=current(event.target);if(!registration)return;
-    const touch=event.touches[0];active=registration;startY=touch.clientY;startX=touch.clientX;pulling=false;mount();setPull(0);
+    const touch=event.touches[0];
+    active=registration;startY=lastY=touch.clientY;startX=lastX=touch.clientX;pulling=false;mount();setPull(0);holdPage();
   }
   function touchMove(event){
     if(!active||refreshing||event.touches.length!==1)return;
     if(scrollTop(active)>1){hide();return}
-    const touch=event.touches[0],dy=touch.clientY-startY,dx=Math.abs(touch.clientX-startX);
+    const touch=event.touches[0];lastY=touch.clientY;lastX=touch.clientX;
+    const dy=lastY-startY,dx=Math.abs(lastX-startX);
     if(dy<=0||dx>Math.max(8,dy*1.08)){if(!pulling&&Math.max(dx,-dy)>10)hide();return}
-    // Once a downward pull at the top is identified, this gesture belongs to
-    // Medsi refresh only. Do not let Safari rubber-band the page or let another
-    // gesture handler reinterpret the same touch sequence as navigation.
     if(event.cancelable)event.preventDefault();
     event.stopImmediatePropagation();
     if(dy<2)return;
@@ -81,8 +83,13 @@
   }
   function touchEnd(event){
     if(!active||refreshing)return;
-    const registration=active,ready=pulling&&indicator.classList.contains('is-ready');
-    if(pulling&&event){if(event.cancelable)event.preventDefault();event.stopImmediatePropagation()}
+    const registration=active;
+    const touch=event&&event.changedTouches&&event.changedTouches[0];
+    const endY=touch?touch.clientY:lastY,endX=touch?touch.clientX:lastX;
+    const dy=endY-startY,dx=Math.abs(endX-startX);
+    const releaseReady=dy>=READY_DISTANCE&&dx<=Math.max(14,dy*1.08);
+    const ready=releaseReady||(pulling&&indicator.classList.contains('is-ready'));
+    if((pulling||releaseReady)&&event){if(event.cancelable)event.preventDefault();event.stopImmediatePropagation()}
     if(ready)runRefresh(registration);else hide();
   }
   function register(options){
