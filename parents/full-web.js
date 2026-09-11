@@ -48,7 +48,53 @@
   function makeFlowId(prefix){let value='';try{if(crypto&&crypto.randomUUID)value=crypto.randomUUID()}catch(_){}if(!value)value=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);return prefix+'_'+value.replace(/[^A-Za-z0-9_-]/g,'')}
   function registrationFingerprint(data){return [onlyDigits(data.phone).slice(-10),data.parentName,data.childName].join('|')}
   function finishRegistration(res){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;showChoose();prewarmAll()}
-  async function runRegistrationFlow(data){const run=++flowRun;show('screenRegistrationPending');$('registrationPendingText').textContent='Пожалуйста, подождите. Мы сохраняем данные и готовим Медси Бот.';let delay=2200;while(run===flowRun){try{let res=await callApi('registerParent',[data.parentName,data.childName,data.phone,data.attemptId],20000);if(run!==flowRun)return;if(res&&res.duplicate){safeRemove(REG_ATTEMPT_KEY);$('phoneInputAuth').value=data.phone;await beginReauthorization(data.phone);return}if(res&&res.ok&&res.parentSession){finishRegistration(res);return}res=await callApi('getParentRegistrationStatus',[data.phone,data.attemptId],12000);if(run!==flowRun)return;if(res&&res.ok&&res.parentSession){finishRegistration(res);return}}catch(e){if(run!==flowRun)return;$('registrationPendingText').textContent='Регистрация занимает больше времени, чем обычно. Проверяем результат…'}await wait(delay);delay=Math.min(8000,delay+1200)}}
+  async function runRegistrationFlow(data){
+    const run=++flowRun;
+    show('screenRegistrationPending');
+    const pendingText=$('registrationPendingText');
+    pendingText.textContent='Пожалуйста, подождите. Мы сохраняем данные и готовим Медси Бот.';
+    let phase='register',delay=1000,notFoundCount=0;
+    while(run===flowRun){
+      try{
+        let res=null;
+        if(phase==='register'){
+          try{
+            res=await callApi('registerParent',[data.parentName,data.childName,data.phone,data.attemptId],20000);
+          }catch(_){
+            if(run!==flowRun)return;
+            phase='status';
+            pendingText.textContent='Регистрация занимает больше времени, чем обычно. Проверяем результат…';
+          }
+          if(run!==flowRun)return;
+          if(res){
+            if(res.duplicate){safeRemove(REG_ATTEMPT_KEY);$('phoneInputAuth').value=data.phone;await beginReauthorization(data.phone);return}
+            if(res.ok&&res.parentSession){finishRegistration(res);return}
+            phase='status';
+          }
+        }
+        if(phase==='status'){
+          const statusRes=await callApi('getParentRegistrationStatus',[data.phone,data.attemptId],10000);
+          if(run!==flowRun)return;
+          if(statusRes&&statusRes.ok&&statusRes.parentSession){finishRegistration(statusRes);return}
+          if(statusRes&&statusRes.result&&statusRes.result.parentSession){finishRegistration(statusRes.result);return}
+          const status=String(statusRes&&(statusRes.status||statusRes.code)||'').toUpperCase();
+          if(status==='NOT_FOUND'){
+            notFoundCount++;
+            if(notFoundCount>=3){phase='register';notFoundCount=0;pendingText.textContent='Проверяем регистрацию ещё раз…'}
+          }else{
+            notFoundCount=0;
+            pendingText.textContent='Регистрация занимает больше времени, чем обычно. Проверяем результат…';
+          }
+        }
+      }catch(_){
+        if(run!==flowRun)return;
+        phase='status';
+        pendingText.textContent='Регистрация занимает больше времени, чем обычно. Проверяем результат…';
+      }
+      await wait(delay);
+      delay=Math.min(3500,delay+400);
+    }
+  }
   async function register(){const digits=onlyDigits($('phoneInputReg').value),err=$('phoneErrorReg'),info=$('alreadyRegistered');err.classList.add('hidden');info.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}const snapshot={phone:digits,parentName:regParentName,childName:regChildName};const saved=readJson(REG_ATTEMPT_KEY);snapshot.attemptId=saved&&saved.fingerprint===registrationFingerprint(snapshot)?saved.attemptId:makeFlowId('reg');snapshot.fingerprint=registrationFingerprint(snapshot);safeSet(REG_ATTEMPT_KEY,JSON.stringify(snapshot));runRegistrationFlow(snapshot)}
   function resetAuthPendingUi(){const screen=$('screenAuthPending');screen.classList.remove('is-approved');$('authPendingSpinner').classList.remove('hidden');$('authApprovedIcon').classList.add('hidden');$('authPendingTitle').textContent='Авторизация начата';$('authPendingText').textContent='Пожалуйста, подождите, пока воспитатель подтвердит вход.';$('authRequestCodeWrap').classList.remove('hidden');$('authPendingBackBtn').classList.add('hidden')}
   function showAuthApproved(res){if(!applyBootstrap(res))throw new Error('Не удалось сохранить подтверждённый вход.');safeRemove(REAUTH_KEY);const screen=$('screenAuthPending');screen.classList.add('is-approved');$('authPendingSpinner').classList.add('hidden');$('authApprovedIcon').classList.remove('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent='Авторизация подтверждена!';$('authPendingText').textContent='Вход сохранён на этом устройстве.';setTimeout(()=>{if(document.body.dataset.screen==='screenAuthPending'){justRegistered=false;showChoose();prewarmAll()}},1800)}
