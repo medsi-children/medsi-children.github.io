@@ -81,7 +81,7 @@
     if(dy<2)return;
     pulling=true;setPull(dy);
   }
-  function touchEnd(event){
+  function finishTouch(event){
     if(!active||refreshing)return;
     const registration=active;
     const touch=event&&event.changedTouches&&event.changedTouches[0];
@@ -101,8 +101,8 @@
 
   document.addEventListener('touchstart',touchStart,{passive:true,capture:true});
   document.addEventListener('touchmove',touchMove,{passive:false,capture:true});
-  document.addEventListener('touchend',touchEnd,{passive:false,capture:true});
-  document.addEventListener('touchcancel',()=>{if(!refreshing)hide()},{passive:true,capture:true});
+  document.addEventListener('touchend',finishTouch,{passive:false,capture:true});
+  document.addEventListener('touchcancel',finishTouch,{passive:false,capture:true});
   document.addEventListener('click',event=>{if(!suppressClick)return;suppressClick=false;event.preventDefault();event.stopPropagation()},{capture:true});
   window.MedsiPullToRefresh={register};
 })();
