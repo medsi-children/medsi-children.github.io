@@ -123,7 +123,7 @@
       if(u){
         const frame=document.createElement('div');frame.className='parent-chat-media-frame';
         const md=document.createElement(m.type==='video'?'video':'img');md.className='parent-chat-media';
-        const markReady=()=>{md.classList.add('is-loaded','medsi-media-ready');if(m.type==='image'&&window.MedsiMediaPreload)window.MedsiMediaPreload.queueOriginal(u);if(stick&&nearBottom())scrollBottom(false)};
+        const markReady=()=>{frame.classList.add('medsi-media-ready');md.classList.add('is-loaded','medsi-media-ready');if(m.type==='image'&&window.MedsiMediaPreload)window.MedsiMediaPreload.queueOriginal(u);if(stick&&nearBottom())scrollBottom(false)};
         if(m.type==='video'){
           frame.style.cursor='default';md.controls=true;md.preload='metadata';md.onloadedmetadata=markReady;
         } else {
