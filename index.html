@@ -22,7 +22,7 @@
   <script src="/chat-overlay/media-preload.js?v=20260907-1"></script>
   <script src="/chat-overlay/upload-ux.js?v=20260907-1"></script>
   <script src="/parents/prewarm.js?v=20260905-production"></script>
-  <script src="/pull-to-refresh.js?v=20260911-2"></script>
+  <script src="/pull-to-refresh.js?v=20260911-touchcancel-1"></script>
 </head>
 <body>
 <div class="wrap"><article id="appCard" class="card start-mode">
@@ -75,7 +75,7 @@
     </div>
   </section>
   <div id="logoutModal" class="parent-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="logoutModalTitle"><div class="parent-confirm-card"><div class="parent-confirm-icon">!</div><h2 id="logoutModalTitle">Выйти из аккаунта?</h2><p>Доступ на этом устройстве будет удалён. Чтобы войти снова, потребуется подтверждение воспитателя.</p><div class="grid2"><button id="logoutCancelBtn" class="btn" type="button">Остаться</button><button id="logoutConfirmBtn" class="btn parent-confirm-danger" type="button">Выйти</button></div></div></div>
-  <div id="reportHistoryModal" class="report-history-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reportHistoryModalTitle"><div class="report-history-modal-card"><div class="report-history-modal-head"><div><span id="reportHistoryModalKind" class="report-history-kind"></span><h2 id="reportHistoryModalTitle"></h2></div><button id="reportHistoryModalCopy" class="report-copy-btn" type="button" aria-label="Скопировать отчёт" title="Скопировать отчёт"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></button></div><div id="reportHistoryModalText" class="report-history-modal-text"></div><button id="reportHistoryModalClose" class="btn" type="button">Закрыть</button></div></div>
+  <div id="reportHistoryModal" class="report-history-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reportHistoryModalTitle"><div class="report-history-modal-card"><div class="report-history-modal-head"><div><span id="reportHistoryModalKind" class="report-history-kind"></span><h2 id="reportHistoryModalTitle"></h2></div><button id="reportHistoryModalCopy" class="report-copy-btn" type="button" aria-label="Скопировать отчёт" title="Скопировать отчёт"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0 2 2h2"></path></svg></button></div><div id="reportHistoryModalText" class="report-history-modal-text"></div><button id="reportHistoryModalClose" class="btn" type="button">Закрыть</button></div></div>
 </article></div>
 <script src="/parents/chat-screen.js?v=20260909-reaction-refresh-1"></script>
 <script src="/chat-overlay/composer-ui.js?v=20260907-1"></script>
