@@ -110,7 +110,7 @@
   document.addEventListener('click',e=>{if(reactionMenu&&!reactionMenu.classList.contains('hidden')&&!e.target.closest('.parent-chat-context,.parent-chat-msg'))closeReactionMenu()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLightbox();closeReactionMenu()}});
 
-  function messageNode(m,quiet){
+  function messageNode(m,quiet,stick){
       const el=document.createElement('article');el.className='parent-chat-msg '+(m.side==='parent'?'parent':'educator');el.dataset.medsiMessageKey=messageKey(m);el.dataset.medsiMessageSignature=messageSig(m);
       if(quiet)el.dataset.medsiAnimated='1';
       const author=document.createElement('div');author.className='parent-chat-author';
@@ -156,7 +156,7 @@
     const existingOrder=[...box.children].filter(el=>el.matches&&el.matches('.parent-chat-msg')).map(el=>el.dataset.medsiMessageKey||'');
     const sameOrder=existingOrder.length===updatedRows.length&&updatedRows.every((m,index)=>existingOrder[index]===messageKey(m));
     if(sameOrder){
-      updatedRows.forEach(m=>{const old=existing.get(messageKey(m));if(old&&old.dataset.medsiMessageSignature!==messageSig(m))old.replaceWith(messageNode(m,true))});
+      updatedRows.forEach(m=>{const old=existing.get(messageKey(m));if(old&&old.dataset.medsiMessageSignature!==messageSig(m))old.replaceWith(messageNode(m,true,stick))});
       rows=updatedRows;
       return;
     }
@@ -164,11 +164,11 @@
     const messageNodes=updatedRows.map((m,index)=>{
       const key=messageKey(m),sig=messageSig(m),old=existing.get(key);
       if(old&&old.dataset.medsiMessageSignature===sig)return old;
-      if(old)return messageNode(m,true);
+      if(old)return messageNode(m,true,stick);
       const pending=pendingRows.find(row=>!usedPending.has(messageKey(row))&&samePendingMessage(row,m));
       if(pending)usedPending.add(messageKey(pending));
       const quiet=!animateInitial||quietAllNew||!!pending||(!hadMessages&&index<updatedRows.length-14);
-      return messageNode(m,quiet)
+      return messageNode(m,quiet,stick)
     });
     rows=updatedRows;
     initialMessagesRendered=true;
