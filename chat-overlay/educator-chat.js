@@ -193,6 +193,14 @@
         const b=document.createElement('button');b.className='btn';b.style.cssText='width:100%; max-width:100%;';b.textContent='Открыть прочитанные чаты';b.onclick=()=>{bucket='read';loadChats(false)};w.appendChild(b);chatList.appendChild(w);
       }
     }
+    function removeDeletedChat(chat){
+      const targetPhone=phone10(chat&&chat.phone);if(!targetPhone)return;
+      currentChats=currentChats.filter(item=>phone10(item&&item.phone)!==targetPhone);threadCache.delete(targetPhone);
+      const card=[...chatList.querySelectorAll('.chat-card')].find(item=>phone10(item.dataset.phone)===targetPhone);
+      if(!card){renderList();return}
+      card.classList.add('medsi-chat-card-deleting');
+      setTimeout(()=>{if(!disposed&&document.body.dataset.screen==='screenChats')renderList()},220);
+    }
     async function loadChats(spinner){
       showListScreen();if(spinner)setRefresh(true);
       if(!chatList.childElementCount)chatList.innerHTML='<div class="chat-empty">Загрузка...</div>';
@@ -324,7 +332,7 @@
     imagePreview.querySelector('#chatImageRemoveBtn').onclick=clearFile;
     chatReplyPreview.querySelector('#chatReplyCancel').onclick=()=>setReply(null);
     childDeleteModal.querySelector('#childDeleteCancel').onclick=()=>{deleteTarget=null;childDeleteModal.classList.add('hidden')};
-    childDeleteModal.querySelector('#childDeleteConfirm').onclick=async()=>{if(!deleteTarget)return;const target=deleteTarget;try{childDeleteModal.querySelector('#childDeleteConfirm').disabled=true;await appApi('deleteReportChildByPhone',[target.phone,tutorToken()]);deleteTarget=null;childDeleteModal.classList.add('hidden');await loadChats(false)}catch(err){overlay.showError(err.message)}finally{childDeleteModal.querySelector('#childDeleteConfirm').disabled=false}};
+    childDeleteModal.querySelector('#childDeleteConfirm').onclick=async()=>{if(!deleteTarget)return;const target=deleteTarget;try{childDeleteModal.querySelector('#childDeleteConfirm').disabled=true;await appApi('deleteReportChildByPhone',[target.phone,tutorToken()]);deleteTarget=null;childDeleteModal.classList.add('hidden');removeDeletedChat(target)}catch(err){overlay.showError(err.message)}finally{childDeleteModal.querySelector('#childDeleteConfirm').disabled=false}};
     childDeleteModal.onclick=e=>{if(e.target===childDeleteModal){deleteTarget=null;childDeleteModal.classList.add('hidden')}};
     document.addEventListener('click',closeMessageMenu);
 
