@@ -24,5 +24,11 @@
   #screenChoose .educator-report-grid .menu-card-title,#screenChoose .educator-secondary-grid .menu-card-title{font-size:.82rem!important;line-height:1.14!important;white-space:nowrap!important;gap:6px!important}
   #screenChoose .menu-card-chat .menu-card-title{font-size:1rem!important}
   #screenChoose .menu-card-text{font-size:.76rem!important;line-height:1.34!important}
+}
 
+/* Regular Safari keeps browser chrome around the web page, unlike the installed
+   PWA. Give the dashboard a little more breathing room below the status bar
+   without changing the standalone app geometry. */
+@media(max-width:560px) and (display-mode:browser){
+  body[data-screen="screenChoose"] .wrap{padding-top:calc(30px + env(safe-area-inset-top))}
 }
