@@ -1,4 +1,9 @@
 /* Production mobile dashboard refinements. */
+html,body{overflow:hidden!important;overscroll-behavior:none!important}
+body{height:100dvh;min-height:100dvh}
+body>.wrap{height:100dvh;min-height:100dvh;overflow:hidden}
+body>.wrap .scene,.educator-exact-clone .scene{overscroll-behavior-y:contain}
+
 @media(max-width:560px){
   /* The reference screen uses the same outer frame, but its dashboard cards are
      about 12px closer to each side. Keep the shell and widen only the content. */
