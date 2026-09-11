@@ -23,7 +23,7 @@
     if(!label)label=new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'long',...(n&&p.year===n.year?{}:{year:'numeric'})}).format(new Date(Number(value)));
     return{key:p.key,label};
   }
-  let state=null,rows=[],busy=false,dead=false,chatClosed=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false;
+  let state=null,rows=[],busy=false,dead=false,chatClosed=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false,initialMessagesRendered=false;
 
   function mediaUrl(m){
     const id=String(m&&m.fileId||'');if(!id)return'';
@@ -145,9 +145,10 @@
     closeReactionMenu();
     const stick=opts&&opts.stick!==undefined?!!opts.stick:nearBottom();
     const preserveExact=!!(opts&&opts.preserveExact);
+    const animateInitial=!!(opts&&opts.animateInitial)&&!initialMessagesRendered;
     const oldHeight=box.scrollHeight,oldTop=box.scrollTop;
     const previousRows=rows,updatedRows=Array.isArray(list)?list:[];
-    if(!updatedRows.length){rows=updatedRows;const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Сообщений пока нет.';box.replaceChildren(e);return}
+    if(!updatedRows.length){rows=updatedRows;initialMessagesRendered=true;const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Сообщений пока нет.';box.replaceChildren(e);return}
     const existing=new Map([...box.children].filter(el=>el.matches&&el.matches('.parent-chat-msg')&&el.dataset.medsiMessageKey).map(el=>[el.dataset.medsiMessageKey,el]));
     const hadMessages=existing.size>0;
     const hasStableOverlap=updatedRows.some(m=>existing.has(messageKey(m)));
@@ -160,24 +161,23 @@
       return;
     }
     const pendingRows=previousRows.filter(isPending),usedPending=new Set();
-    let addedAnimated=0;
     const messageNodes=updatedRows.map((m,index)=>{
       const key=messageKey(m),sig=messageSig(m),old=existing.get(key);
       if(old&&old.dataset.medsiMessageSignature===sig)return old;
       if(old)return messageNode(m,true);
       const pending=pendingRows.find(row=>!usedPending.has(messageKey(row))&&samePendingMessage(row,m));
       if(pending)usedPending.add(messageKey(pending));
-      const quiet=quietAllNew||!!pending||(!hadMessages&&index<updatedRows.length-14);
-      if(!quiet)addedAnimated++;
+      const quiet=!animateInitial||quietAllNew||!!pending||(!hadMessages&&index<updatedRows.length-14);
       return messageNode(m,quiet)
     });
     rows=updatedRows;
+    initialMessagesRendered=true;
     const fragment=document.createDocumentFragment();
     let previousDay='';
     rows.forEach((m,i)=>{const chip=dateChip(m&&m.timestamp);if(chip&&chip.key!==previousDay){const sep=document.createElement('div');sep.className='medsi-date-separator';sep.dataset.dateKey=chip.key;sep.textContent=chip.label;fragment.appendChild(sep);previousDay=chip.key}fragment.appendChild(messageNodes[i])});
     box.replaceChildren(fragment);
     requestAnimationFrame(()=>{
-      if(stick)box.scrollTo({top:box.scrollHeight,behavior:hadMessages&&addedAnimated?'smooth':'auto'});
+      if(stick)box.scrollTo({top:box.scrollHeight,behavior:'auto'});
       else if(preserveExact)box.scrollTop=Math.max(0,oldTop);
       else box.scrollTop=Math.max(0,oldTop+(box.scrollHeight-oldHeight));
     })
@@ -194,7 +194,7 @@
     const shouldRender=!!opts.force||changed;
     if(shouldRender){
       const stick=opts.stick!==undefined?!!opts.stick:nearBottom();
-      render(list,{stick,preserveExact:!!opts.background&&!stick});
+      render(list,{stick,preserveExact:!!opts.background&&!stick,animateInitial:!initialMessagesRendered});
     }else rows=list;
     if((changed||opts.forceRead)&&!chatClosed){
       t.markRead(state.session,'parent',state.phone).catch(err=>{if(isChatClosedError(err))showClosedChat()});
@@ -203,13 +203,13 @@
   }
 
   async function open(next){
-    stopLive();dead=false;chatClosed=false;state={...next,phone:p10(next&&next.phone)};rows=[];clearError();closeReactionMenu();setBusy(false);if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
+    stopLive();dead=false;chatClosed=false;state={...next,phone:p10(next&&next.phone)};rows=[];initialMessagesRendered=false;clearError();closeReactionMenu();setBusy(false);if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
     $('parentChatChild').textContent=state.childName||state.parentName||'Ребёнок';
     $('parentChatPhone').textContent=state.phone?'8'+state.phone:'';
     $('parentChatInput').value='';
     const cached=window.MedsiParentPrewarm?await MedsiParentPrewarm.ready(state.phone).catch(()=>null):null;
     const hasCached=!!(cached&&Array.isArray(cached.messages));
-    if(hasCached)render(cached.messages,{stick:true});
+    if(hasCached){$('parentChatMessages').replaceChildren();render(cached.messages,{stick:true,animateInitial:true});}
     else $('parentChatMessages').innerHTML='<div class="parent-chat-empty">Загружаем сообщения…</div>';
     try{await refresh({stick:true,fresh:true,force:!hasCached,forceRead:true})}catch(e){if(isChatClosedError(e))showClosedChat();else showError(e&&e.message||'Не удалось загрузить сообщения.')}
     if(!chatClosed)scheduleLive(LIVE_REFRESH_MS)

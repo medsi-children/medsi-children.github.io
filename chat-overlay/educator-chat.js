@@ -108,6 +108,7 @@
     let disposed=false;
     let deleteTarget=null;
     let threadRequestId=0;
+    let initialMessagesRendered=false;
     const THREAD_LOAD_TIMEOUT_MS=8000;
 
     function tutorToken(){try{return String(localStorage.getItem('medsi_tutor_session_v1')||'')}catch(_){return''}}
@@ -248,8 +249,10 @@
     }
     function renderRows(nextRows,stick=true,opts){
       const previousRows=activeRows,updatedRows=Array.isArray(nextRows)?nextRows:[],oldTop=chatThreadBox.scrollTop;
+      const animateInitial=!!(opts&&opts.animateInitial)&&!initialMessagesRendered;
       if(!updatedRows.length){
         activeRows=[];
+        initialMessagesRendered=true;
         const existingEmpty=chatThreadBox.querySelector(':scope > .chat-empty');
         if(existingEmpty&&existingEmpty.dataset.state==='empty')return;
         const empty=document.createElement('div');empty.className='chat-empty';empty.dataset.state='empty';empty.textContent='Сообщений пока нет.';chatThreadBox.replaceChildren(empty);return
@@ -263,11 +266,12 @@
         activeRows=updatedRows;
         return;
       }
-      const pendingRows=previousRows.filter(isPending),usedPending=new Set();let addedAnimated=0;
-      const nodes=updatedRows.map((m,index)=>{const key=messageKey(m),sig=messageSig(m),old=existing.get(key);if(old&&old.dataset.medsiMessageSignature===sig)return old;if(old)return messageNode(m,true);const pending=pendingRows.find(row=>!usedPending.has(messageKey(row))&&samePendingMessage(row,m));if(pending)usedPending.add(messageKey(pending));const quiet=quietAllNew||!!pending||(!hadMessages&&index<updatedRows.length-14);if(!quiet)addedAnimated++;return messageNode(m,quiet)});
+      const pendingRows=previousRows.filter(isPending),usedPending=new Set();
+      const nodes=updatedRows.map((m,index)=>{const key=messageKey(m),sig=messageSig(m),old=existing.get(key);if(old&&old.dataset.medsiMessageSignature===sig)return old;if(old)return messageNode(m,true);const pending=pendingRows.find(row=>!usedPending.has(messageKey(row))&&samePendingMessage(row,m));if(pending)usedPending.add(messageKey(pending));const quiet=!animateInitial||quietAllNew||!!pending||(!hadMessages&&index<updatedRows.length-14);return messageNode(m,quiet)});
       activeRows=updatedRows;
+      initialMessagesRendered=true;
       const fragment=document.createDocumentFragment();nodes.forEach(node=>fragment.appendChild(node));chatThreadBox.replaceChildren(fragment)
-      requestAnimationFrame(()=>{if(stick)chatThreadBox.scrollTo({top:chatThreadBox.scrollHeight,behavior:hadMessages&&addedAnimated?'smooth':'auto'});else if(opts&&opts.preserveExact)chatThreadBox.scrollTop=Math.max(0,oldTop)})
+      requestAnimationFrame(()=>{if(stick)chatThreadBox.scrollTo({top:chatThreadBox.scrollHeight,behavior:'auto'});else if(opts&&opts.preserveExact)chatThreadBox.scrollTop=Math.max(0,oldTop)})
     }
     async function refreshThread(preserve){
       if(!activeChat)return;
@@ -282,7 +286,7 @@
         const pendingRows=activeRows.filter(isPending).filter(pending=>!receivedRows.some(row=>samePendingMessage(pending,row)));
         const nextRows=receivedRows.concat(pendingRows);
         setCached(targetPhone,nextRows);
-        renderRows(nextRows,!preserve||gap<80,{preserveExact:preserve&&gap>80});
+        renderRows(nextRows,!preserve||gap<80,{preserveExact:preserve&&gap>80,animateInitial:!initialMessagesRendered});
       }catch(err){
         if(requestId===threadRequestId&&activeChat&&phone10(activeChat.phone)===targetPhone){showThreadLoadFailure();overlay.showError(err.message||'Не удалось загрузить чат.')}
       }
@@ -291,11 +295,12 @@
       threadRequestId++;
       setReply(null);editing=null;clearFile();editor.textContent='';
       activeRows=[];
+      initialMessagesRendered=false;
       activeChat=chat;
       if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
       showThreadScreen();renderThreadHeader(chat);
       const cached=getCached(chat.phone);
-      if(cached)renderRows(cached.rows);
+      if(cached){chatThreadBox.replaceChildren();renderRows(cached.rows,true,{animateInitial:true});}
       else{
         const connecting=document.createElement('div');connecting.className='chat-empty';connecting.dataset.state='connecting';connecting.textContent='Подключаемся к чату…';chatThreadBox.replaceChildren(connecting);
       }
