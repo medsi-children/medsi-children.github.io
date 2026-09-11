@@ -108,6 +108,7 @@
     let disposed=false;
     let deleteTarget=null;
     let threadRequestId=0;
+    const THREAD_LOAD_TIMEOUT_MS=8000;
 
     function tutorToken(){try{return String(localStorage.getItem('medsi_tutor_session_v1')||'')}catch(_){return''}}
     async function appApi(method,args){
@@ -213,6 +214,24 @@
     }
 
     function renderThreadHeader(chat){chatThreadHeader.replaceChildren();['Родитель: '+(chat.parentName||'—'),'Ребёнок: '+(chat.childName||'—'),'Номер телефона: '+displayPhone(chat.phone||'')].forEach(text=>{const d=document.createElement('div');d.textContent=text;chatThreadHeader.appendChild(d)})}
+    function threadWithTimeout(phone){
+      return new Promise((resolve,reject)=>{
+        let settled=false;
+        const timer=setTimeout(()=>{if(settled)return;settled=true;const error=new Error('Сервер чата отвечает слишком долго.');error.code='THREAD-TIMEOUT';reject(error)},THREAD_LOAD_TIMEOUT_MS);
+        Promise.resolve(transport.thread(session,phone,'',100)).then(
+          value=>{if(settled)return;settled=true;clearTimeout(timer);resolve(value)},
+          error=>{if(settled)return;settled=true;clearTimeout(timer);reject(error)}
+        );
+      });
+    }
+    function showThreadLoadFailure(){
+      if(activeRows.length)return;
+      const state=document.createElement('div');state.className='chat-empty';state.dataset.state='error';
+      const message=document.createElement('div');message.textContent='Не удалось получить сообщения.';
+      const retry=document.createElement('button');retry.type='button';retry.className='btn';retry.textContent='Повторить';retry.style.cssText='display:block;width:auto;min-width:140px;margin:12px auto 0;padding:10px 18px;';
+      retry.onclick=()=>{retry.disabled=true;message.textContent='Повторяем запрос…';refreshThread(false)};
+      state.append(message,retry);chatThreadBox.replaceChildren(state);
+    }
     function messageNode(m,quiet){
       const el=document.createElement('div');el.className='msg '+(m.side==='educator'?'educator':'parent');el.dataset.medsiMessageKey=messageKey(m);el.dataset.medsiMessageSignature=messageSig(m);if(quiet)el.dataset.medsiAnimated='1';
       const author=document.createElement('div');author.className='msg-author';
@@ -229,6 +248,12 @@
     }
     function renderRows(nextRows,stick=true,opts){
       const previousRows=activeRows,updatedRows=Array.isArray(nextRows)?nextRows:[],oldTop=chatThreadBox.scrollTop;
+      if(!updatedRows.length){
+        activeRows=[];
+        const existingEmpty=chatThreadBox.querySelector(':scope > .chat-empty');
+        if(existingEmpty&&existingEmpty.dataset.state==='empty')return;
+        const empty=document.createElement('div');empty.className='chat-empty';empty.dataset.state='empty';empty.textContent='Сообщений пока нет.';chatThreadBox.replaceChildren(empty);return
+      }
       const existing=new Map([...chatThreadBox.children].filter(el=>el.matches&&el.matches('.msg')&&el.dataset.medsiMessageKey).map(el=>[el.dataset.medsiMessageKey,el]));
       const hadMessages=existing.size>0,hasStableOverlap=updatedRows.some(m=>existing.has(messageKey(m))),quietAllNew=hadMessages&&!hasStableOverlap;
       const existingOrder=[...chatThreadBox.children].filter(el=>el.matches&&el.matches('.msg')).map(el=>el.dataset.medsiMessageKey||'');
@@ -241,7 +266,7 @@
       const pendingRows=previousRows.filter(isPending),usedPending=new Set();let addedAnimated=0;
       const nodes=updatedRows.map((m,index)=>{const key=messageKey(m),sig=messageSig(m),old=existing.get(key);if(old&&old.dataset.medsiMessageSignature===sig)return old;if(old)return messageNode(m,true);const pending=pendingRows.find(row=>!usedPending.has(messageKey(row))&&samePendingMessage(row,m));if(pending)usedPending.add(messageKey(pending));const quiet=quietAllNew||!!pending||(!hadMessages&&index<updatedRows.length-14);if(!quiet)addedAnimated++;return messageNode(m,quiet)});
       activeRows=updatedRows;
-      if(!activeRows.length){const e=document.createElement('div');e.className='chat-empty';e.textContent='Сообщений пока нет.';chatThreadBox.replaceChildren(e)}else{const fragment=document.createDocumentFragment();nodes.forEach(node=>fragment.appendChild(node));chatThreadBox.replaceChildren(fragment)}
+      const fragment=document.createDocumentFragment();nodes.forEach(node=>fragment.appendChild(node));chatThreadBox.replaceChildren(fragment)
       requestAnimationFrame(()=>{if(stick)chatThreadBox.scrollTo({top:chatThreadBox.scrollHeight,behavior:hadMessages&&addedAnimated?'smooth':'auto'});else if(opts&&opts.preserveExact)chatThreadBox.scrollTop=Math.max(0,oldTop)})
     }
     async function refreshThread(preserve){
@@ -250,22 +275,30 @@
       const requestId=++threadRequestId;
       const gap=chatThreadBox.scrollHeight-chatThreadBox.scrollTop-chatThreadBox.clientHeight;
       try{
-        const res=await transport.thread(session,targetPhone,'',100);
+        const res=await threadWithTimeout(targetPhone);
         if(disposed)return;
-        setCached(targetPhone,res.messages||[]);
         if(requestId!==threadRequestId||!activeChat||phone10(activeChat.phone)!==targetPhone)return;
-        renderRows(res.messages||[],!preserve||gap<80,{preserveExact:preserve&&gap>80});
+        const receivedRows=Array.isArray(res&&res.messages)?res.messages:[];
+        const pendingRows=activeRows.filter(isPending).filter(pending=>!receivedRows.some(row=>samePendingMessage(pending,row)));
+        const nextRows=receivedRows.concat(pendingRows);
+        setCached(targetPhone,nextRows);
+        renderRows(nextRows,!preserve||gap<80,{preserveExact:preserve&&gap>80});
       }catch(err){
-        if(requestId===threadRequestId&&activeChat&&phone10(activeChat.phone)===targetPhone)overlay.showError(err.message||'Не удалось загрузить чат.')
+        if(requestId===threadRequestId&&activeChat&&phone10(activeChat.phone)===targetPhone){showThreadLoadFailure();overlay.showError(err.message||'Не удалось загрузить чат.')}
       }
     }
     async function openThread(chat){
       threadRequestId++;
       setReply(null);editing=null;clearFile();editor.textContent='';
+      activeRows=[];
       activeChat=chat;
       if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
       showThreadScreen();renderThreadHeader(chat);
-      const cached=getCached(chat.phone);if(cached)renderRows(cached.rows);else chatThreadBox.innerHTML='<div class="chat-empty">Загрузка...</div>';
+      const cached=getCached(chat.phone);
+      if(cached)renderRows(cached.rows);
+      else{
+        const connecting=document.createElement('div');connecting.className='chat-empty';connecting.dataset.state='connecting';connecting.textContent='Подключаемся к чату…';chatThreadBox.replaceChildren(connecting);
+      }
       await refreshThread(false);
       if(!activeChat||phone10(activeChat.phone)!==phone10(chat.phone))return;
       transport.markRead(session,'educator',chat.phone).catch(()=>{});chat.hasUnread=false
