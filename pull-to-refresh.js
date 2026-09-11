@@ -35,6 +35,7 @@
     indicator.classList.toggle('is-pulling',eased>0);
     indicator.classList.toggle('is-ready',eased>=READY_OFFSET);
   }
+  function holdPage(){document.documentElement.classList.add('medsi-pull-active')}
   function releasePage(){document.documentElement.classList.remove('medsi-pull-active')}
   function hide(){
     pulling=false;active=null;releasePage();indicator.classList.remove('is-pulling','is-ready','is-refreshing');
@@ -57,15 +58,18 @@
   function touchStart(event){
     if(refreshing||event.touches.length!==1)return;
     const registration=current();if(!registration)return;
-    const touch=event.touches[0];active=registration;startY=touch.clientY;startX=touch.clientX;pulling=false;mount();setPull(0);
+    const touch=event.touches[0];active=registration;startY=touch.clientY;startX=touch.clientX;pulling=false;mount();setPull(0);holdPage();
   }
   function touchMove(event){
     if(!active||refreshing||event.touches.length!==1)return;
     if(scrollTop(active)>1){hide();return}
     const touch=event.touches[0],dy=touch.clientY-startY,dx=Math.abs(touch.clientX-startX);
-    if(dy<=0||dx>dy){if(!pulling&&Math.max(dx,-dy)>10)hide();return}
-    if(dy<4)return;
-    pulling=true;document.documentElement.classList.add('medsi-pull-active');if(event.cancelable)event.preventDefault();setPull(dy);
+    if(dy<=0||dx>Math.max(8,dy*1.08)){if(!pulling&&Math.max(dx,-dy)>10)hide();return}
+    // Prevent Safari's own page pull-to-refresh on the very first downward move.
+    // Waiting until the indicator is visibly moving is already too late on iOS.
+    if(event.cancelable)event.preventDefault();
+    if(dy<2)return;
+    pulling=true;setPull(dy);
   }
   function touchEnd(){
     if(!active||refreshing)return;
