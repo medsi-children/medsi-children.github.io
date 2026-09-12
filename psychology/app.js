@@ -5,6 +5,11 @@
   let sendBusy=false,tutorToken='';
 
   function timeoutPromise(ms){return new Promise((_,reject)=>setTimeout(()=>reject(new Error('TIMEOUT')),ms))}
+  function reportSubmissionId(){
+    if(window.crypto&&typeof window.crypto.randomUUID==='function')return 'report_'+window.crypto.randomUUID().replace(/-/g,'');
+    return 'report_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,12);
+  }
+  function delay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
   async function callApi(method,args,timeoutMs){
     const run=async()=>{
       const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});
@@ -62,15 +67,62 @@
     if(sendBusy)return;
     const text=$('text').value,btn=$('sendBtn');showError('');
     if(!text.trim()){showError('Пустой текст отчёта.');return}
+    const submissionId=reportSubmissionId();
     sendBusy=true;btn.disabled=true;btn.textContent='Отправляем…';
     try{
-      const res=await callApi('appendReport',[{reportType:'psychology',text},tutorToken],30000);
+      let stopped=false;
+      const request=callApi('appendReport',[{reportType:'psychology',text,submissionId},tutorToken],30000)
+        .then(value=>({source:'request',value}),error=>({source:'request',error}));
+      const acceptance=waitForAcceptance(submissionId,()=>stopped)
+        .then(value=>({source:'acceptance',value}),error=>({source:'acceptance',error}));
+      const first=await Promise.race([request,acceptance]);
+      if(first.source==='acceptance'&&first.value){showDone();return}
+      let result=first;
+      if(first.source==='request')stopped=true;
+      else result=await request;
+      if(result.error&&String(result.error&&result.error.message||result.error)!=='TIMEOUT')throw result.error;
+      let res=result.value||null;
+      if(!res||res.processing){btn.textContent='Проверяем результат…';res=await recoverSubmission(submissionId,text)}
       if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось отправить отчёт.');
-      $('formScreen').classList.add('hidden');$('doneScreen').classList.remove('hidden');
+      showDone();
     }catch(e){
       const message=String(e&&e.message||e);
-      showError(message==='TIMEOUT'?'Сервер долго не отвечает. Попробуйте ещё раз.':message);
+      showError(message==='TIMEOUT'?'Сервер отвечает дольше обычного. Отчёт не нужно отправлять повторно.':message);
     }finally{sendBusy=false;btn.disabled=false;btn.textContent='Отправить'}
+  }
+
+  function showDone(){$('formScreen').classList.add('hidden');$('doneScreen').classList.remove('hidden')}
+
+  async function waitForAcceptance(submissionId,shouldStop){
+    const deadline=Date.now()+20000;await delay(700);
+    while(Date.now()<deadline&&!(shouldStop&&shouldStop())){
+      try{
+        const status=await callApi('getReportSubmissionStatus',[submissionId,tutorToken],7000);
+        if(status&&(status.status==='saved'||status.status==='completed'))return status;
+        if(status&&status.status==='failed')throw new Error(status.message||'Не удалось отправить отчёт.');
+      }catch(e){if(String(e&&e.message||e)!=='TIMEOUT')throw e}
+      await delay(700);
+    }
+    return null;
+  }
+
+  async function recoverSubmission(submissionId,text){
+    const deadline=Date.now()+120000;let retried=false,notFoundCount=0;
+    while(Date.now()<deadline){
+      await delay(2200);
+      let status=null;
+      try{status=await callApi('getReportSubmissionStatus',[submissionId,tutorToken],12000)}catch(e){if(String(e&&e.message||e)!=='TIMEOUT')throw e;continue}
+      if(status&&(status.status==='saved'||status.status==='completed'))return status.result||{ok:true};
+      if(status&&status.status==='failed')throw new Error(status.message||'Не удалось отправить отчёт.');
+      if(status&&status.status==='not_found'&&++notFoundCount>=2&&!retried){
+        retried=true;
+        let retry=null;
+        try{retry=await callApi('appendReport',[{reportType:'psychology',text,submissionId},tutorToken],30000)}catch(e){if(String(e&&e.message||e)!=='TIMEOUT')throw e}
+        if(retry&&retry.ok&&!retry.processing)return retry;
+        if(retry&&!retry.ok)throw new Error(retry.message||'Не удалось отправить отчёт.');
+      }
+    }
+    throw new Error('Сервер отвечает дольше обычного. Отчёт продолжает обрабатываться; не отправляйте его повторно.');
   }
 
   $('authBtn').addEventListener('click',authenticate);
