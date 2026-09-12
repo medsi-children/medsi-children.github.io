@@ -374,12 +374,9 @@
     childDeleteModal.onclick=e=>{if(e.target===childDeleteModal){deleteTarget=null;childDeleteModal.classList.add('hidden')}};
     document.addEventListener('click',closeMessageMenu);
 
-    const removePullRefresh=window.MedsiPullToRefresh?MedsiPullToRefresh.register({id:'educator-chat-list',isActive:()=>!disposed&&document.body.dataset.screen==='screenChats'&&!screenChats.classList.contains('hidden'),getScroller:()=>scene,onRefresh:()=>loadChats(true)}):null;
-
     loadChats(false);
     return()=>{
       disposed=true;
-      if(removePullRefresh)removePullRefresh();
       if(window.__medsiEducatorApplyThreadRefresh===applyLiveRows)delete window.__medsiEducatorApplyThreadRefresh;
       if(pendingUrl)URL.revokeObjectURL(pendingUrl);
       contextMenu.remove();childDeleteModal.remove();
