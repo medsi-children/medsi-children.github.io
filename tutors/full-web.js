@@ -25,6 +25,10 @@
   function parentSig(rows){return (rows||[]).map(r=>[phone10(r.phone),r.parentName||'',r.childName||''].join('|')).sort().join('~')}
 
   function timeoutPromise(ms){return new Promise((_,reject)=>setTimeout(()=>reject(new Error('TIMEOUT')),ms))}
+  function reportSubmissionId(){
+    if(window.crypto&&typeof window.crypto.randomUUID==='function')return 'report_'+window.crypto.randomUUID().replace(/-/g,'');
+    return 'report_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,12);
+  }
   async function callApi(method,args,timeoutMs){
     const run=async()=>{
       const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});
@@ -108,9 +112,71 @@
   function openReport(type){$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Психотерапия','Вставьте отчёт по психотерапии.'];setScreen('screenForm',spec[0],spec[1])}
   async function sendReport(){
     const type=$('btnSend').dataset.type,text=$('text').value,btn=$('btnSend');$('reportError').classList.add('hidden');if(!text.trim()){showReportError('Пустой текст отчёта.');return}
+    const submissionId=reportSubmissionId();
     btn.disabled=true;btn.textContent='Отправляем…';
-    try{const res=await callApi('appendReport',[{reportType:type,text},tutorToken],30000);if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось отправить отчёт.');$('doneText').textContent='Готово.';setScreen('screenDone','Готово','Отчёт отправлен.')}
-    catch(e){showReportError(String(e&&e.message||e))}finally{btn.disabled=false;btn.textContent='Отправить'}
+    try{
+      let acceptanceStopped=false;
+      const request=callApi('appendReport',[{reportType:type,text,submissionId},tutorToken],30000)
+        .then(value=>({source:'request',value}),error=>({source:'request',error}));
+      const acceptance=waitForReportAcceptance(submissionId,()=>acceptanceStopped)
+        .then(value=>({source:'acceptance',value}),error=>({source:'acceptance',error}));
+      const first=await Promise.race([request,acceptance]);
+      if(first.source==='acceptance'&&first.value){showReportSent();return}
+      let res=null;
+      if(first.source==='request'){
+        acceptanceStopped=true;
+        if(first.error&&String(first.error&&first.error.message||first.error)!=='TIMEOUT')throw first.error;
+        res=first.value||null;
+      }else{
+        const completedRequest=await request;
+        if(completedRequest.error&&String(completedRequest.error&&completedRequest.error.message||completedRequest.error)!=='TIMEOUT')throw completedRequest.error;
+        res=completedRequest.value||null;
+      }
+      if(res&&res.ok&&!res.processing){showReportSent();return}
+      if(res&&!res.ok)throw new Error(res.message||'Не удалось отправить отчёт.');
+      btn.textContent='Проверяем результат…';
+      res=await recoverReportSubmission(type,text,submissionId);
+      if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось подтвердить отправку отчёта.');
+      showReportSent();
+    }
+    catch(e){const message=String(e&&e.message||e);showReportError(message==='TIMEOUT'?'Сервер отвечает дольше обычного. Отчёт не нужно отправлять повторно — откройте эту форму через минуту и проверьте результат.':message)}
+    finally{btn.disabled=false;btn.textContent='Отправить'}
+  }
+  function showReportSent(){$('doneText').textContent='Готово.';setScreen('screenDone','Готово','Отчёт отправлен.')}
+  function reportRecoveryDelay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+  async function waitForReportAcceptance(submissionId,shouldStop){
+    const deadline=Date.now()+20000;
+    await reportRecoveryDelay(700);
+    while(Date.now()<deadline&&!(shouldStop&&shouldStop())){
+      try{
+        const status=await callApi('getReportSubmissionStatus',[submissionId,tutorToken],7000);
+        if(status&&(status.status==='saved'||status.status==='completed'))return status;
+        if(status&&status.status==='failed')throw new Error(status.message||'Не удалось отправить отчёт.');
+      }catch(e){if(String(e&&e.message||e)!=='TIMEOUT')throw e}
+      await reportRecoveryDelay(700);
+    }
+    return null;
+  }
+  async function recoverReportSubmission(type,text,submissionId){
+    const deadline=Date.now()+120000;let retried=false;let notFoundCount=0;
+    while(Date.now()<deadline){
+      await reportRecoveryDelay(2200);
+      let status=null;
+      try{status=await callApi('getReportSubmissionStatus',[submissionId,tutorToken],12000)}catch(e){if(String(e&&e.message||e)!=='TIMEOUT')throw e;continue}
+      if(status&&(status.status==='saved'||status.status==='completed'))return status.result||{ok:true};
+      if(status&&status.status==='failed')throw new Error(status.message||'Не удалось отправить отчёт.');
+      if(status&&status.status==='not_found'){
+        notFoundCount++;
+        if(notFoundCount>=2&&!retried){
+          retried=true;
+          let retry=null;
+          try{retry=await callApi('appendReport',[{reportType:type,text,submissionId},tutorToken],30000)}catch(e){if(String(e&&e.message||e)!=='TIMEOUT')throw e}
+          if(retry&&retry.ok&&!retry.processing)return retry;
+          if(retry&&!retry.ok)throw new Error(retry.message||'Не удалось отправить отчёт.');
+        }
+      }
+    }
+    throw new Error('Сервер отвечает дольше обычного. Отчёт продолжает обрабатываться; не отправляйте его повторно.');
   }
   function showReportError(text){const el=$('reportError');el.textContent=text;el.classList.remove('hidden')}
 
