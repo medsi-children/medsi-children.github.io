@@ -20,9 +20,7 @@
   function splitNumberedHeading(v){
     const text=stripBodyNoise(String(v||'').trim());
     if(!text)return{title:'Этап занятия',body:''};
-    let m=text.match(/^([^:\n]{2,120}?)\s*:\s*([\s\S]*)$/);
-    if(m)return{title:cap(m[1]),body:m[2].trim()};
-    m=text.match(/^(.{2,120}?)[.!?]\s+([\s\S]+)$/);
+    const m=text.match(/^(.{2,120}?)(?::\s*|[.!?]\s+)([\s\S]*)$/);
     if(m)return{title:cap(m[1]),body:m[2].trim()};
     if(text.length<=90)return{title:cap(text),body:''};
     return{title:'Этап занятия',body:text}
