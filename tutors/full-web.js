@@ -192,13 +192,10 @@
 
   async function ensureD1Fresh(){if(d1Session&&Number(d1Session.expiresAt||0)>Date.now()+60000)return d1Session;return requestFreshD1()}
   async function openChat(){try{const s=await ensureD1Fresh();overlay.open({type:'medsi:chat-overlay',action:'open',role:'educator',session:s})}catch(e){alert(String(e&&e.message||e))}}
-  async function refreshUnreadBadge(fresh){const badge=$('newParentMsgBanner');if(!d1Session||!window.MedsiOverlayTransport){badge.classList.add('hidden');return}try{const res=await MedsiOverlayTransport.chats(d1Session,'unread',fresh?{fresh:true}:undefined);const chats=Array.isArray(res&&res.chats)?res.chats:[];badge.classList.toggle('hidden',!chats.some(x=>!!x.hasUnread))}catch(_){badge.classList.add('hidden')}}
-  async function refreshTutorMenu(){if(!tutorToken)return;try{await ensureD1Fresh()}catch(_){}await Promise.allSettled([prewarmParents(),refreshUnreadBadge(true),window.MedsiAccessRequests?MedsiAccessRequests.refresh():Promise.resolve()])}
-  function installPullRefresh(){if(!window.MedsiPullToRefresh)return;MedsiPullToRefresh.register({id:'tutor-menu',isActive:()=>document.body.dataset.screen==='screenChoose'&&$('tutorAuthGate').classList.contains('hidden')&&$('accessRequestConfirm').classList.contains('hidden')&&!document.body.classList.contains('medsi-chat-overlay-open'),getScroller:()=>document.querySelector('body>.wrap .scene')||window,onRefresh:refreshTutorMenu})}
+  async function refreshUnreadBadge(){const badge=$('newParentMsgBanner');if(!d1Session||!window.MedsiOverlayTransport){badge.classList.add('hidden');return}try{const res=await MedsiOverlayTransport.chats(d1Session,'unread');const chats=Array.isArray(res&&res.chats)?res.chats:[];badge.classList.toggle('hidden',!chats.some(x=>!!x.hasUnread))}catch(_){badge.classList.add('hidden')}}
 
   function startApp(){
     if(document.body.dataset.started==='1'){showMenu();return}document.body.dataset.started='1';
-    installPullRefresh();
     window.MEDSI_APP_BASE_URL=APP_BASE_URL;
     overlay=window.MedsiChatOverlay.create({frameId:'__no_iframe__',onOpen:(state,api)=>{if(overlayCleanup){try{overlayCleanup()}catch(_){}overlayCleanup=null}if(window.MedsiEducatorOverlayChat)overlayCleanup=MedsiEducatorOverlayChat.mount(api,state)||null},onClose:()=>{if(overlayCleanup){try{overlayCleanup()}catch(_){}overlayCleanup=null}showMenu()}});
     showMenu();prewarmParents();if(window.MedsiAccessRequests)MedsiAccessRequests.start()
