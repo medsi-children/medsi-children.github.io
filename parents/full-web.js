@@ -2,7 +2,7 @@
   const APP_BASE_URL='/__session/apps-script';
   const PUSH_APP_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
   const PUSH_SERVICE_URL='https://medsi-push-worker.medsi-children.workers.dev';
-  const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1';
+  const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',BOOTSTRAP_CHECK_KEY='medsi_parent_bootstrap_check_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1';
   const $=id=>document.getElementById(id);
   const reportCache={},reportPending={},reportReadPending={};let currentPhone='',parentName='',childName='',regParentName='',regChildName='',justRegistered=false,d1Session=null,pushReady=false,parentSession='',flowRun=0,currentReportKind='morning',currentReportText='',chatReadPending=null,reportHistoryByDate={},reportHistoryMonth=0,reportHistoryMinMonth=0,reportHistoryMaxMonth=0,selectedHistoryDate='';
   const onlyDigits=v=>String(v||'').replace(/\D+/g,'');const validPhone=v=>onlyDigits(v).length>=10;
@@ -44,7 +44,7 @@
   function showAuth(){setHeader('Авторизация','Введите номер телефона, который вы указывали при регистрации.');show('screenAuth')}
   function applyBootstrap(res){if(!res||!res.ok||!res.parentSession)return false;currentPhone=onlyDigits(res.phone||currentPhone);parentName=String(res.parentName||parentName||'').trim();childName=String(res.childName||childName||'').trim();parentSession=String(res.parentSession);safeSet(PARENT_SESSION_KEY,parentSession);safeSet(PHONE_KEY,currentPhone);safeSet(LEGACY_PHONE_KEY,currentPhone);safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);applyUnread(res);syncPushIdentity();return true}
   function showChoose(){if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();setHeader('Медси Бот','Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.');$('waitNote').classList.toggle('hidden',!justRegistered);prewarmAll();show('screenChoose')}
-  function clearSession(){currentPhone='';parentName='';childName='';parentSession='';d1Session=null;chatReadPending=null;flowRun++;safeRemove(PHONE_KEY);safeRemove(LEGACY_PHONE_KEY);safeRemove(PARENT_KEY);safeRemove(CHILD_KEY);safeRemove(PARENT_SESSION_KEY);safeRemove(D1_KEY);Object.keys(reportCache).forEach(k=>delete reportCache[k]);Object.keys(reportPending).forEach(k=>delete reportPending[k]);Object.keys(reportReadPending).forEach(k=>delete reportReadPending[k]);if(window.MedsiParentPrewarm)MedsiParentPrewarm.clear();if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();syncPushIdentity()}
+  function clearSession(){currentPhone='';parentName='';childName='';parentSession='';d1Session=null;chatReadPending=null;flowRun++;safeRemove(PHONE_KEY);safeRemove(LEGACY_PHONE_KEY);safeRemove(PARENT_KEY);safeRemove(CHILD_KEY);safeRemove(PARENT_SESSION_KEY);safeRemove(D1_KEY);safeRemove(BOOTSTRAP_CHECK_KEY);Object.keys(reportCache).forEach(k=>delete reportCache[k]);Object.keys(reportPending).forEach(k=>delete reportPending[k]);Object.keys(reportReadPending).forEach(k=>delete reportReadPending[k]);if(window.MedsiParentPrewarm)MedsiParentPrewarm.clear();if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();syncPushIdentity()}
   async function restoreSaved(){
     const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));
     if(!validPhone(ph)){showStart();return}
@@ -53,9 +53,12 @@
     childName=String(safeGet(CHILD_KEY)||'').trim();
     parentSession=safeGet(PARENT_SESSION_KEY);if(!parentSession){clearSession();$('phoneInputAuth').value=ph;showAuth();return}syncPushIdentity();
     showChoose();
+    const lastBootstrap=Number(safeGet(BOOTSTRAP_CHECK_KEY)||0);
+    if(lastBootstrap&&Date.now()-lastBootstrap<15*60*1000){prewarmAll();return}
     try{
       const res=await callApi('getParentBootstrap',[ph,parentSession],12000);
       if(!applyBootstrap(res)){clearSession();$('phoneInputAuth').value=ph;showAuth();return}
+      safeSet(BOOTSTRAP_CHECK_KEY,String(Date.now()));
       setChips();
       prewarmAll();
     }catch(_){
@@ -131,7 +134,7 @@
   function warmAllReports(){const kinds=['morning','evening','psychology'];if(!currentPhone||kinds.every(kind=>reportCache[kind]||reportPending[kind]))return;const phone=currentPhone,session=parentSession;const sessionPromise=warmD1();sessionPromise.then(chatSession=>{if(chatSession&&window.MedsiParentPrewarm)MedsiParentPrewarm.warm(chatSession,currentPhone)});const batch=sessionPromise.then(fetchCurrentReportsFromD1).then(reports=>{if(onlyDigits(currentPhone).slice(-10)!==onlyDigits(phone).slice(-10)||parentSession!==session)return{};kinds.forEach(kind=>{if(reports[kind])reportCache[kind]=reports[kind]});return reports}).catch(()=>({}));kinds.forEach(kind=>{if(reportCache[kind]||reportPending[kind])return;const pending=batch.then(reports=>reports[kind]||null).finally(()=>{if(reportPending[kind]===pending)delete reportPending[kind]});reportPending[kind]=pending})}
   function warmReport(kind){if(reportPending[kind])return reportPending[kind];if(reportCache[kind])return Promise.resolve(reportCache[kind]);warmAllReports();return reportPending[kind]||Promise.resolve(null)}
   function prewarmAll(){if(!currentPhone)return;warmAllReports()}
-  async function refreshParentMenu(){if(!currentPhone||!parentSession)return;const bootstrap=callApi('getParentBootstrap',[currentPhone,parentSession],12000).then(res=>{if(applyBootstrap(res))setChips()});const chat=warmD1().then(session=>session&&window.MedsiParentPrewarm?MedsiParentPrewarm.warm(session,currentPhone):null);await Promise.allSettled([bootstrap,chat])}
+  async function refreshParentMenu(){if(!currentPhone||!parentSession)return;const bootstrap=callApi('getParentBootstrap',[currentPhone,parentSession],12000).then(res=>{if(applyBootstrap(res)){safeSet(BOOTSTRAP_CHECK_KEY,String(Date.now()));setChips()}});const chat=warmD1().then(session=>session&&window.MedsiParentPrewarm?MedsiParentPrewarm.warm(session,currentPhone):null);await Promise.allSettled([bootstrap,chat])}
   function reportTitle(kind){return kind==='morning'?'Утренний отчёт':kind==='evening'?'Вечерний отчёт':'Групповая психотерапия'}
   function normalizeBlock(v){return String(v||'').replace(/\s+/g,' ').trim()}
   function dedupeExactReport(text){const raw=String(text||'').trim();if(!raw)return raw;const blocks=raw.split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);if(blocks.length>1){const seen=new Set(),unique=[];for(const block of blocks){const key=normalizeBlock(block);if(!key||seen.has(key))continue;seen.add(key);unique.push(block)}if(unique.length<blocks.length)return unique.join('\n\n')}const lines=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);if(lines.length===2&&normalizeBlock(lines[0])===normalizeBlock(lines[1]))return lines[0];return raw}
