@@ -96,10 +96,16 @@
   }
 
   function sendMessage(session, role, phone, message) {
+    const payload = { ...(message || {}) };
+    if (!String(payload.clientMessageId || '').trim()) {
+      payload.clientMessageId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : 'msg-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+    }
     return request(session, '/lab/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...(message || {}), phone: String(phone || ''), side: String(role || '') })
+      body: JSON.stringify({ ...payload, phone: String(phone || ''), side: String(role || '') })
     });
   }
 
