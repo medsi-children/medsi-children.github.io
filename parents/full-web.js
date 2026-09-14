@@ -1,5 +1,6 @@
 (function(){
-  const APP_BASE_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
+  const APP_BASE_URL='/__session/apps-script';
+  const PUSH_APP_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
   const PUSH_SERVICE_URL='https://medsi-push-worker.medsi-children.workers.dev';
   const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1';
   const $=id=>document.getElementById(id);
@@ -10,7 +11,7 @@
   function timeout(ms){return new Promise((_,reject)=>setTimeout(()=>reject(new Error('TIMEOUT')),ms))}
   async function callApi(method,args,ms,keepalive){const run=async()=>{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',keepalive:!!keepalive});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));return p.result};return Promise.race([run(),timeout(ms||15000)])}
   function isStartLike(id){return id==='screenStart'||id==='screenChoose'}
-  function initPush(){if(pushReady||!window.MedsiPush)return;pushReady=true;const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));MedsiPush.init({frameId:'__no_parent_iframe__',appEndpointUrl:APP_BASE_URL,pushServiceUrl:PUSH_SERVICE_URL,identity:validPhone(ph)?{role:'parent',phone:ph}:null})}
+  function initPush(){if(pushReady||!window.MedsiPush)return;pushReady=true;const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));MedsiPush.init({frameId:'__no_parent_iframe__',appEndpointUrl:PUSH_APP_URL,pushServiceUrl:PUSH_SERVICE_URL,identity:validPhone(ph)?{role:'parent',phone:ph}:null})}
   function syncPushIdentity(){if(!window.MedsiPush)return;if(validPhone(currentPhone))MedsiPush.setIdentity({role:'parent',phone:currentPhone,parentSession:parentSession||''});else MedsiPush.clearIdentity()}
   function show(id){['screenStart','screenNames','screenPhoneReg','screenAuth','screenRegistrationPending','screenAuthPending','screenChoose','screenReport','screenReportHistory','screenSchedule','screenChat'].forEach(x=>$(x).classList.toggle('hidden',x!==id));document.body.dataset.screen=id;$('appCard').classList.toggle('start-mode',id==='screenStart');$('headerBlock').classList.toggle('hidden',isStartLike(id)||id==='screenChat'||id==='screenRegistrationPending'||id==='screenAuthPending');const el=$(id);el.classList.remove('screen-enter');void el.offsetWidth;el.classList.add('screen-enter');setTimeout(()=>el.classList.remove('screen-enter'),300);setChips();if(window.MedsiPush)MedsiPush.setPanelVisible(id==='screenChoose'||id==='screenChat');window.scrollTo(0,0)}
   function setHeader(title,meta){$('title').textContent=title;$('meta').textContent=meta||''}

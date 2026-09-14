@@ -1,5 +1,5 @@
 (function(){
-  const APP_BASE_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
+  const APP_BASE_URL='/__session/apps-script';
   const TUTOR_KEY='medsi_tutor_session_v1';
   const D1_KEY='medsi_d1_educator_session_v1';
   const $=id=>document.getElementById(id);
