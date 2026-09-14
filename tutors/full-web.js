@@ -33,7 +33,11 @@
   }
   async function callApi(method,args,timeoutMs){
     const run=async()=>{
-      const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});
+      const body=JSON.stringify({action:'api',method,args:args||[]});
+      const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body,cache:'no-store'}).catch(error=>{
+        if(method!=='listAvailableParentsForChat')throw error;
+        return fetch('/__session/apps-script',{method:'POST',headers:{'content-type':'application/json'},body,cache:'no-store'});
+      });
       const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
       if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));
       return p.result;
@@ -49,6 +53,16 @@
   }
   function hideGate(){$('tutorAuthGate').classList.add('hidden');$('tutorAuthGate').classList.remove('checking')}
   function setCheckingText(text){$('authCheckingText').textContent=text}
+  function enterApp(){
+    try{startApp();hideGate();return true}
+    catch(error){
+      showGate(true);
+      setCheckingText('Не удалось полностью загрузить панель. Проверьте соединение и обновите страницу.');
+      $('authRetry').classList.remove('hidden');
+      console.error('TUTOR_UI_START_FAILED',error);
+      return false;
+    }
+  }
 
   function requestFreshD1(){
     if(d1RefreshPromise)return d1RefreshPromise;
@@ -82,7 +96,8 @@
     if(authRetryTimer){clearTimeout(authRetryTimer);authRetryTimer=null}
     tutorToken=String(safeGet(TUTOR_KEY)||'');d1Session=loadD1();
     if(!tutorToken){showGate(false);return}
-    if(d1Session&&d1Session.token){hideGate();startApp();refreshSavedSessionInBackground();return}
+    if(d1Session&&d1Session.token){if(enterApp())refreshSavedSessionInBackground();return}
+    $('authRetry').classList.add('hidden');
     showGate(true);setCheckingText('Проверяем сохранённый вход…');authVerifyInFlight=true;
     try{
       const res=await callApi('verifyTutorSession',[tutorToken],17000);
@@ -90,8 +105,7 @@
       if(!res||res.ok!==true)throw new Error('Не удалось проверить сохранённый вход.');
       const session=extractD1(res);
       if(session)saveAuth(tutorToken,session);
-      hideGate();startApp();
-      if(!session)scheduleD1Warm();
+      if(enterApp()&&!session)scheduleD1Warm();
     }catch(_){
       setCheckingText('Связь временно прервалась. Повторяем проверку автоматически — сохранённый вход не потерян.');
       authRetryTimer=setTimeout(verifySaved,5000);
@@ -106,7 +120,7 @@
       const res=await callApi('verifyTutorAccess',[login,password],18000);
       if(!res||!res.ok||!res.token)throw new Error((res&&res.message)||'Не удалось войти.');
       saveAuth(String(res.token),extractD1(res));$('tutorPassword').value='';
-      hideGate();startApp();scheduleD1Warm();
+      if(enterApp())scheduleD1Warm();
     }catch(e){setAuthError(String(e&&e.message||e)==='TIMEOUT'?'Сервер долго не отвечает. Попробуйте ещё раз.':String(e&&e.message||e))}
     finally{authBusy=false;$('tutorLoginBtn').disabled=false;$('tutorLoginBtn').textContent='Войти в систему'}
   }
@@ -270,12 +284,14 @@
   async function refreshUnreadBadge(){const badge=$('newParentMsgBanner');if(!d1Session||!window.MedsiOverlayTransport){badge.classList.add('hidden');return}try{const res=await MedsiOverlayTransport.chats(d1Session,'unread');const chats=Array.isArray(res&&res.chats)?res.chats:[];badge.classList.toggle('hidden',!chats.some(x=>!!x.hasUnread))}catch(_){badge.classList.add('hidden')}}
 
   function startApp(){
-    if(document.body.dataset.started==='1'){showMenu();return}document.body.dataset.started='1';
+    if(document.body.dataset.started==='1'){showMenu();return}
+    if(!window.MedsiChatOverlay||typeof MedsiChatOverlay.create!=='function'||!window.MedsiEducatorOverlayChat||typeof MedsiEducatorOverlayChat.mount!=='function')throw new Error('UI_MODULE_UNAVAILABLE');
     window.MEDSI_APP_BASE_URL=APP_BASE_URL;
     overlay=window.MedsiChatOverlay.create({frameId:'__no_iframe__',onOpen:(state,api)=>{if(overlayCleanup){try{overlayCleanup()}catch(_){}overlayCleanup=null}if(window.MedsiEducatorOverlayChat)overlayCleanup=MedsiEducatorOverlayChat.mount(api,state)||null},onClose:()=>{if(overlayCleanup){try{overlayCleanup()}catch(_){}overlayCleanup=null}showMenu()}});
+    document.body.dataset.started='1';
     showMenu();prewarmParents();if(window.MedsiAccessRequests)MedsiAccessRequests.start()
   }
 
   $('btnParentChats').addEventListener('click',openChat);$('btnMorning').addEventListener('click',()=>openReport('morning'));$('btnEvening').addEventListener('click',()=>openReport('evening'));$('btnPsychology').addEventListener('click',()=>openReport('psychology'));$('btnParentPhones').addEventListener('click',openPhones);$('btnBack').addEventListener('click',showMenu);$('btnPhonesBack').addEventListener('click',showMenu);$('btnAgain').addEventListener('click',showMenu);$('btnSend').addEventListener('click',sendReport);$('tutorLoginBtn').addEventListener('click',submitLogin);$('tutorPassword').addEventListener('keydown',e=>{if(e.key==='Enter')submitLogin()});
-  window.medsiForgetCachedChatToken=()=>{safeRemove(D1_KEY);d1Session=null;return true};window.medsiLogoutTutor=()=>{clearAuth();location.reload()};verifySaved();
+  window.medsiForgetCachedChatToken=()=>{safeRemove(D1_KEY);d1Session=null;return true};window.medsiLogoutTutor=()=>{clearAuth();location.reload()};window.medsiTutorBootReady=true;verifySaved();
 })();

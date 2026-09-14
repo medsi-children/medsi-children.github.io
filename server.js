@@ -15,6 +15,8 @@ const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES || 100 * 1024 * 102
 const CHAT_UPSTREAM = String(
   process.env.CHAT_UPSTREAM || 'https://medsi-chat-worker.medsi-children.workers.dev'
 ).replace(/\/$/, '');
+const APP_SCRIPT_URL = String(process.env.APP_SCRIPT_URL ||
+  'https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec').trim();
 const UPLOAD_UPSTREAM = String(
   process.env.UPLOAD_UPSTREAM || 'https://medsi-chat-upload-test.medsi-children.workers.dev'
 ).replace(/\/$/, '');
@@ -64,7 +66,9 @@ async function proxy(req, res, target) {
     const options = {
       method,
       headers: forwardedHeaders(req),
-      redirect: 'manual'
+      redirect: 'manual',
+      signal: method === 'GET' && target.startsWith(CHAT_UPSTREAM + '/lab/')
+        ? AbortSignal.timeout(20000) : undefined
     };
 
     if (!['GET', 'HEAD'].includes(method)) {
@@ -125,7 +129,7 @@ async function probe(url) {
     });
     try { await response.body?.cancel(); } catch (_) {}
     return {
-      ok: true,
+      ok: response.status >= 200 && response.status < 500,
       status: response.status,
       latencyMs: Date.now() - startedAt
     };
@@ -135,6 +139,29 @@ async function probe(url) {
       latencyMs: Date.now() - startedAt,
       message: error.message
     };
+  }
+}
+
+async function probeAppsScript() {
+  const startedAt = Date.now();
+  try {
+    // A deliberately invalid token exercises the live web app without reading
+    // records, creating a session, or exposing a real employee credential.
+    const response = await fetch(APP_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({ action: 'api', method: 'verifyTutorSession', args: ['health-check'] }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000)
+    });
+    const payload = await response.json();
+    return {
+      ok: response.ok && payload && payload.ok === true && payload.result && payload.result.ok === false,
+      status: response.status,
+      latencyMs: Date.now() - startedAt
+    };
+  } catch (error) {
+    return { ok: false, latencyMs: Date.now() - startedAt, message: error.message };
   }
 }
 
@@ -374,19 +401,22 @@ app.get('/__health', async (_req, res) => {
 });
 
 app.get('/__diag/network', async (_req, res) => {
-  const [chat, upload, push, db, media] = await Promise.all([
+  const [chat, upload, push, appsScript, db, media] = await Promise.all([
     probe(CHAT_UPSTREAM + '/'),
     probe(UPLOAD_UPSTREAM + '/'),
     probe(PUSH_UPSTREAM + '/'),
+    probeAppsScript(),
     database.health(),
     storage.health()
   ]);
 
   res.setHeader('cache-control', 'no-store');
-  res.json({
-    ok: true,
+  const ok = chat.ok && upload.ok && push.ok && appsScript.ok && db.ok && media.ok;
+  res.status(ok ? 200 : 502).json({
+    ok,
     measuredAt: new Date().toISOString(),
     timewebToCloudflare: { chat, upload, push },
+    timewebToAppsScript: appsScript,
     database: db,
     media
   });

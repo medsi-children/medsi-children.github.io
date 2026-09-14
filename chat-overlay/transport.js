@@ -3,6 +3,9 @@
   const UPLOAD_URL = window.location.origin + '/chat-upload';
   const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
   const UPLOAD_TIMEOUT_MS = 90000;
+  const READ_TIMEOUT_MS = 15000;
+  const WRITE_TIMEOUT_MS = 35000;
+  const READ_RETRIES = 2;
   const TRANSIENT_UPLOAD_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
   function requireSession(session) {
@@ -29,36 +32,52 @@
 
   async function request(session, path, options) {
     const auth = requireSession(session);
-    let response;
-    try {
-      response = await fetch(BASE_URL + path, {
-        ...(options || {}),
-        headers: {
-          ...((options && options.headers) || {}),
-          'X-Medsi-Chat-Session': auth.token
+    const method = String((options && options.method) || 'GET').toUpperCase();
+    const isWrite = method !== 'GET' && method !== 'HEAD';
+    const attempts = isWrite ? 1 : READ_RETRIES + 1;
+    let lastError = null;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), isWrite ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS) : null;
+      try {
+        const response = await fetch(BASE_URL + path, {
+          ...(options || {}),
+          signal: controller ? controller.signal : undefined,
+          headers: {
+            ...((options && options.headers) || {}),
+            'X-Medsi-Chat-Session': auth.token
+          }
+        });
+        let payload;
+        try { payload = await response.json(); }
+        catch (_) {
+          const error = new Error('Сервер чата вернул некорректный ответ.');
+          error.code = 'BAD_RESPONSE';
+          throw error;
         }
-      });
-    } catch (error) {
-      const wrapped = new Error((error && error.message) || 'Не удалось связаться с сервером чата.');
-      wrapped.code = 'NETWORK';
-      throw wrapped;
+        if (!response.ok || !payload || !payload.ok) {
+          const error = new Error((payload && payload.message) || 'Ошибка чата.');
+          error.code = (payload && payload.code) || ('HTTP-' + response.status);
+          error.status = response.status;
+          // Do not retry an explicit authorization or business-rule response.
+          if (response.status < 500 && response.status !== 408 && response.status !== 425 && response.status !== 429) throw error;
+          throw error;
+        }
+        return payload;
+      } catch (error) {
+        if (controller && controller.signal.aborted) {
+          lastError = Object.assign(new Error('Сервер чата отвечает слишком долго.'), {code:'TIMEOUT'});
+        } else if (error && error.code) {
+          lastError = error;
+        } else {
+          lastError = Object.assign(new Error((error && error.message) || 'Не удалось связаться с сервером чата.'), {code:'NETWORK'});
+        }
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+      if (attempt + 1 < attempts) await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
     }
-
-    let payload;
-    try { payload = await response.json(); }
-    catch (_) {
-      const error = new Error('Сервер чата вернул некорректный ответ.');
-      error.code = 'BAD_RESPONSE';
-      throw error;
-    }
-
-    if (!response.ok || !payload || !payload.ok) {
-      const error = new Error((payload && payload.message) || 'Ошибка чата.');
-      error.code = (payload && payload.code) || ('HTTP-' + response.status);
-      error.status = response.status;
-      throw error;
-    }
-    return payload;
+    throw lastError || Object.assign(new Error('Не удалось связаться с сервером чата.'), {code:'NETWORK'});
   }
 
   function thread(session, phone, beforeKey, limit) {

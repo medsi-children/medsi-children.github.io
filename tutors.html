@@ -41,20 +41,31 @@
     .auth-checking{text-align:center;color:var(--muted);line-height:1.45}
     .auth-checking p{margin:14px 0 0}
   </style>
-  <script src="/notify-client.js?v=20260909-auth-close-1"></script>
-  <script src="/tutors/push-auth.js?v=20260906-timeweb-1"></script>
-  <script src="/chat-overlay/transport.js?v=20260911-upload-hardening-1"></script>
-  <script src="/chat-overlay/media-preload.js?v=20260907-1"></script>
-  <script src="/chat-overlay/upload-ux.js?v=20260907-1"></script>
-  <script src="/tutors/chat-prewarm.js?v=20260905-production"></script>
-  <script src="/chat-overlay/interaction-fix.js?v=20260905-production"></script>
-<script src="/chat-overlay/educator-chat.js?v=20260911-first-open-motion-1"></script>
-<script src="/chat-overlay/composer-ui.js?v=20260907-1"></script>
-<script src="/chat-overlay/chat-list-ui.js?v=20260907-1"></script>
-<script src="/tutors/phone-cards-ui.js?v=20260907-1"></script>
-  <script src="/chat-overlay/educator-new-chat.js?v=20260905-production"></script>
-  <script src="/chat-overlay/overlay-core.js?v=20260905-production"></script>
-  <script src="/tutors/layout-stability.js?v=20260905-production"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded',function(){
+      setTimeout(function(){
+        if(window.medsiTutorBootReady)return;
+        var text=document.getElementById('authCheckingText');
+        var retry=document.getElementById('authRetry');
+        if(text)text.textContent='Не удалось полностью загрузить панель. Проверьте соединение и обновите страницу.';
+        if(retry)retry.classList.remove('hidden');
+      },12000);
+    });
+  </script>
+  <script defer src="/notify-client.js?v=20260909-auth-close-1"></script>
+  <script defer src="/tutors/push-auth.js?v=20260906-timeweb-1"></script>
+  <script defer src="/chat-overlay/transport.js?v=20260911-upload-hardening-1"></script>
+  <script defer src="/chat-overlay/media-preload.js?v=20260907-1"></script>
+  <script defer src="/chat-overlay/upload-ux.js?v=20260907-1"></script>
+  <script defer src="/tutors/chat-prewarm.js?v=20260905-production"></script>
+  <script defer src="/chat-overlay/interaction-fix.js?v=20260905-production"></script>
+<script defer src="/chat-overlay/educator-chat.js?v=20260911-first-open-motion-1"></script>
+<script defer src="/chat-overlay/composer-ui.js?v=20260907-1"></script>
+<script defer src="/chat-overlay/chat-list-ui.js?v=20260907-1"></script>
+<script defer src="/tutors/phone-cards-ui.js?v=20260907-1"></script>
+  <script defer src="/chat-overlay/educator-new-chat.js?v=20260905-production"></script>
+  <script defer src="/chat-overlay/overlay-core.js?v=20260905-production"></script>
+  <script defer src="/tutors/layout-stability.js?v=20260905-production"></script>
 </head>
 <body data-screen="screenChoose">
   <div id="tutorAuthGate" class="auth-gate">
@@ -67,6 +78,7 @@
       <div id="authChecking" class="auth-checking" role="status" aria-live="polite">
         <div class="boot-spinner" aria-hidden="true"></div>
         <p id="authCheckingText">Загружаем панель…</p>
+        <button id="authRetry" class="btn hidden" type="button" onclick="location.reload()">Повторить загрузку</button>
       </div>
       <div id="authForm" class="hidden">
         <div class="auth-fields">
@@ -160,20 +172,20 @@
     <div class="access-confirm-card"><div id="accessConfirmIcon" class="access-confirm-icon">?</div><h2 id="accessConfirmTitle"></h2><p id="accessConfirmText"></p><div class="access-confirm-actions"><button id="accessConfirmBack" class="btn" type="button">Вернуться</button><button id="accessConfirmApply" class="btn" type="button"></button></div><p id="accessConfirmError" class="status error hidden"></p></div>
   </div>
 
-  <script src="/tutors/access-requests.js?v=20260910-refresh-1"></script>
-  <script src="/tutors/full-web.js?v=20260914-auth-retry-1"></script>
-  <script src="/tutors/page-scroll.js?v=20260907-1"></script>
-  <script src="/tutors/report-ui.js?v=20260907-1"></script>
-  <script src="/tutors/chat-opening.js?v=20260907-1"></script>
-  <script src="/tutors/tutor-push-panel.js?v=20260907-1"></script>
-  <script src="/tutors/chat-context-menu.js?v=20260907-1"></script>
-  <script src="/chat-overlay/video-link.js?v=1"></script>
-  <script src="/chat-overlay/video-link-preview.js?v=1"></script>
-  <script src="/chat-overlay/gesture-navigation.js?v=20260907-hint-1"></script>
-  <script src="/chat-overlay/message-enhancements.js?v=20260907-recovery-1"></script>
-  <script src="/chat-overlay/chat-motion.js?v=20260911-first-open-only-1"></script>
-  <script src="/chat-overlay/bottom-lock.js?v=20260906-1"></script>
-  <script src="/tutors/live-chat-refresh.js?v=20260908-incremental-1"></script>
-  <script src="/chat-overlay/reaction-icons.js?v=20260907-twemoji-2"></script>
+  <script defer src="/tutors/access-requests.js?v=20260910-refresh-1"></script>
+  <script defer src="/tutors/full-web.js?v=20260914-auth-retry-1"></script>
+  <script defer src="/tutors/page-scroll.js?v=20260907-1"></script>
+  <script defer src="/tutors/report-ui.js?v=20260907-1"></script>
+  <script defer src="/tutors/chat-opening.js?v=20260907-1"></script>
+  <script defer src="/tutors/tutor-push-panel.js?v=20260907-1"></script>
+  <script defer src="/tutors/chat-context-menu.js?v=20260907-1"></script>
+  <script defer src="/chat-overlay/video-link.js?v=1"></script>
+  <script defer src="/chat-overlay/video-link-preview.js?v=1"></script>
+  <script defer src="/chat-overlay/gesture-navigation.js?v=20260907-hint-1"></script>
+  <script defer src="/chat-overlay/message-enhancements.js?v=20260907-recovery-1"></script>
+  <script defer src="/chat-overlay/chat-motion.js?v=20260911-first-open-only-1"></script>
+  <script defer src="/chat-overlay/bottom-lock.js?v=20260906-1"></script>
+  <script defer src="/tutors/live-chat-refresh.js?v=20260908-incremental-1"></script>
+  <script defer src="/chat-overlay/reaction-icons.js?v=20260907-twemoji-2"></script>
 </body>
 </html>
