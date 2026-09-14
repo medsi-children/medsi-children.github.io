@@ -12,6 +12,8 @@
   let parentsCache=[];
   let parentsSignature='';
   let authBusy=false;
+  let authVerifyInFlight=false;
+  let authRetryTimer=null;
 
   function safeGet(key){try{return localStorage.getItem(key)||''}catch(_){return''}}
   function safeSet(key,val){try{localStorage.setItem(key,val)}catch(_){}}
@@ -19,7 +21,7 @@
   function loadD1(){try{const s=JSON.parse(safeGet(D1_KEY)||'null');return s&&s.token&&Number(s.expiresAt||0)>Date.now()+30000?s:null}catch(_){return null}}
   function extractD1(res){if(!res)return null;if(res.d1Session&&res.d1Session.token)return res.d1Session;if(res.session&&res.session.token)return res.session;if(res.token)return res;return null}
   function saveAuth(token,session){tutorToken=String(token||'');if(tutorToken)safeSet(TUTOR_KEY,tutorToken);if(session&&session.token){d1Session=session;safeSet(D1_KEY,JSON.stringify(session))}}
-  function clearAuth(){tutorToken='';d1Session=null;d1RefreshPromise=null;if(d1WarmTimer){clearTimeout(d1WarmTimer);d1WarmTimer=null}safeRemove(TUTOR_KEY);safeRemove(D1_KEY);if(window.MedsiAccessRequests)MedsiAccessRequests.stop()}
+  function clearAuth(){tutorToken='';d1Session=null;d1RefreshPromise=null;if(d1WarmTimer){clearTimeout(d1WarmTimer);d1WarmTimer=null}if(authRetryTimer){clearTimeout(authRetryTimer);authRetryTimer=null}safeRemove(TUTOR_KEY);safeRemove(D1_KEY);if(window.MedsiAccessRequests)MedsiAccessRequests.stop()}
   function phone10(v){return String(v||'').replace(/\D+/g,'').slice(-10)}
   function displayPhone(v){const p=phone10(v);return p?'8'+p:''}
   function parentSig(rows){return (rows||[]).map(r=>[phone10(r.phone),r.parentName||'',r.childName||''].join('|')).sort().join('~')}
@@ -46,15 +48,16 @@
     if(!checking)setTimeout(()=>$('tutorLogin').focus(),30);
   }
   function hideGate(){$('tutorAuthGate').classList.add('hidden');$('tutorAuthGate').classList.remove('checking')}
+  function setCheckingText(text){$('authCheckingText').textContent=text}
 
   function requestFreshD1(){
     if(d1RefreshPromise)return d1RefreshPromise;
     d1RefreshPromise=(async()=>{
       let verify=null;
-      try{verify=await callApi('verifyTutorSession',[tutorToken],8000)}catch(_){}
+      try{verify=await callApi('verifyTutorSession',[tutorToken],17000)}catch(_){}
       let session=extractD1(verify);
       if(!session){
-        try{session=extractD1(await callApi('getD1ChatSession',['educator','',tutorToken],10000))}catch(_){}
+        try{session=extractD1(await callApi('getD1ChatSession',['educator','',tutorToken],17000))}catch(_){}
       }
       if(!session||!session.token)throw new Error('Не удалось обновить сессию чата.');
       saveAuth(tutorToken,session);return session;
@@ -75,18 +78,24 @@
     try{const session=await requestFreshD1();if(session){prewarmParents();refreshUnreadBadge()}}catch(_){}
   }
   async function verifySaved(){
+    if(authVerifyInFlight)return;
+    if(authRetryTimer){clearTimeout(authRetryTimer);authRetryTimer=null}
     tutorToken=String(safeGet(TUTOR_KEY)||'');d1Session=loadD1();
     if(!tutorToken){showGate(false);return}
     if(d1Session&&d1Session.token){hideGate();startApp();refreshSavedSessionInBackground();return}
-    showGate(true);
+    showGate(true);setCheckingText('Проверяем сохранённый вход…');authVerifyInFlight=true;
     try{
-      const res=await callApi('verifyTutorSession',[tutorToken],8000);
-      if(!res||!res.ok){clearAuth();showGate(false);return}
+      const res=await callApi('verifyTutorSession',[tutorToken],17000);
+      if(res&&res.ok===false){clearAuth();showGate(false);setAuthError('Сохранённый вход завершился. Введите логин и пароль.');return}
+      if(!res||res.ok!==true)throw new Error('Не удалось проверить сохранённый вход.');
       const session=extractD1(res);
       if(session)saveAuth(tutorToken,session);
       hideGate();startApp();
       if(!session)scheduleD1Warm();
-    }catch(e){clearAuth();showGate(false);if(String(e&&e.message||e)!=='TIMEOUT')setAuthError(String(e&&e.message||e))}
+    }catch(_){
+      setCheckingText('Связь временно прервалась. Повторяем проверку автоматически — сохранённый вход не потерян.');
+      authRetryTimer=setTimeout(verifySaved,5000);
+    }finally{authVerifyInFlight=false}
   }
 
   async function submitLogin(){
@@ -94,7 +103,7 @@
     if(!login||!password){setAuthError('Введите логин и пароль.');return}
     authBusy=true;$('tutorLoginBtn').disabled=true;$('tutorLoginBtn').textContent='Проверяем…';setAuthError('');
     try{
-      const res=await callApi('verifyTutorAccess',[login,password],15000);
+      const res=await callApi('verifyTutorAccess',[login,password],18000);
       if(!res||!res.ok||!res.token)throw new Error((res&&res.message)||'Не удалось войти.');
       saveAuth(String(res.token),extractD1(res));$('tutorPassword').value='';
       hideGate();startApp();scheduleD1Warm();

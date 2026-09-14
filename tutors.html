@@ -37,8 +37,9 @@
     .educator-logo span:nth-child(3){width:19px!important;height:19px!important;left:45px!important;top:20px!important;bottom:auto!important}
     .educator-logo span:nth-child(4){width:16px!important;height:16px!important;left:66px!important;top:4px!important;bottom:auto!important}
     .educator-logo span:nth-child(5){width:12px!important;height:12px!important;left:84px!important;top:24px!important;bottom:auto!important}
-    .auth-gate.checking .auth-card{width:auto!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
-    .auth-gate.checking .educator-start-brand,.auth-gate.checking #authForm,.auth-gate.checking #authChecking{display:none!important}
+    .auth-gate.checking #authForm{display:none!important}
+    .auth-checking{text-align:center;color:var(--muted);line-height:1.45}
+    .auth-checking p{margin:14px 0 0}
   </style>
   <script src="/notify-client.js?v=20260909-auth-close-1"></script>
   <script src="/tutors/push-auth.js?v=20260906-timeweb-1"></script>
@@ -63,7 +64,10 @@
         <h1 class="auth-title">Медси Бот</h1>
         <p class="auth-subtitle">Войдите, чтобы работать с отчётами, чатами и телефонами родителей.</p>
       </div>
-      <div id="authChecking" class="hidden" aria-hidden="true"></div>
+      <div id="authChecking" class="auth-checking" role="status" aria-live="polite">
+        <div class="boot-spinner" aria-hidden="true"></div>
+        <p id="authCheckingText">Загружаем панель…</p>
+      </div>
       <div id="authForm" class="hidden">
         <div class="auth-fields">
           <label for="tutorLogin">Логин</label>
@@ -157,7 +161,7 @@
   </div>
 
   <script src="/tutors/access-requests.js?v=20260910-refresh-1"></script>
-  <script src="/tutors/full-web.js?v=20260912-report-recovery-1"></script>
+  <script src="/tutors/full-web.js?v=20260914-auth-retry-1"></script>
   <script src="/tutors/page-scroll.js?v=20260907-1"></script>
   <script src="/tutors/report-ui.js?v=20260907-1"></script>
   <script src="/tutors/chat-opening.js?v=20260907-1"></script>

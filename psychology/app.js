@@ -41,10 +41,11 @@
     tutorToken=safeGet(TUTOR_KEY).trim();
     if(!tutorToken){showAuth();return}
     try{
-      const res=await callApi('verifyTutorSession',[tutorToken],10000);
+      const res=await callApi('verifyTutorSession',[tutorToken],17000);
       if(res&&res.ok){showForm();return}
+      if(res&&res.ok===false){tutorToken='';safeSet(TUTOR_KEY,'');showAuth();return}
     }catch(_){ }
-    tutorToken='';safeSet(TUTOR_KEY,'');showAuth();
+    showAuth('Связь временно прервалась. Сохранённый вход не потерян — откройте страницу ещё раз.');
   }
 
   async function authenticate(){
@@ -54,7 +55,7 @@
     if(!login||!password){error.textContent='Введите логин и пароль.';error.classList.remove('hidden');return}
     btn.disabled=true;btn.textContent='Проверяем…';
     try{
-      const res=await callApi('verifyTutorAccess',[login,password],15000);
+      const res=await callApi('verifyTutorAccess',[login,password],18000);
       if(!res||!res.ok)throw new Error((res&&res.message)||'Неверный логин или пароль.');
       tutorToken=String(res.token||'');
       if(!tutorToken)throw new Error('Сервер не выдал сессию.');
