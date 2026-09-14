@@ -64,7 +64,7 @@
       liveTimer=0;
       if(chatVisible()&&!liveRunning){
         liveRunning=true;
-        try{await refresh({fresh:true,silent:true,background:true});if(chatPending){chatPending=false;setBusy(false)}}catch(err){if(isChatClosedError(err)){if(!chatPending)showClosedChat()} }
+        try{await refresh({fresh:true,silent:true,background:true});if(chatPending){chatPending=false;setBusy(false)}}catch(err){if(isChatClosedError(err)){if(!chatPending)showClosedChat();else if(state.confirmChatClosed){const confirmed=await state.confirmChatClosed().catch(()=>false);if(confirmed)showClosedChat()}} }
         finally{liveRunning=false}
       }
       scheduleLive(LIVE_REFRESH_MS);
@@ -226,7 +226,7 @@
         // settling.  Give it a couple of short, silent retries before
         // declaring the chat genuinely closed.
         if(attempt<2)await new Promise(resolve=>setTimeout(resolve,700*(attempt+1)));
-        else {showPendingChat();scheduleLive(1200);}
+        else {const confirmed=state.confirmChatClosed?await state.confirmChatClosed().catch(()=>false):false;if(confirmed)showClosedChat();else {showPendingChat();scheduleLive(1200);}}
       }
     }
     if(!chatClosed&&opened)scheduleLive(LIVE_REFRESH_MS)
