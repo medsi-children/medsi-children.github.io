@@ -224,6 +224,18 @@
     }
   }
 
+  function reportSubmit(session, payload) {
+    return request(session, '/lab/report-submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+  }
+
+  function reportStatus(session, submissionId) {
+    return request(session, '/lab/report-submit/status?submissionId=' + encodeURIComponent(String(submissionId || '')));
+  }
+
   function injectVideoStyles() {
     if (document.getElementById('medsi-video-ui-style')) return;
     const style = document.createElement('style');
@@ -361,7 +373,9 @@
     edit,
     remove,
     pin,
-    upload
+    upload,
+    reportSubmit,
+    reportStatus
   };
 
   installMediaUi();

@@ -2,7 +2,8 @@
   const APP_BASE_URL='/__session/apps-script';
   const $=id=>document.getElementById(id);
   const TUTOR_KEY='medsi_tutor_session_v1';
-  let sendBusy=false,tutorToken='';
+  let sendBusy=false,tutorToken='',d1Session=null;
+  function extractD1(res){return res&&res.d1Session&&res.d1Session.token?res.d1Session:null}
 
   function timeoutPromise(ms){return new Promise((_,reject)=>setTimeout(()=>reject(new Error('TIMEOUT')),ms))}
   function reportSubmissionId(){
@@ -42,7 +43,7 @@
     if(!tutorToken){showAuth();return}
     try{
       const res=await callApi('verifyTutorSession',[tutorToken],17000);
-      if(res&&res.ok){showForm();return}
+      if(res&&res.ok){d1Session=extractD1(res);showForm();return}
       if(res&&res.ok===false){tutorToken='';safeSet(TUTOR_KEY,'');showAuth();return}
     }catch(_){ }
     showAuth('Связь временно прервалась. Сохранённый вход не потерян — откройте страницу ещё раз.');
@@ -59,6 +60,7 @@
       if(!res||!res.ok)throw new Error((res&&res.message)||'Неверный логин или пароль.');
       tutorToken=String(res.token||'');
       if(!tutorToken)throw new Error('Сервер не выдал сессию.');
+      d1Session=extractD1(res);
       safeSet(TUTOR_KEY,tutorToken);showForm();
     }catch(e){error.textContent=String(e&&e.message||e)==='TIMEOUT'?'Сервер долго не отвечает. Попробуйте ещё раз.':String(e&&e.message||e);error.classList.remove('hidden')}
     finally{btn.disabled=false;btn.textContent='Войти'}
@@ -71,6 +73,12 @@
     const submissionId=reportSubmissionId();
     sendBusy=true;btn.disabled=true;btn.textContent='Отправляем…';
     try{
+      if(d1Session&&window.MedsiOverlayTransport&&MedsiOverlayTransport.reportSubmit){
+        try{
+          const queued=await MedsiOverlayTransport.reportSubmit(d1Session,{reportType:'psychology',text,submissionId});
+          if(queued&&queued.accepted){showDone();return}
+        }catch(_){ /* fallback to the existing idempotent Apps Script route */ }
+      }
       let stopped=false;
       const request=callApi('appendReport',[{reportType:'psychology',text,submissionId},tutorToken],30000)
         .then(value=>({source:'request',value}),error=>({source:'request',error}));

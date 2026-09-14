@@ -165,6 +165,15 @@
     const submissionId=reportSubmissionId();
     btn.disabled=true;btn.textContent='Отправляем…';
     try{
+      // Cloudflare outbox accepts the report immediately and drains it to
+      // Apps Script in the background. If unavailable, retain the proven
+      // direct path below as a safe rollback.
+      if(d1Session&&window.MedsiOverlayTransport&&MedsiOverlayTransport.reportSubmit){
+        try{
+          const queued=await MedsiOverlayTransport.reportSubmit(d1Session,{reportType:type,text,submissionId});
+          if(queued&&queued.accepted){showReportSent();return}
+        }catch(_){ /* fallback to the existing idempotent Apps Script route */ }
+      }
       let acceptanceStopped=false;
       const request=callApi('appendReport',[{reportType:type,text,submissionId},tutorToken],30000)
         .then(value=>({source:'request',value}),error=>({source:'request',error}));
