@@ -111,7 +111,12 @@
     if(authRetryTimer){clearTimeout(authRetryTimer);authRetryTimer=null}
     tutorToken=String(safeGet(TUTOR_KEY)||'');d1Session=loadD1();
     if(!tutorToken){showGate(false);return}
-    if(d1Session&&d1Session.token){if(enterApp())refreshSavedSessionInBackground();return}
+    if(d1Session&&d1Session.token){
+      if(enterApp()&&Number(d1Session.expiresAt||0)<=Date.now()+10*60*1000){
+        refreshSavedSessionInBackground();
+      }
+      return;
+    }
     // A saved tutor token is enough to restore the lightweight menu shell.
     // Do not keep the whole panel behind a blank checking screen while the
     // D1 session is refreshed through a slower mobile connection.
