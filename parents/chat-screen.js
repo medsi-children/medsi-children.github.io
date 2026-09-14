@@ -23,7 +23,7 @@
     if(!label)label=new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'long',...(n&&p.year===n.year?{}:{year:'numeric'})}).format(new Date(Number(value)));
     return{key:p.key,label};
   }
-  let state=null,rows=[],busy=false,dead=false,chatClosed=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false,initialMessagesRendered=false;
+  let state=null,rows=[],busy=false,dead=false,chatClosed=false,chatPending=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false,initialMessagesRendered=false;
 
   function mediaUrl(m){
     const id=String(m&&m.fileId||'');if(!id)return'';
@@ -53,7 +53,7 @@
   function scrollBottom(smooth){const box=$('parentChatMessages');if(!box)return;requestAnimationFrame(()=>box.scrollTo({top:box.scrollHeight,behavior:smooth?'smooth':'auto'}))}
   function showError(msg){const e=$('parentChatError');if(!e)return;e.textContent=String(msg||'Не удалось открыть чат.');e.classList.remove('hidden')}
   function clearError(){const e=$('parentChatError');if(!e)return;e.textContent='';e.classList.add('hidden')}
-  function setBusy(v){busy=!!v;const disabled=busy||chatClosed;$('parentChatInput').disabled=disabled;$('parentChatSend').disabled=disabled;$('parentChatAttach').disabled=disabled}
+  function setBusy(v){busy=!!v;const disabled=busy||chatClosed||chatPending;$('parentChatInput').disabled=disabled;$('parentChatSend').disabled=disabled;$('parentChatAttach').disabled=disabled}
   function isChatClosedError(error){return !!(error&&(error.code==='CHAT_CLOSED'||Number(error.status)===410))}
   function stopLive(){if(liveTimer){clearTimeout(liveTimer);liveTimer=0}liveRunning=false}
   function chatVisible(){const screen=$('screenChat');return !!state&&!dead&&!chatClosed&&!document.hidden&&document.body.dataset.screen==='screenChat'&&screen&&!screen.classList.contains('hidden')}
@@ -64,17 +64,23 @@
       liveTimer=0;
       if(chatVisible()&&!liveRunning){
         liveRunning=true;
-        try{await refresh({fresh:true,silent:true,background:true})}catch(err){if(isChatClosedError(err))showClosedChat()}
+        try{await refresh({fresh:true,silent:true,background:true});if(chatPending){chatPending=false;setBusy(false)}}catch(err){if(isChatClosedError(err)){if(!chatPending)showClosedChat()} }
         finally{liveRunning=false}
       }
       scheduleLive(LIVE_REFRESH_MS);
     },Math.max(150,Number(delay)||LIVE_REFRESH_MS))
   }
   function showClosedChat(){
-    chatClosed=true;rows=[];stopLive();clearError();closeReactionMenu();
+    chatClosed=true;chatPending=false;rows=[];stopLive();clearError();closeReactionMenu();
     const box=$('parentChatMessages');
     if(box){box.replaceChildren();const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Чат с воспитателями закрыт.';box.appendChild(e)}
     $('parentChatInput').value='';setBusy(false);
+  }
+  function showPendingChat(){
+    chatClosed=false;chatPending=true;rows=[];clearError();closeReactionMenu();
+    const box=$('parentChatMessages');
+    if(box){box.replaceChildren();const e=document.createElement('div');e.className='parent-chat-empty';e.textContent='Сообщений пока нет.';box.appendChild(e)}
+    setBusy(false);
   }
 
   function closeLightbox(){if(!lightbox)return;lightbox.remove();lightbox=null}
@@ -203,7 +209,7 @@
   }
 
   async function open(next){
-    stopLive();dead=false;chatClosed=false;state={...next,phone:p10(next&&next.phone)};rows=[];initialMessagesRendered=false;clearError();closeReactionMenu();setBusy(false);if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
+    stopLive();dead=false;chatClosed=false;chatPending=false;state={...next,phone:p10(next&&next.phone)};rows=[];initialMessagesRendered=false;clearError();closeReactionMenu();setBusy(false);if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
     $('parentChatChild').textContent=state.childName||state.parentName||'Ребёнок';
     $('parentChatPhone').textContent=state.phone?'8'+state.phone:'';
     $('parentChatInput').value='';
@@ -211,10 +217,21 @@
     const hasCached=!!(cached&&Array.isArray(cached.messages));
     if(hasCached){$('parentChatMessages').replaceChildren();render(cached.messages,{stick:true,animateInitial:true});}
     else $('parentChatMessages').innerHTML='<div class="parent-chat-empty">Загружаем сообщения…</div>';
-    try{await refresh({stick:true,fresh:true,force:!hasCached,forceRead:true})}catch(e){if(isChatClosedError(e))showClosedChat();else showError(e&&e.message||'Не удалось загрузить сообщения.')}
-    if(!chatClosed)scheduleLive(LIVE_REFRESH_MS)
+    let opened=false;
+    for(let attempt=0;attempt<3&&!opened;attempt++){
+      try{await refresh({stick:true,fresh:true,force:!hasCached||attempt>0,forceRead:true});opened=true;chatPending=false;setBusy(false)}
+      catch(e){
+        if(!isChatClosedError(e)){showError(e&&e.message||'Не удалось загрузить сообщения.');break}
+        // Immediately after registration the profile mirror may still be
+        // settling.  Give it a couple of short, silent retries before
+        // declaring the chat genuinely closed.
+        if(attempt<2)await new Promise(resolve=>setTimeout(resolve,700*(attempt+1)));
+        else {showPendingChat();scheduleLive(1200);}
+      }
+    }
+    if(!chatClosed&&opened)scheduleLive(LIVE_REFRESH_MS)
   }
-  function close(){stopLive();dead=true;state=null;rows=[];chatClosed=false;setBusy(false);clearError();closeLightbox();closeReactionMenu()}
+  function close(){stopLive();dead=true;state=null;rows=[];chatClosed=false;chatPending=false;setBusy(false);clearError();closeLightbox();closeReactionMenu()}
 
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state&&!dead&&!chatClosed)scheduleLive(250)});
 
