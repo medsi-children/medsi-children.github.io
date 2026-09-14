@@ -1,7 +1,7 @@
 (function(){
   const APP_BASE_URL='/__session/apps-script';
   const $=id=>document.getElementById(id);
-  const TUTOR_KEY='medsi_tutor_session_v1';
+  const TUTOR_KEY='medsi_tutor_session_v1',D1_KEY='medsi_psychology_d1_session_v1';
   let sendBusy=false,tutorToken='',d1Session=null;
   function extractD1(res){return res&&res.d1Session&&res.d1Session.token?res.d1Session:null}
 
@@ -25,6 +25,8 @@
 
   function safeGet(key){try{return localStorage.getItem(key)||''}catch(_){return''}}
   function safeSet(key,value){try{localStorage.setItem(key,value)}catch(_){} }
+  function loadD1(){try{const value=JSON.parse(safeGet(D1_KEY)||'null');if(value&&value.token&&Number(value.expiresAt||0)>Date.now()+30000)return value}catch(_){}return null}
+  function saveD1(value){if(value&&value.token){d1Session=value;safeSet(D1_KEY,JSON.stringify(value))}return value}
 
   function showForm(){
     $('authScreen').classList.add('hidden');
@@ -41,9 +43,10 @@
   async function restoreTutorSession(){
     tutorToken=safeGet(TUTOR_KEY).trim();
     if(!tutorToken){showAuth();return}
+    if(loadD1()){showForm();return}
     try{
       const res=await callApi('verifyTutorSession',[tutorToken],17000);
-      if(res&&res.ok){d1Session=extractD1(res);showForm();return}
+      if(res&&res.ok){saveD1(extractD1(res));showForm();return}
       if(res&&res.ok===false){tutorToken='';safeSet(TUTOR_KEY,'');showAuth();return}
     }catch(_){ }
     showAuth('Связь временно прервалась. Сохранённый вход не потерян — откройте страницу ещё раз.');
@@ -60,7 +63,7 @@
       if(!res||!res.ok)throw new Error((res&&res.message)||'Неверный логин или пароль.');
       tutorToken=String(res.token||'');
       if(!tutorToken)throw new Error('Сервер не выдал сессию.');
-      d1Session=extractD1(res);
+      saveD1(extractD1(res));
       safeSet(TUTOR_KEY,tutorToken);showForm();
     }catch(e){error.textContent=String(e&&e.message||e)==='TIMEOUT'?'Сервер долго не отвечает. Попробуйте ещё раз.':String(e&&e.message||e);error.classList.remove('hidden')}
     finally{btn.disabled=false;btn.textContent='Войти'}
