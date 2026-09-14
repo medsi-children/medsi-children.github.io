@@ -32,17 +32,21 @@
     return 'report_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,12);
   }
   async function callApi(method,args,timeoutMs){
-    const run=async()=>{
-      const body=JSON.stringify({action:'api',method,args:args||[]});
-      const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body,cache:'no-store'}).catch(error=>{
-        if(method!=='listAvailableParentsForChat')throw error;
-        return fetch('/__session/apps-script',{method:'POST',headers:{'content-type':'application/json'},body,cache:'no-store'});
-      });
-      const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
-      if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));
-      return p.result;
-    };
-    return Promise.race([run(),timeoutPromise(timeoutMs||15000)]);
+    const readOnly=/^(get|list|verify|check)/i.test(String(method||''));
+    const attempts=readOnly?2:1;
+    let lastError;
+    for(let attempt=0;attempt<attempts;attempt++){
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),timeoutMs||15000);
+      try{
+        const body=JSON.stringify({action:'api',method,args:args||[]});
+        const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body,cache:'no-store',signal:controller.signal});
+        const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
+        if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));
+        clearTimeout(timer);return p.result;
+      }catch(e){clearTimeout(timer);lastError=e;if(attempt+1<attempts)await new Promise(resolve=>setTimeout(resolve,350))}
+    }
+    throw lastError||new Error('TIMEOUT');
   }
 
   function setAuthError(text){const el=$('tutorAuthError');el.textContent=String(text||'');el.classList.toggle('hidden',!text)}

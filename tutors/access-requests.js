@@ -5,7 +5,15 @@
   const state={running:false,inFlight:false,timer:null,requests:[],selected:null,decision:''};
   function tutorToken(){try{return String(localStorage.getItem(TUTOR_KEY)||'')}catch(_){return''}}
   function timeout(ms){return new Promise((_,reject)=>setTimeout(()=>reject(new Error('TIMEOUT')),ms))}
-  async function callApi(method,args,ms){const run=async()=>{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store'});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Некорректный ответ сервера.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));return p.result};return Promise.race([run(),timeout(ms||15000)])}
+  async function callApi(method,args,ms){
+    const readOnly=/^(get|list|verify|check)/i.test(String(method||''));
+    const attempts=readOnly?2:1;let lastError;
+    for(let attempt=0;attempt<attempts;attempt++){
+      const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),ms||15000);
+      try{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',signal:controller.signal});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Некорректный ответ сервера.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));clearTimeout(timer);return p.result}catch(e){clearTimeout(timer);lastError=e;if(attempt+1<attempts)await new Promise(resolve=>setTimeout(resolve,350))}
+    }
+    throw lastError||new Error('TIMEOUT');
+  }
   function targetRequestId(){try{return new URL(location.href).searchParams.get('reauth')||''}catch(_){return''}}
   function current(){return state.requests[0]||null}
   function render(){const toast=$('accessRequestToast'),request=current();if(!toast)return;if(!request){toast.classList.add('hidden');state.selected=null;return}toast.classList.remove('hidden','is-leaving');$('accessRequestText').textContent=request.text||((request.actor||'Родитель')+' запрашивает повторную авторизацию');$('accessRequestCode').textContent=request.code||'—';const extra=Math.max(0,state.requests.length-1),count=$('accessRequestCount');count.textContent=extra?('Ещё '+extra):'';count.classList.toggle('hidden',!extra)}

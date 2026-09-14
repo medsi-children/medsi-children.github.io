@@ -9,7 +9,25 @@
   const safeGet=k=>{try{return localStorage.getItem(k)||''}catch(_){return''}};
   const safeSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}};const safeRemove=k=>{try{localStorage.removeItem(k)}catch(_){}};
   function timeout(ms){return new Promise((_,reject)=>setTimeout(()=>reject(new Error('TIMEOUT')),ms))}
-  async function callApi(method,args,ms,keepalive){const run=async()=>{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',keepalive:!!keepalive});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));return p.result};return Promise.race([run(),timeout(ms||15000)])}
+  async function callApi(method,args,ms,keepalive){
+    const readOnly=/^(get|list|verify|check)/i.test(String(method||''));
+    const attempts=readOnly?2:1;
+    let lastError;
+    for(let attempt=0;attempt<attempts;attempt++){
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),ms||15000);
+      try{
+        const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',keepalive:!!keepalive,signal:controller.signal});
+        const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
+        if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));
+        clearTimeout(timer);return p.result;
+      }catch(e){
+        clearTimeout(timer);lastError=e;
+        if(attempt+1<attempts)await wait(350);
+      }
+    }
+    throw lastError||new Error('TIMEOUT');
+  }
   function isStartLike(id){return id==='screenStart'||id==='screenChoose'}
   function initPush(){if(pushReady||!window.MedsiPush)return;pushReady=true;const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));MedsiPush.init({frameId:'__no_parent_iframe__',appEndpointUrl:PUSH_APP_URL,pushServiceUrl:PUSH_SERVICE_URL,identity:validPhone(ph)?{role:'parent',phone:ph}:null})}
   function syncPushIdentity(){if(!window.MedsiPush)return;if(validPhone(currentPhone))MedsiPush.setIdentity({role:'parent',phone:currentPhone,parentSession:parentSession||''});else MedsiPush.clearIdentity()}
