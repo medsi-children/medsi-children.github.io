@@ -93,7 +93,18 @@
     },80);
   }
   async function refreshSavedSessionInBackground(){
-    try{const session=await requestFreshD1();if(session){prewarmParents();refreshUnreadBadge()}}catch(_){}
+    try{
+      const verify=await callApi('verifyTutorSession',[tutorToken],17000);
+      if(verify&&verify.ok===false){
+        clearAuth();showGate(false);setAuthError('Сохранённый вход завершился. Введите логин и пароль.');
+        return;
+      }
+      const session=extractD1(verify)||await requestFreshD1();
+      if(session){saveAuth(tutorToken,session);prewarmParents();refreshUnreadBadge()}
+    }catch(_){
+      // Keep the already restored menu visible; the next foreground action
+      // or scheduled refresh can try again without losing the token.
+    }
   }
   async function verifySaved(){
     if(authVerifyInFlight)return;
@@ -101,6 +112,13 @@
     tutorToken=String(safeGet(TUTOR_KEY)||'');d1Session=loadD1();
     if(!tutorToken){showGate(false);return}
     if(d1Session&&d1Session.token){if(enterApp())refreshSavedSessionInBackground();return}
+    // A saved tutor token is enough to restore the lightweight menu shell.
+    // Do not keep the whole panel behind a blank checking screen while the
+    // D1 session is refreshed through a slower mobile connection.
+    if(enterApp()){
+      refreshSavedSessionInBackground();
+      return;
+    }
     $('authRetry').classList.add('hidden');
     showGate(true);setCheckingText('Проверяем сохранённый вход…');authVerifyInFlight=true;
     try{
