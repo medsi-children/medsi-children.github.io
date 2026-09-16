@@ -75,39 +75,24 @@
   <p>Восстанавливаем подключение к Медси Боту…</p>
   <button class="btn" type="button" onclick="location.reload()">Обновить</button>
 </div>
+<script src="/chat-overlay/transport.js?v=20260916-parent-chat-fast"></script>
+<script src="/parents/prewarm.js?v=20260916-parent-chat-fast"></script>
+<script src="/parents/chat-screen.js?v=20260916-parent-chat-fast"></script>
+<script>
+  window.MedsiLoadParentChat=function(){return Promise.resolve();};
+</script>
+<script src="/parents/full-web.js?v=20260916-parent-chat-fast"></script>
 <script>
 (function(){
-  var loaded={},chatPending=null;
-  function load(src,attempt){
-    if(loaded[src])return loaded[src];
-    var promise=new Promise(function(resolve,reject){
-      var script=document.createElement('script'),done=false;
-      var timer=setTimeout(function(){finish(new Error('LOAD_TIMEOUT'));},10000);
-      function finish(error){if(done)return;done=true;clearTimeout(timer);script.onload=null;script.onerror=null;if(error){script.remove();reject(error);}else resolve();}
-      script.async=true;script.src=src;
-      script.onload=function(){finish();};script.onerror=function(){finish(new Error('LOAD_FAILED'));};
-      document.head.appendChild(script);
-    }).catch(function(error){delete loaded[src];if(!attempt)return load(src,1);throw error;});
-    loaded[src]=promise;return promise;
-  }
-  function series(files,optional){return files.reduce(function(p,src){return p.then(function(){var next=load(src,optional?1:0);return optional?next.catch(function(){}):next;});},Promise.resolve());}
-  window.MedsiLoadParentChat=function(){
-    if(window.MedsiParentChatScreen)return Promise.resolve();
-    if(chatPending)return chatPending;
-    chatPending=series(['/chat-overlay/transport.js?v=20260916-parent-recovery','/parents/prewarm.js?v=20260916-parent-recovery','/parents/chat-screen.js?v=20260916-parent-recovery']).finally(function(){chatPending=null;});
-    return chatPending;
-  };
   var status=document.getElementById('parentBootStatus');
-  var notice=setTimeout(function(){if(!window.MedsiParentApp||!window.MedsiParentApp.ready)status.classList.remove('hidden');},4000);
-  load('/parents/full-web.js?v=20260916-parent-recovery').then(function(){
-    if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
-    clearTimeout(notice);status.classList.add('hidden');
-    window.MedsiLoadParentChat().then(function(){
-      return series(["/chat-overlay/media-preload.js?v=20260907-1", "/chat-overlay/upload-ux.js?v=20260916-parent-recovery", "/chat-overlay/composer-ui.js?v=20260907-1", "/chat-overlay/reaction-icons.js?v=20260907-twemoji-2", "/chat-overlay/message-enhancements.js?v=20260907-recovery-1", "/chat-overlay/chat-motion.js?v=20260911-first-open-only-1", "/chat-overlay/bottom-lock.js?v=20260906-1", "/chat-overlay/video-link.js?v=1"],true);
-    }).catch(function(){});
-    series(['/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20260909-auth-close-1'],true).then(function(){window.MedsiParentApp.helpersReady();}).catch(function(){});
-    ["/parents/psychology-format.js?v=20260909-leading-dot-1", "/parents/chat-opening.js?v=20260907-1", "/parents/report-disclaimer.js?v=20260907-1", "/chat-overlay/gesture-navigation.js?v=20260907-hint-1"].forEach(function(src){load(src,1).catch(function(){});});
-  }).catch(function(){clearTimeout(notice);status.classList.remove('hidden');});
+  if(!window.MedsiParentApp||!window.MedsiParentApp.ready){status.classList.remove('hidden');return;}
+  status.classList.add('hidden');
+  function optional(src){
+    var script=document.createElement('script');
+    script.async=true;script.src=src;document.head.appendChild(script);
+  }
+  ['/chat-overlay/media-preload.js?v=20260907-1','/chat-overlay/upload-ux.js?v=20260916-parent-recovery','/chat-overlay/composer-ui.js?v=20260907-1','/chat-overlay/reaction-icons.js?v=20260907-twemoji-2','/chat-overlay/message-enhancements.js?v=20260907-recovery-1','/chat-overlay/chat-motion.js?v=20260911-first-open-only-1','/chat-overlay/bottom-lock.js?v=20260906-1','/chat-overlay/video-link.js?v=1','/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20260909-auth-close-1','/parents/psychology-format.js?v=20260909-leading-dot-1','/parents/chat-opening.js?v=20260907-1','/parents/report-disclaimer.js?v=20260907-1','/chat-overlay/gesture-navigation.js?v=20260907-hint-1'].forEach(optional);
+  setTimeout(function(){if(window.MedsiParentApp&&window.MedsiParentApp.helpersReady)window.MedsiParentApp.helpersReady();},0);
 })();
 </script>
 </body></html>
