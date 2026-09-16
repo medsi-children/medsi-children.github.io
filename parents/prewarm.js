@@ -24,7 +24,7 @@
   const cache=new Map(),pending=new Map();
   const PARENT_SESSION_KEY='medsi_parent_auth_session_v1',PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',D1_KEY='medsi_d1_parent_session_v1';
   const p10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
-  const originalThread=t.thread.bind(t),originalSend=t.sendMessage.bind(t),originalEdit=t.edit.bind(t),originalRemove=t.remove.bind(t),originalReact=t.react.bind(t);
+  const originalThread=t.thread.bind(t),originalSend=t.sendMessage.bind(t),originalMarkRead=t.markRead.bind(t),originalMarkUnread=t.markUnread.bind(t),originalPin=t.pin.bind(t),originalUpload=t.upload.bind(t),originalEdit=t.edit.bind(t),originalRemove=t.remove.bind(t),originalReact=t.react.bind(t);
   function key(phone){return p10(phone)}
   function storageKey(phone){return 'medsi_parent_thread_session_v1_'+key(phone)}
   function fresh(entry){return entry&&Date.now()-entry.at<45000}
@@ -47,19 +47,20 @@
     return null;
   }
   async function readThreadSafely(session,phone,before,limit){
-    try{return await originalThread(session,phone,before||'',limit||100)}
+    const ph=p10(phone);
+    try{return await originalThread(session,ph,before||'',limit||100)}
     catch(error){
       if(before||Number(error&&error.status)!==410)throw error;
-      const exists=await confirmParentExists(phone);
+      const exists=await confirmParentExists(ph);
       if(exists===false)throw error;
-      if(exists===true)return cachedThread(phone)||{ok:true,messages:[]};
+      if(exists===true)return cachedThread(ph)||{ok:true,messages:[]};
       const transient=new Error('Профиль чата синхронизируется.');transient.code='PROFILE_SYNC_PENDING';transient.status=503;throw transient;
     }
   }
   async function fetchThread(session,phone,before,limit){
     const k=key(phone),pendingKey=(before?'history:':'latest:')+k;
     if(pending.has(pendingKey))return pending.get(pendingKey);
-    const p=readThreadSafely(session,phone,before,limit).then(res=>{if(!before)rememberThread(phone,res);return res}).finally(()=>pending.delete(pendingKey));
+    const p=readThreadSafely(session,k,before,limit).then(res=>{if(!before)rememberThread(k,res);return res}).finally(()=>pending.delete(pendingKey));
     pending.set(pendingKey,p);return p;
   }
   t.thread=function(session,phone,before,limit,options){
@@ -67,21 +68,25 @@
     if(forceFresh)return fetchThread(session,phone,before,limit);
     const k=key(phone);
     if(!before){
-      const c=cache.get(k)||readSession(phone);
+      const c=cache.get(k)||readSession(k);
       if(fresh(c)){cache.set(k,c);return Promise.resolve(c.res)}
       const pendingKey='latest:'+k;if(pending.has(pendingKey))return pending.get(pendingKey)
     }
-    return fetchThread(session,phone,before,limit);
+    return fetchThread(session,k,before,limit);
   };
   function invalidatePhone(phone){cache.delete(key(phone));clearSession(phone)}
-  t.sendMessage=async function(session,role,phone,message){const r=await originalSend(session,role,phone,message);invalidatePhone(phone);return r};
+  t.sendMessage=async function(session,role,phone,message){const ph=p10(phone),r=await originalSend(session,role,ph,message);invalidatePhone(ph);return r};
+  t.markRead=function(session,role,phone){return originalMarkRead(session,role,p10(phone))};
+  t.markUnread=function(session,phone){return originalMarkUnread(session,p10(phone))};
+  t.pin=function(session,phone,bucket){return originalPin(session,p10(phone),bucket)};
+  t.upload=function(session,phone,file){return originalUpload(session,p10(phone),file)};
   t.edit=async function(session,role,messageKey,text){const r=await originalEdit(session,role,messageKey,text);cache.clear();clearSession();return r};
   t.remove=async function(session,role,messageKey){const r=await originalRemove(session,role,messageKey);cache.clear();clearSession();return r};
   t.react=async function(session,messageKey,reaction){const r=await originalReact(session,messageKey,reaction);cache.clear();clearSession();return r};
 
   let loginWarm=null;
   function extractSession(res){if(!res)return null;if(res.token)return res;if(res.session&&res.session.token)return res.session;if(res.d1Session&&res.d1Session.token)return res.d1Session;return null}
-  function saveLoginSession(phone,session){if(!session||!session.token)return;try{localStorage.setItem(D1_KEY,JSON.stringify({phone:p10(phone),session}))}catch(_){};fetchThread(session,phone,'',100).catch(()=>{})}
+  function saveLoginSession(phone,session){if(!session||!session.token)return;try{localStorage.setItem(D1_KEY,JSON.stringify({phone:p10(phone),session}))}catch(_){};fetchThread(session,p10(phone),'',100).catch(()=>{})}
   function prewarmLogin(phone){const ph=p10(phone);if(!ph)return Promise.resolve(null);if(loginWarm&&loginWarm.phone===ph)return loginWarm.promise;const promise=fetch('/__session/apps-script',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'api',method:'getD1ChatSession',args:['parent',ph,'']}),cache:'no-store'}).then(r=>r.json()).then(p=>{const s=extractSession(p&&p.result);if(s)saveLoginSession(ph,s);return s}).catch(()=>null);loginWarm={phone:ph,promise};return promise}
   function installLoginWarm(){const run=()=>{const btn=document.getElementById('authBtn'),input=document.getElementById('phoneInputAuth');if(btn&&input&&!btn.dataset.medsiSessionWarm){btn.dataset.medsiSessionWarm='1';btn.addEventListener('click',()=>prewarmLogin(input.value),true);input.addEventListener('keydown',e=>{if(e.key==='Enter')prewarmLogin(input.value)},true)}};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run()}
   // Do not contact Apps Script before the parent authorization flow finishes.
@@ -111,5 +116,5 @@
   window.addEventListener('pageshow',kickSavedWarm);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)kickSavedWarm()});
 
-  window.MedsiParentPrewarm={warm:(session,phone)=>fetchThread(session,phone,'',100).catch(()=>null),ready:phone=>pending.get('latest:'+key(phone))||Promise.resolve((cache.get(key(phone))||readSession(phone))?.res||null),peek:phone=>((cache.get(key(phone))||readSession(phone))?.res||null),clear:()=>{cache.clear();clearSession();savedWarmKey=''},prewarmLogin,kick:kickSavedWarm};
+  window.MedsiParentPrewarm={warm:(session,phone)=>fetchThread(session,p10(phone),'',100).catch(()=>null),ready:phone=>pending.get('latest:'+key(phone))||Promise.resolve((cache.get(key(phone))||readSession(phone))?.res||null),peek:phone=>((cache.get(key(phone))||readSession(phone))?.res||null),clear:()=>{cache.clear();clearSession();savedWarmKey=''},prewarmLogin,kick:kickSavedWarm};
 })();
