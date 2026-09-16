@@ -1,4 +1,5 @@
 (function () {
+  if(window.MedsiOverlayTransport)return;
   const BASE_URL = window.location.origin;
   const UPLOAD_URL = window.location.origin + '/chat-upload';
   const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -75,6 +76,7 @@
       } finally {
         if (timer) clearTimeout(timer);
       }
+      if(lastError.status&&lastError.status<500&&![408,425,429].includes(lastError.status))throw lastError;
       if (attempt + 1 < attempts) await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
     }
     throw lastError || Object.assign(new Error('Не удалось связаться с сервером чата.'), {code:'NETWORK'});

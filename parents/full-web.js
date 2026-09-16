@@ -1,21 +1,25 @@
 (function(){
+  if(window.MedsiParentApp)return;
+  window.MedsiParentApp={};
   const APP_BASE_URL='/__session/apps-script';
   const PUSH_APP_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
   const PUSH_SERVICE_URL='https://medsi-push-worker.medsi-children.workers.dev';
   const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',BOOTSTRAP_CHECK_KEY='medsi_parent_bootstrap_check_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1';
   const $=id=>document.getElementById(id);
-  const reportCache={},reportPending={},reportReadPending={};let currentPhone='',parentName='',childName='',regParentName='',regChildName='',justRegistered=false,d1Session=null,pushReady=false,parentSession='',flowRun=0,currentReportKind='morning',currentReportText='',chatReadPending=null,reportHistoryByDate={},reportHistoryMonth=0,reportHistoryMinMonth=0,reportHistoryMaxMonth=0,selectedHistoryDate='';
+  const reportCache={},reportPending={},reportReadPending={};
+  const REPORT_FRESH_MS=60000;let sessionPending=null,menuPending=null,openingChat=false,reportRun=0,historyRun=0;
+  function freshReport(kind){return reportCache[kind]&&Date.now()-Number(reportCache[kind].fetchedAt||0)<REPORT_FRESH_MS}let currentPhone='',parentName='',childName='',regParentName='',regChildName='',justRegistered=false,d1Session=null,pushReady=false,parentSession='',flowRun=0,currentReportKind='morning',currentReportText='',chatReadPending=null,reportHistoryByDate={},reportHistoryMonth=0,reportHistoryMinMonth=0,reportHistoryMaxMonth=0,selectedHistoryDate='';
   const onlyDigits=v=>String(v||'').replace(/\D+/g,'');const validPhone=v=>onlyDigits(v).length>=10;
   const safeGet=k=>{try{return localStorage.getItem(k)||''}catch(_){return''}};
   const safeSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}};const safeRemove=k=>{try{localStorage.removeItem(k)}catch(_){}};
   function timeout(ms){return new Promise((_,reject)=>setTimeout(()=>reject(new Error('TIMEOUT')),ms))}
   async function callApi(method,args,ms,keepalive){
     const readOnly=/^(get|list|verify|check)/i.test(String(method||''));
-    const attempts=readOnly?2:1;
+    const attempts=1; // The gateway owns retries; let its two 15s attempts finish.
     let lastError;
     for(let attempt=0;attempt<attempts;attempt++){
       const controller=new AbortController();
-      const timer=setTimeout(()=>controller.abort(),ms||15000);
+      const timer=setTimeout(()=>controller.abort(),readOnly?35000:(ms||15000));
       try{
         const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',keepalive:!!keepalive,signal:controller.signal});
         const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
@@ -44,7 +48,7 @@
   function showAuth(){setHeader('Авторизация','Введите номер телефона, который вы указывали при регистрации.');show('screenAuth')}
   function applyBootstrap(res){if(!res||!res.ok||!res.parentSession)return false;currentPhone=onlyDigits(res.phone||currentPhone);parentName=String(res.parentName||parentName||'').trim();childName=String(res.childName||childName||'').trim();parentSession=String(res.parentSession);if(res.d1Session&&res.d1Session.token)saveD1Session(res.d1Session);safeSet(PARENT_SESSION_KEY,parentSession);safeSet(PHONE_KEY,currentPhone);safeSet(LEGACY_PHONE_KEY,currentPhone);safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);applyUnread(res);syncPushIdentity();return true}
   function showChoose(){if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();setHeader('Медси Бот','Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.');$('waitNote').classList.toggle('hidden',!justRegistered);prewarmAll();show('screenChoose')}
-  function clearSession(){currentPhone='';parentName='';childName='';parentSession='';d1Session=null;chatReadPending=null;flowRun++;safeRemove(PHONE_KEY);safeRemove(LEGACY_PHONE_KEY);safeRemove(PARENT_KEY);safeRemove(CHILD_KEY);safeRemove(PARENT_SESSION_KEY);safeRemove(D1_KEY);safeRemove(BOOTSTRAP_CHECK_KEY);Object.keys(reportCache).forEach(k=>delete reportCache[k]);Object.keys(reportPending).forEach(k=>delete reportPending[k]);Object.keys(reportReadPending).forEach(k=>delete reportReadPending[k]);if(window.MedsiParentPrewarm)MedsiParentPrewarm.clear();if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();syncPushIdentity()}
+  function clearSession(){sessionPending=null;menuPending=null;reportRun++;historyRun++;currentPhone='';parentName='';childName='';parentSession='';d1Session=null;chatReadPending=null;flowRun++;safeRemove(PHONE_KEY);safeRemove(LEGACY_PHONE_KEY);safeRemove(PARENT_KEY);safeRemove(CHILD_KEY);safeRemove(PARENT_SESSION_KEY);safeRemove(D1_KEY);safeRemove(BOOTSTRAP_CHECK_KEY);Object.keys(reportCache).forEach(k=>delete reportCache[k]);Object.keys(reportPending).forEach(k=>delete reportPending[k]);Object.keys(reportReadPending).forEach(k=>delete reportReadPending[k]);if(window.MedsiParentPrewarm)MedsiParentPrewarm.clear();if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();syncPushIdentity()}
   async function restoreSaved(){
     const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));
     if(!validPhone(ph)){showStart();return}
@@ -52,13 +56,14 @@
     parentName=String(safeGet(PARENT_KEY)||'').trim();
     childName=String(safeGet(CHILD_KEY)||'').trim();
     parentSession=safeGet(PARENT_SESSION_KEY);if(!parentSession){clearSession();$('phoneInputAuth').value=ph;showAuth();return}syncPushIdentity();
-    showChoose();
+    const savedAuth=parentSession;showChoose();
     try{if(await refreshProfileFromD1()){prewarmAll();return}}catch(_){/* fall back to the authoritative Apps Script check below */}
     const lastBootstrap=Number(safeGet(BOOTSTRAP_CHECK_KEY)||0);
     if(lastBootstrap&&Date.now()-lastBootstrap<15*60*1000){prewarmAll();return}
     try{
       const res=await callApi('getParentBootstrap',[ph,parentSession],12000);
-      if(!applyBootstrap(res)){clearSession();$('phoneInputAuth').value=ph;showAuth();return}
+      if(currentPhone!==ph||parentSession!==savedAuth)return;
+      if(!applyBootstrap(res)){if(res&&res.code==='NOT_FOUND'){clearSession();$('phoneInputAuth').value=ph;showAuth();}return}
       safeSet(BOOTSTRAP_CHECK_KEY,String(Date.now()));
       setChips();
       prewarmAll();
@@ -130,23 +135,72 @@
   function extractSession(res){if(res&&res.token)return res;if(res&&res.session&&res.session.token)return res.session;return null}
   function saveD1Session(session){if(!session||!session.token)return null;d1Session=session;safeSet(D1_KEY,JSON.stringify({phone:onlyDigits(currentPhone).slice(-10),session}));return session}
   function loadCachedD1Session(phone){try{const saved=JSON.parse(safeGet(D1_KEY)||'null'),session=extractSession(saved),savedPhone=onlyDigits(saved&&saved.phone||phone).slice(-10);if(session&&savedPhone===onlyDigits(phone).slice(-10)&&Number(session.expiresAt||0)>Date.now()+30000)return saveD1Session(session)}catch(_){}return null}
-  async function refreshProfileFromD1(){const session=loadCachedD1Session(currentPhone);if(!session)return false;const phone=currentPhone;const response=await fetch('/lab/profile',{headers:{'X-Medsi-Chat-Session':session.token},cache:'no-store'});const value=await response.json().catch(()=>null);if(response.status===410){
+  async function refreshProfileFromD1(){const phone=currentPhone,auth=parentSession;let value;try{value=await readD1('/lab/profile')}catch(error){if(error.status!==410)throw error;
     // A D1 profile can briefly lag behind REPORTS after registration or a
     // background reconcile.  Confirm deletion through the authoritative
     // bootstrap before discarding a perfectly valid saved parent session.
     try{
-      const fallback=await callApi('getParentBootstrap',[phone,parentSession],12000);
+      const fallback=await callApi('getParentBootstrap',[phone,auth],12000);
+      if(currentPhone!==phone||parentSession!==auth)return false;
       if(applyBootstrap(fallback)){safeSet(BOOTSTRAP_CHECK_KEY,String(Date.now()));setChips();return true}
     }catch(_){/* keep the saved session while the backend recovers */}
     return false
-  }if(!response.ok||!value||!value.ok)throw new Error('Профиль временно недоступен.');parentName=String(value.parentName||parentName||'').trim();childName=String(value.childName||childName||'').trim();safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);setChips();safeSet(BOOTSTRAP_CHECK_KEY,String(Date.now()));return true}
-  async function warmD1(){if(!currentPhone)return null;try{const saved=JSON.parse(safeGet(D1_KEY)||'null');const s=extractSession(saved);const phone=onlyDigits(saved&&saved.phone||currentPhone).slice(-10);if(s&&Number(s.expiresAt||0)>Date.now()+30000&&phone===onlyDigits(currentPhone).slice(-10))return saveD1Session(s)}catch(_){}try{const res=await callApi('getD1ChatSession',['parent',currentPhone,parentSession],10000);const s=extractSession(res);return s?saveD1Session(s):null}catch(_){return null}}
+  }if(phone!==currentPhone||parentSession!==auth)return false;parentName=String(value.parentName||parentName||'').trim();childName=String(value.childName||childName||'').trim();safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);setChips();safeSet(BOOTSTRAP_CHECK_KEY,String(Date.now()));return true}
+  async function warmD1(force){
+    if(!currentPhone)return null;
+    if(sessionPending)return sessionPending;
+    if(!force){if(d1Session&&Number(d1Session.expiresAt||0)>Date.now()+30000)return d1Session;const cached=loadCachedD1Session(currentPhone);if(cached)return cached;}
+    const phone=currentPhone,auth=parentSession;
+    const pending=callApi('getD1ChatSession',['parent',phone,auth],35000).then(res=>{
+      const session=extractSession(res);
+      if(currentPhone!==phone||parentSession!==auth)return null;
+      return session?saveD1Session(session):null;
+    }).finally(()=>{if(sessionPending===pending)sessionPending=null});
+    sessionPending=pending;return pending;
+  }
+  async function readD1(path){
+    const phone=currentPhone,auth=parentSession;
+    let session=await warmD1(),lastError;
+    for(let attempt=0;attempt<2;attempt++){
+      if(!session||currentPhone!==phone||parentSession!==auth)throw new Error('Не удалось получить доступ. Повторяем подключение…');
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+      try{
+        const response=await fetch(path,{headers:{'X-Medsi-Chat-Session':session.token},cache:'no-store',signal:controller.signal});
+        const value=await response.json();
+        if(!response.ok||!value||!value.ok){const error=new Error(value&&value.message||'Не удалось загрузить данные.');error.status=response.status;throw error;}
+        return value;
+      }catch(error){
+        lastError=error;
+        if(error.status===401&&attempt===0){session=await warmD1(true);}
+        else if(error.status&&error.status<500&&![408,425,429].includes(error.status))throw error;
+      }finally{clearTimeout(timer);}
+      if(attempt===0)await wait(400);
+    }
+    throw lastError;
+  }
   function normalizeCurrentReports(value){const reports={morning:{ok:true,text:'Отчёта пока нет. Пожалуйста, попробуйте позже 🙏',hasReport:false,version:'',updatedAt:0},evening:{ok:true,text:'Отчёта пока нет. Пожалуйста, попробуйте позже 🙏',hasReport:false,version:'',updatedAt:0},psychology:{ok:true,text:'Отчёта пока нет. Пожалуйста, попробуйте позже 🙏',hasReport:false,version:'',updatedAt:0}};(Array.isArray(value&&value.reports)?value.reports:[]).forEach(item=>{const kind=String(item&&item.kind||'').toLowerCase();if(!['morning','evening','psychology'].includes(kind))return;const text=String(item&&item.text||'').trim();reports[kind]={ok:true,text:text||'Отчёта пока нет. Пожалуйста, попробуйте позже 🙏',hasReport:!!text,version:String(item&&item.version||''),updatedAt:Number(item&&item.updatedAt||0)}});return reports}
-  async function fetchCurrentReportsFromD1(session){if(!session||!session.token)throw new Error('D1 session is unavailable.');const response=await fetch('/lab/report-current',{headers:{'X-Medsi-Chat-Session':session.token},cache:'no-store'});const value=await response.json();if(!response.ok||!value.ok)throw new Error(value&&value.message||'Текущие отчёты временно недоступны.');return normalizeCurrentReports(value)}
-  function warmAllReports(){const kinds=['morning','evening','psychology'];if(!currentPhone||kinds.every(kind=>reportCache[kind]||reportPending[kind]))return;const phone=currentPhone,session=parentSession;const sessionPromise=warmD1();sessionPromise.then(chatSession=>{if(chatSession&&window.MedsiParentPrewarm)MedsiParentPrewarm.warm(chatSession,currentPhone)});const batch=sessionPromise.then(fetchCurrentReportsFromD1).then(reports=>{if(onlyDigits(currentPhone).slice(-10)!==onlyDigits(phone).slice(-10)||parentSession!==session)return{};kinds.forEach(kind=>{if(reports[kind])reportCache[kind]=reports[kind]});return reports}).catch(()=>({}));kinds.forEach(kind=>{if(reportCache[kind]||reportPending[kind])return;const pending=batch.then(reports=>reports[kind]||null).finally(()=>{if(reportPending[kind]===pending)delete reportPending[kind]});reportPending[kind]=pending})}
-  function warmReport(kind){if(reportPending[kind])return reportPending[kind];if(reportCache[kind])return Promise.resolve(reportCache[kind]);warmAllReports();return reportPending[kind]||Promise.resolve(null)}
-  function prewarmAll(){if(!currentPhone)return;warmAllReports()}
-  async function refreshParentMenu(){if(!currentPhone||!parentSession)return;const bootstrap=refreshProfileFromD1().then(ready=>{if(ready)return null;return callApi('getParentBootstrap',[currentPhone,parentSession],12000).then(res=>{if(applyBootstrap(res)){safeSet(BOOTSTRAP_CHECK_KEY,String(Date.now()));setChips()}})}).catch(()=>null);const chat=warmD1().then(session=>session&&window.MedsiParentPrewarm?MedsiParentPrewarm.warm(session,currentPhone):null);await Promise.allSettled([bootstrap,chat])}
+  async function fetchCurrentReportsFromD1(){return normalizeCurrentReports(await readD1('/lab/report-current'))}
+  function warmAllReports(){
+    const kinds=['morning','evening','psychology'];
+    if(!currentPhone||kinds.every(kind=>freshReport(kind)||reportPending[kind]))return;
+    const phone=currentPhone,session=parentSession;
+    const batch=fetchCurrentReportsFromD1().then(reports=>{
+      if(currentPhone!==phone||parentSession!==session)return {};
+      kinds.forEach(kind=>{if(reports[kind])reportCache[kind]={...reports[kind],fetchedAt:Date.now()};});
+      return reportCache;
+    }).catch(()=>({}));
+    kinds.forEach(kind=>{if(reportPending[kind])return;const pending=batch.then(reports=>reports[kind]||null).finally(()=>{if(reportPending[kind]===pending)delete reportPending[kind]});reportPending[kind]=pending;});
+  }
+  function warmReport(kind){if(freshReport(kind))return Promise.resolve(reportCache[kind]);if(!reportPending[kind])warmAllReports();return reportPending[kind]||Promise.resolve(null)}
+  function prewarmAll(){if(!currentPhone)return;warmAllReports();}
+  function refreshParentMenu(){
+    if(!currentPhone||!parentSession)return Promise.resolve();
+    if(menuPending)return menuPending;
+    const phone=currentPhone,auth=parentSession;prewarmAll();
+    const bootstrap=refreshProfileFromD1().then(ready=>{if(ready||phone!==currentPhone||auth!==parentSession)return;return callApi('getParentBootstrap',[phone,auth],35000).then(res=>{if(phone!==currentPhone||auth!==parentSession)return;if(applyBootstrap(res)){safeSet(BOOTSTRAP_CHECK_KEY,String(Date.now()));setChips();}});}).catch(()=>null);
+    const chat=warmD1().then(session=>session&&window.MedsiParentPrewarm?MedsiParentPrewarm.warm(session,currentPhone):null);
+    const pending=Promise.allSettled([bootstrap,chat]).finally(()=>{if(menuPending===pending)menuPending=null});menuPending=pending;return pending;
+  }
   function reportTitle(kind){return kind==='morning'?'Утренний отчёт':kind==='evening'?'Вечерний отчёт':'Групповая психотерапия'}
   function normalizeBlock(v){return String(v||'').replace(/\s+/g,' ').trim()}
   function dedupeExactReport(text){const raw=String(text||'').trim();if(!raw)return raw;const blocks=raw.split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);if(blocks.length>1){const seen=new Set(),unique=[];for(const block of blocks){const key=normalizeBlock(block);if(!key||seen.has(key))continue;seen.add(key);unique.push(block)}if(unique.length<blocks.length)return unique.join('\n\n')}const lines=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);if(lines.length===2&&normalizeBlock(lines[0])===normalizeBlock(lines[1]))return lines[0];return raw}
@@ -165,10 +219,31 @@
   function openHistoryDay(date){const reports=(reportHistoryByDate[date]||[]).slice().sort((a,b)=>a.kind==='morning'&&b.kind!=='morning'?-1:a.kind!=='morning'&&b.kind==='morning'?1:0);if(!reports.length)return;selectedHistoryDate=date;$('reportHistoryModalTitle').textContent=historyDateLabel(date);const body=$('reportHistoryModalReports');body.replaceChildren(...reports.map(makeHistoryReportSection));$('reportHistoryModal').classList.remove('hidden');renderReportCalendar()}
   function renderReportCalendar(){const list=$('reportHistoryList'),year=Math.floor(reportHistoryMonth/12),month=((reportHistoryMonth%12)+12)%12;list.innerHTML='';const calendar=document.createElement('div');calendar.className='report-calendar';const nav=document.createElement('div');nav.className='report-calendar-nav';const previous=document.createElement('button'),next=document.createElement('button'),title=document.createElement('div');previous.type=next.type='button';previous.className=next.className='report-calendar-arrow';previous.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>';next.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>';previous.setAttribute('aria-label','Предыдущий месяц');next.setAttribute('aria-label','Следующий месяц');previous.disabled=reportHistoryMonth<=reportHistoryMinMonth;next.disabled=reportHistoryMonth>=reportHistoryMaxMonth;previous.onclick=()=>{reportHistoryMonth--;selectedHistoryDate='';renderReportCalendar()};next.onclick=()=>{reportHistoryMonth++;selectedHistoryDate='';renderReportCalendar()};title.className='report-calendar-title';title.textContent=historyMonthLabel(year,month);nav.append(previous,title,next);const weekdays=document.createElement('div');weekdays.className='report-calendar-weekdays';['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(value=>{const day=document.createElement('span');day.textContent=value;weekdays.appendChild(day)});const grid=document.createElement('div');grid.className='report-calendar-grid';const offset=(new Date(year,month,1).getDay()+6)%7,days=new Date(year,month+1,0).getDate(),total=Math.ceil((offset+days)/7)*7;for(let index=0;index<total;index++){if(index<offset||index>=offset+days){const blank=document.createElement('span');blank.className='report-calendar-blank';grid.appendChild(blank);continue}const number=index-offset+1,key=historyDateKey(year,month,number),reports=reportHistoryByDate[key]||[],hasMorning=reports.some(report=>report.kind==='morning'),hasEvening=reports.some(report=>report.kind==='evening'),day=document.createElement('button');day.type='button';day.className='report-calendar-day'+(reports.length?' has-reports':'')+(selectedHistoryDate===key?' is-selected':'');day.disabled=!reports.length;day.setAttribute('aria-label',historyDateLabel(key)+(hasMorning&&hasEvening?', утренний и вечерний отчёты':hasMorning?', утренний отчёт':hasEvening?', вечерний отчёт':', отчётов нет'));const numberEl=document.createElement('span');numberEl.className='report-calendar-number';numberEl.textContent=String(number);const marks=document.createElement('span');marks.className='report-calendar-marks';if(hasMorning)marks.insertAdjacentHTML('beforeend',historySunIcon);if(hasEvening)marks.insertAdjacentHTML('beforeend',historyMoonIcon);day.append(numberEl,marks);if(reports.length)day.onclick=()=>openHistoryDay(key);grid.appendChild(day)}calendar.append(nav,weekdays,grid);list.appendChild(calendar)}
   function renderReportHistory(reports){const list=$('reportHistoryList'),valid=[];reportHistoryByDate={};selectedHistoryDate='';for(const report of reports){const parts=historyDateParts(report&&report.reportDate);if(!parts||!['morning','evening'].includes(report.kind))continue;const date=historyDateKey(parts.year,parts.month,parts.day);if(!reportHistoryByDate[date])reportHistoryByDate[date]=[];if(!reportHistoryByDate[date].some(item=>item.kind===report.kind))reportHistoryByDate[date].push(report);valid.push({date,month:parts.year*12+parts.month})}list.innerHTML='';if(!valid.length){const empty=document.createElement('div');empty.className='report-history-empty';empty.textContent='Сохранённых отчётов пока нет.';list.appendChild(empty);return}valid.sort((a,b)=>a.date.localeCompare(b.date));reportHistoryMinMonth=Math.min(...valid.map(item=>item.month));reportHistoryMaxMonth=Math.max(...valid.map(item=>item.month));reportHistoryMonth=reportHistoryMaxMonth;renderReportCalendar()}
-  async function openReportHistory(){setHeader('История отчётов','Утренние и вечерние отчёты по дням.');$('reportHistoryError').classList.add('hidden');$('reportHistoryList').innerHTML='<div class="report-loading"><span class="report-loading-spinner"></span><span>Загружаем историю...</span></div>';show('screenReportHistory');try{const session=d1Session||await warmD1();if(!session||!session.token)throw new Error('Не удалось получить доступ к истории.');const response=await fetch('/lab/report-history',{headers:{'X-Medsi-Chat-Session':session.token},cache:'no-store'});const value=await response.json();if(!response.ok||!value.ok)throw new Error(value.message||'История временно недоступна.');renderReportHistory(Array.isArray(value.reports)?value.reports:[])}catch(e){$('reportHistoryList').innerHTML='';$('reportHistoryError').textContent=String(e&&e.message||e);$('reportHistoryError').classList.remove('hidden')}}
-  async function openReport(kind){currentReportKind=kind;currentReportText='';setHeader(reportTitle(kind),'');const hasHistory=kind==='morning'||kind==='evening';$('reportDisclaimer').classList.toggle('hidden',kind==='psychology');$('reportCopyBtn').classList.add('hidden');$('reportHistoryBtn').classList.toggle('hidden',!hasHistory);$('reportContent').innerHTML='<div class="report-loading"><span class="report-loading-spinner"></span><span>Загружаем...</span></div>';$('reportError').classList.add('hidden');show('screenReport');hideReportBadge(kind);const cached=reportCache[kind]||null;if(cached&&cached.ok){showReportResult(kind,cached);return}const pending=warmReport(kind);const res=await Promise.race([pending,wait(12000).then(()=>null)]);if(showReportResult(kind,res))return;pending.then(late=>{if(late&&late.ok)showReportResult(kind,late)})}
+  async function openReportHistory(){const run=++historyRun;setHeader('История отчётов','Утренние и вечерние отчёты по дням.');$('reportHistoryError').classList.add('hidden');$('reportHistoryList').innerHTML='<div class="report-loading"><span class="report-loading-spinner"></span><span>Загружаем историю...</span></div>';show('screenReportHistory');try{const value=await readD1('/lab/report-history');if(run!==historyRun)return;renderReportHistory(Array.isArray(value.reports)?value.reports:[])}catch(e){if(run!==historyRun)return;$('reportHistoryList').innerHTML='';$('reportHistoryError').textContent=String(e&&e.message||e);$('reportHistoryError').classList.remove('hidden')}}
+  async function openReport(kind){
+    const run=++reportRun;currentReportKind=kind;currentReportText='';setHeader(reportTitle(kind),'');
+    $('reportDisclaimer').classList.toggle('hidden',kind==='psychology');$('reportCopyBtn').classList.add('hidden');$('reportHistoryBtn').classList.toggle('hidden',kind==='psychology');
+    $('reportContent').innerHTML='<div class="report-loading"><span class="report-loading-spinner"></span><span>Загружаем...</span></div>';
+    $('reportError').classList.add('hidden');show('screenReport');hideReportBadge(kind);
+    const cached=reportCache[kind];if(cached)showReportResult(kind,cached);
+    const result=await warmReport(kind);
+    if(run!==reportRun||document.body.dataset.screen!=='screenReport')return;
+    if(result)showReportResult(kind,result);
+    else if(!cached){$('reportContent').textContent='';$('reportError').textContent='Восстанавливаем соединение…';$('reportError').classList.remove('hidden');}
+    if(!result)setTimeout(()=>{if(run===reportRun&&document.body.dataset.screen==='screenReport')openReport(kind)},5000);
+  }
   function showSchedule(){setHeader('Режим дня','Расписание детского отделения.');show('screenSchedule')}
-  async function openChat(){try{const session=d1Session||await warmD1();if(!session)throw new Error('Не удалось получить доступ к чату.');if(!window.MedsiParentChatScreen)throw new Error('Чат не загрузился.');const readPending=markChatBadgeRead();show('screenChat');await MedsiParentChatScreen.open({session,phone:currentPhone,parentName,childName,confirmChatClosed:async()=>{try{const check=await callApi('getParentBootstrap',[currentPhone,parentSession],8000);return !!(check&&check.ok===false&&check.code==='NOT_FOUND')}catch(_){return false}},onBack:()=>{showChoose();readPending.then(()=>refreshParentMenu())}})}catch(e){alert(String(e&&e.message||e))}}
+  async function openChat(){
+    if(openingChat)return;openingChat=true;
+    try{
+      if(window.MedsiLoadParentChat)await window.MedsiLoadParentChat();
+      const session=d1Session; // The chat owns connection recovery and stays visible while a session is renewed.
+      if(!window.MedsiParentChatScreen)throw new Error('Чат не загрузился.');
+      const readPending=markChatBadgeRead();show('screenChat');
+      await MedsiParentChatScreen.open({session,phone:currentPhone,parentName,childName,getSession:force=>warmD1(force),confirmChatClosed:async()=>{try{const check=await callApi('getParentBootstrap',[currentPhone,parentSession],35000);return !!(check&&check.ok===false&&check.code==='NOT_FOUND')}catch(_){return false}},onBack:()=>{showChoose();readPending.then(()=>refreshParentMenu());}});
+    }catch(e){alert(String(e&&e.message||e));}
+    finally{openingChat=false;const btn=$('btnChat');btn.classList.remove('medsi-chat-opening');btn.querySelector('.medsi-chat-opening-spinner')?.remove();}
+  }
 
   $('btnGoRegister').onclick=()=>showNames();$('btnGoAuth').onclick=()=>showAuth();$('startHelpBtn').onclick=()=>{const p=$('startHelpPanel'),open=p.classList.toggle('is-open');p.setAttribute('aria-hidden',open?'false':'true')};
   $('namesBackBtn').onclick=showStart;$('namesAuthBtn').onclick=showAuth;$('phoneRegBackBtn').onclick=showNames;$('authBackBtn').onclick=showStart;
@@ -179,5 +254,10 @@
   $('reportBackBtn').onclick=()=>{const pending=reportReadPending[currentReportKind];showChoose();if(pending)pending.then(()=>refreshParentMenu())};$('scheduleBackBtn').onclick=showChoose;$('logoutBtn').onclick=()=>$('logoutModal').classList.remove('hidden');$('logoutCancelBtn').onclick=()=>$('logoutModal').classList.add('hidden');$('logoutConfirmBtn').onclick=()=>{$('logoutModal').classList.add('hidden');clearSession();safeRemove(REAUTH_KEY);justRegistered=false;showStart()};
   ['phoneInputReg','phoneInputAuth'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter')(id==='phoneInputReg'?register:auth)()}));
   function boot(){initPush();const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY)),session=safeGet(PARENT_SESSION_KEY);if(validPhone(ph)&&session){restoreSaved();return}const reauth=readJson(REAUTH_KEY);if(reauth&&validPhone(reauth.phone)&&reauth.requestId){runReauthorizationFlow(reauth,false);return}const registration=readJson(REG_ATTEMPT_KEY);if(registration&&validPhone(registration.phone)&&registration.attemptId){runRegistrationFlow(registration);return}showStart()}
+  window.MedsiParentApp.refresh=refreshParentMenu;
+  window.MedsiParentApp.helpersReady=()=>{initPush();syncPushIdentity();};
+  function resume(){if(document.hidden||!currentPhone||!parentSession)return;if(document.body.dataset.screen==='screenChoose')refreshParentMenu();else if(document.body.dataset.screen==='screenReport')openReport(currentReportKind);}
+  window.addEventListener('online',resume);window.addEventListener('pageshow',resume);document.addEventListener('visibilitychange',resume);
   boot();
+  window.MedsiParentApp.ready=true;
 })();

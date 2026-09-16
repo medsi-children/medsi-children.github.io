@@ -86,6 +86,6 @@
     if(root&&root.matches&&root.matches('.parent-chat-media-frame img,.parent-chat-media-frame video,.msg-image-wrap img,.msg-image-wrap video'))markMedia(root);
     (root&&root.querySelectorAll?root:document).querySelectorAll('.parent-chat-media-frame img,.parent-chat-media-frame video,.msg-image-wrap img,.msg-image-wrap video').forEach(markMedia);
   }
-  scan(document);
-  new MutationObserver(list=>list.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1)scan(n)}))).observe(document.body,{childList:true,subtree:true});
+  function start(){scan(document);new MutationObserver(list=>list.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1)scan(n)}))).observe(document.body,{childList:true,subtree:true});}
+  if(document.body)start();else document.addEventListener('DOMContentLoaded',start,{once:true});
 })();

@@ -1,4 +1,5 @@
 (function(){
+  if(window.MedsiParentPrewarm)return;
 
   if(!window.__medsiTimewebSessionFetchWrapped){
     window.__medsiTimewebSessionFetchWrapped=true;
