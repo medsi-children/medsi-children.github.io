@@ -53,6 +53,7 @@
       const session=extractSession(payload.result);
       if(!session||!session.token)return null;
       saveStoredD1Session(ph,session);
+      try{cache.clear();clearSession(ph);savedWarmKey='';}catch(_){}
       return session;
     }).catch(()=>null).finally(()=>{if(d1RecoveryPending&&d1RecoveryPending.promise===promise)d1RecoveryPending=null});
     d1RecoveryPending={phone:ph,promise};
@@ -120,8 +121,8 @@
       if(before||Number(error&&error.status)!==410)throw error;
       const exists=await confirmParentExists(ph);
       if(exists===false)throw error;
-      if(exists===true)return cachedThread(ph)||{ok:true,messages:[]};
-      const transient=new Error('Профиль чата синхронизируется.');transient.code='PROFILE_SYNC_PENDING';transient.status=503;throw transient;
+      const transient=new Error(exists===true?'Восстанавливаем соединение…':'Профиль чата синхронизируется.');
+      transient.code='PROFILE_SYNC_PENDING';transient.status=503;throw transient;
     }
   }
   async function fetchThread(session,phone,before,limit){
