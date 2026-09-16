@@ -88,11 +88,16 @@
   if(!window.MedsiParentApp||!window.MedsiParentApp.ready){status.classList.remove('hidden');return;}
   status.classList.add('hidden');
   function optional(src){
-    var script=document.createElement('script');
-    script.async=true;script.src=src;document.head.appendChild(script);
+    return new Promise(function(resolve){
+      var script=document.createElement('script'),done=false;
+      function finish(){if(done)return;done=true;script.onload=null;script.onerror=null;resolve();}
+      script.async=true;script.src=src;script.onload=finish;script.onerror=finish;document.head.appendChild(script);
+    });
   }
-  ['/chat-overlay/media-preload.js?v=20260907-1','/chat-overlay/upload-ux.js?v=20260916-parent-recovery','/chat-overlay/composer-ui.js?v=20260907-1','/chat-overlay/reaction-icons.js?v=20260907-twemoji-2','/chat-overlay/message-enhancements.js?v=20260907-recovery-1','/chat-overlay/chat-motion.js?v=20260911-first-open-only-1','/chat-overlay/bottom-lock.js?v=20260906-1','/chat-overlay/video-link.js?v=1','/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20260909-auth-close-1','/parents/psychology-format.js?v=20260909-leading-dot-1','/parents/chat-opening.js?v=20260907-1','/parents/report-disclaimer.js?v=20260907-1','/chat-overlay/gesture-navigation.js?v=20260907-hint-1'].forEach(optional);
-  setTimeout(function(){if(window.MedsiParentApp&&window.MedsiParentApp.helpersReady)window.MedsiParentApp.helpersReady();},0);
+  function series(files){return files.reduce(function(p,src){return p.then(function(){return optional(src);});},Promise.resolve());}
+  series(['/chat-overlay/media-preload.js?v=20260907-1','/chat-overlay/upload-ux.js?v=20260916-parent-recovery','/chat-overlay/composer-ui.js?v=20260907-1','/chat-overlay/reaction-icons.js?v=20260907-twemoji-2','/chat-overlay/message-enhancements.js?v=20260907-recovery-1','/chat-overlay/chat-motion.js?v=20260911-first-open-only-1','/chat-overlay/bottom-lock.js?v=20260906-1','/chat-overlay/video-link.js?v=1']);
+  series(['/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20260909-auth-close-1']).then(function(){if(window.MedsiParentApp&&window.MedsiParentApp.helpersReady)window.MedsiParentApp.helpersReady();});
+  ['/parents/psychology-format.js?v=20260909-leading-dot-1','/parents/chat-opening.js?v=20260907-1','/parents/report-disclaimer.js?v=20260907-1','/chat-overlay/gesture-navigation.js?v=20260907-hint-1'].forEach(function(src){optional(src);});
 })();
 </script>
 </body></html>
