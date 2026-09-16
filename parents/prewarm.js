@@ -147,7 +147,16 @@
   t.markRead=function(session,role,phone){return originalMarkRead(session,role,p10(phone))};
   t.markUnread=function(session,phone){return originalMarkUnread(session,p10(phone))};
   t.pin=function(session,phone,bucket){return originalPin(session,p10(phone),bucket)};
-  t.upload=function(session,phone,file){return originalUpload(session,p10(phone),file)};
+  t.upload=async function(session,phone,file){
+    const ph=p10(phone),active=storedD1Session(ph)||session;
+    try{return await originalUpload(active,ph,file)}
+    catch(error){
+      if(![401,410].includes(Number(error&&error.status)))throw error;
+      const fresh=await recoverD1Session(ph);
+      if(!fresh||!fresh.token)throw error;
+      return originalUpload(fresh,ph,file);
+    }
+  };
   t.edit=async function(session,role,messageKey,text){const r=await originalEdit(session,role,messageKey,text);cache.clear();clearSession();return r};
   t.remove=async function(session,role,messageKey){const r=await originalRemove(session,role,messageKey);cache.clear();clearSession();return r};
   t.react=async function(session,messageKey,reaction){const r=await originalReact(session,messageKey,reaction);cache.clear();clearSession();return r};
