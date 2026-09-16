@@ -6,11 +6,11 @@ const path=require('node:path');
 const root=path.join(__dirname,'..');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function environment(fetch){
-  const elements=new Map(),storage=new Map(),timers=new Map();let timerId=0;
+  const elements=new Map(),storage=new Map(),timers=new Map(),intervals=new Map();let timerId=0,intervalId=0;
   const noop=()=>{};
   const node=()=>({classList:{add:noop,remove:noop,toggle:noop,contains:()=>false},style:{},dataset:{},addEventListener:noop,setAttribute:noop,scrollTo:noop,replaceChildren:noop,appendChild:noop,querySelector:()=>null,value:'',textContent:''});
-  const ctx={console,AbortController,fetch,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},document:{getElementById:id=>{if(!elements.has(id))elements.set(id,node());return elements.get(id)},createElement:node,addEventListener:noop,body:node()},window:{scrollTo:noop,addEventListener:noop},navigator:{},alert:message=>{throw new Error('Unexpected alert: '+message)},requestAnimationFrame:noop,setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id)};
-  vm.createContext(ctx);return {ctx,elements,storage,timers};
+  const ctx={console,AbortController,fetch,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},document:{getElementById:id=>{if(!elements.has(id))elements.set(id,node());return elements.get(id)},createElement:node,addEventListener:noop,body:node(),hidden:false},window:{scrollTo:noop,addEventListener:noop},navigator:{},alert:message=>{throw new Error('Unexpected alert: '+message)},requestAnimationFrame:noop,setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++intervalId;intervals.set(id,{fn,ms});return id},clearInterval:id=>intervals.delete(id)};
+  vm.createContext(ctx);return {ctx,elements,storage,timers,intervals};
 }
 function parent(fetch){
   const env=environment(fetch);
@@ -73,16 +73,14 @@ test('rejected read token is renewed once and the read resumes',async()=>{
   for(const timer of [...env.timers.values()])if(timer.ms===400)timer.fn();
   assert.ok((await result).ok);assert.equal(renewals,1);assert.deepEqual(tokens,['synthetic','renewed']);
 });
-test('menu startup finishes even when every auxiliary script hangs',async()=>{
+test('parent chat core is loaded directly without the ten second script watchdog',()=>{
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-  const loader=html.match(/<script>\s*([\s\S]*?)<\/script>/)[1];
-  const env=environment();let coreLoaded=false;const appended=[];
-  env.ctx.document.createElement=()=>({remove(){}});
-  env.ctx.document.head={appendChild(script){appended.push(script.src);if(script.src.startsWith('/parents/full-web.js')){coreLoaded=true;env.ctx.window.MedsiParentApp={ready:true};Promise.resolve().then(()=>script.onload());}}};
-  vm.runInContext(loader,env.ctx);await tick();
-  assert.ok(coreLoaded);assert.ok(env.ctx.window.MedsiParentApp.ready);
-  assert.ok(appended.some(src=>src.startsWith('/chat-overlay/transport.js')));
-  assert.equal(appended[0].split('?')[0],'/parents/full-web.js');
+  const transport=html.indexOf('<script src="/chat-overlay/transport.js?v=20260916-parent-chat-fast"></script>');
+  const prewarm=html.indexOf('<script src="/parents/prewarm.js?v=20260916-parent-chat-fast"></script>');
+  const chat=html.indexOf('<script src="/parents/chat-screen.js?v=20260916-parent-chat-fast"></script>');
+  const app=html.indexOf('<script src="/parents/full-web.js?v=20260916-parent-chat-fast"></script>');
+  assert.ok(transport>=0&&prewarm>transport&&chat>prewarm&&app>chat);
+  assert.doesNotMatch(html,/LOAD_TIMEOUT/);
 });
 test('empty chat renders after the first request failed and a background read recovered',async()=>{
   const env=environment();let offline=true;
@@ -112,9 +110,40 @@ test('reopening is not locked by a previous unfinished chat read',async()=>{
 });
 test('previously loaded history remains available for display after its freshness interval',()=>{
   const env=environment();const saved={res:{ok:true,messages:[{messageKey:'example',text:'synthetic'}]},at:Date.now()-120000};
-  env.ctx.sessionStorage={getItem:()=>JSON.stringify(saved)};
+  env.ctx.sessionStorage={getItem:()=>JSON.stringify(saved),setItem:()=>{},removeItem:()=>{}};
   const noop=async()=>({ok:true});env.ctx.window.fetch=noop;
   env.ctx.window.MedsiOverlayTransport={thread:noop,sendMessage:noop,edit:noop,remove:noop,react:noop};
   vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);
   assert.equal(env.ctx.window.MedsiParentPrewarm.peek('0000000000').messages[0].messageKey,'example');
+});
+test('a valid parent treats a temporary D1 410 as an empty pending thread',async()=>{
+  const env=environment(async()=>response({ok:true,result:{ok:true,parentSession:'auth'}}));
+  env.ctx.sessionStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};
+  env.storage.set('medsi_parent_auth_session_v1','auth');
+  const closed=async()=>{throw Object.assign(new Error('profile missing'),{status:410,code:'CHAT_CLOSED'})};
+  const noop=async()=>({ok:true});
+  env.ctx.window.MedsiOverlayTransport={thread:closed,sendMessage:noop,edit:noop,remove:noop,react:noop};
+  vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);
+  const result=await env.ctx.window.MedsiOverlayTransport.thread(session,'0000000000','',100,{fresh:true});
+  assert.deepEqual(Array.from(result.messages),[]);
+});
+test('a bootstrap-confirmed missing parent keeps the D1 410 closed-chat signal',async()=>{
+  const env=environment(async()=>response({ok:true,result:{ok:false,code:'NOT_FOUND'}}));
+  env.ctx.sessionStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};
+  env.storage.set('medsi_parent_auth_session_v1','auth');
+  const closed=async()=>{throw Object.assign(new Error('profile missing'),{status:410,code:'CHAT_CLOSED'})};
+  const noop=async()=>({ok:true});
+  env.ctx.window.MedsiOverlayTransport={thread:closed,sendMessage:noop,edit:noop,remove:noop,react:noop};
+  vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);
+  await assert.rejects(()=>env.ctx.window.MedsiOverlayTransport.thread(session,'0000000000','',100,{fresh:true}),error=>Number(error.status)===410);
+});
+test('saved D1 session starts a parent thread prewarm in the background',async()=>{
+  let calls=0;const env=environment(async()=>response({ok:true,result:{ok:true,parentSession:'auth'}}));
+  env.ctx.sessionStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};
+  env.storage.set('medsi_parent_phone','0000000000');
+  env.storage.set('medsi_d1_parent_session_v1',JSON.stringify({phone:'0000000000',session}));
+  const thread=async()=>{calls++;return {ok:true,messages:[]}},noop=async()=>({ok:true});
+  env.ctx.window.MedsiOverlayTransport={thread,sendMessage:noop,edit:noop,remove:noop,react:noop};
+  vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);await tick();
+  assert.equal(calls,1);
 });
