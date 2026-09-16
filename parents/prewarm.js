@@ -27,7 +27,7 @@
   function key(phone){return p10(phone)}
   function storageKey(phone){return 'medsi_parent_thread_session_v1_'+key(phone)}
   function fresh(entry){return entry&&Date.now()-entry.at<45000}
-  function readSession(phone){try{const x=JSON.parse(sessionStorage.getItem(storageKey(phone))||'null');return fresh(x)?x:null}catch(_){return null}}
+  function readSession(phone){try{const x=JSON.parse(sessionStorage.getItem(storageKey(phone))||'null');return x&&x.res&&Array.isArray(x.res.messages)?x:null}catch(_){return null}}
   function writeSession(phone,res){try{sessionStorage.setItem(storageKey(phone),JSON.stringify({res,at:Date.now()}))}catch(_){}}
   function clearSession(phone){try{if(phone)sessionStorage.removeItem(storageKey(phone));else Object.keys(sessionStorage).filter(k=>k.startsWith('medsi_parent_thread_session_v1_')).forEach(k=>sessionStorage.removeItem(k))}catch(_){}}
   function rememberThread(phone,res){const entry={res,at:Date.now()};cache.set(key(phone),entry);writeSession(phone,res);return res}

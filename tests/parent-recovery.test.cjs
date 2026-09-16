@@ -84,3 +84,37 @@ test('menu startup finishes even when every auxiliary script hangs',async()=>{
   assert.ok(appended.some(src=>src.startsWith('/chat-overlay/transport.js')));
   assert.equal(appended[0].split('?')[0],'/parents/full-web.js');
 });
+test('empty chat renders after the first request failed and a background read recovered',async()=>{
+  const env=environment();let offline=true;
+  env.ctx.window.MedsiOverlayTransport={thread:async()=>{if(offline)throw new Error('offline');return {ok:true,messages:[]}},markRead:async()=>({ok:true})};
+  vm.runInContext(fs.readFileSync(path.join(root,'parents/chat-screen.js'),'utf8'),env.ctx);
+  await env.ctx.window.MedsiParentChatScreen.open({phone:'0000000000',session});
+  let rendered;env.elements.get('parentChatMessages').replaceChildren=el=>{rendered=el.textContent;};
+  offline=false;await env.ctx.window.MedsiParentChatScreen.refresh({fresh:true,background:true});
+  assert.equal(rendered,'Сообщений пока нет.');
+});
+test('a confirmed empty cache is shown immediately while the next read is still pending',async()=>{
+  const env=environment();let finish;
+  env.ctx.window.MedsiParentPrewarm={peek:()=>({ok:true,messages:[]})};env.ctx.MedsiParentPrewarm=env.ctx.window.MedsiParentPrewarm;
+  env.ctx.window.MedsiOverlayTransport={thread:()=>new Promise(resolve=>finish=resolve),markRead:async()=>({ok:true})};
+  vm.runInContext(fs.readFileSync(path.join(root,'parents/chat-screen.js'),'utf8'),env.ctx);
+  let rendered;env.ctx.document.getElementById('parentChatMessages').replaceChildren=el=>{if(el)rendered=el.textContent;};
+  const opening=env.ctx.window.MedsiParentChatScreen.open({phone:'0000000000',session});await tick();
+  assert.equal(rendered,'Сообщений пока нет.');finish({ok:true,messages:[]});await opening;
+});
+test('reopening is not locked by a previous unfinished chat read',async()=>{
+  const env=parent(async()=>response({ok:true,result:{ok:true}}));env.api.setup(session);
+  let opens=0;const completions=[];
+  env.ctx.window.MedsiParentChatScreen={close(){},open(){opens++;return new Promise(resolve=>completions.push(resolve));}};
+  env.ctx.MedsiParentChatScreen=env.ctx.window.MedsiParentChatScreen;
+  const first=env.api.openChat();await tick();const second=env.api.openChat();await tick();
+  assert.equal(opens,2);completions.forEach(resolve=>resolve());await Promise.all([first,second]);
+});
+test('previously loaded history remains available for display after its freshness interval',()=>{
+  const env=environment();const saved={res:{ok:true,messages:[{messageKey:'example',text:'synthetic'}]},at:Date.now()-120000};
+  env.ctx.sessionStorage={getItem:()=>JSON.stringify(saved)};
+  const noop=async()=>({ok:true});env.ctx.window.fetch=noop;
+  env.ctx.window.MedsiOverlayTransport={thread:noop,sendMessage:noop,edit:noop,remove:noop,react:noop};
+  vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);
+  assert.equal(env.ctx.window.MedsiParentPrewarm.peek('0000000000').messages[0].messageKey,'example');
+});

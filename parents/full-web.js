@@ -240,6 +240,7 @@
       const session=d1Session; // The chat owns connection recovery and stays visible while a session is renewed.
       if(!window.MedsiParentChatScreen)throw new Error('Чат не загрузился.');
       const readPending=markChatBadgeRead();show('screenChat');
+      openingChat=false; // Going back must not lock reopening behind the previous network request.
       await MedsiParentChatScreen.open({session,phone:currentPhone,parentName,childName,getSession:force=>warmD1(force),confirmChatClosed:async()=>{try{const check=await callApi('getParentBootstrap',[currentPhone,parentSession],35000);return !!(check&&check.ok===false&&check.code==='NOT_FOUND')}catch(_){return false}},onBack:()=>{showChoose();readPending.then(()=>refreshParentMenu());}});
     }catch(e){alert(String(e&&e.message||e));}
     finally{openingChat=false;const btn=$('btnChat');btn.classList.remove('medsi-chat-opening');btn.querySelector('.medsi-chat-opening-spinner')?.remove();}

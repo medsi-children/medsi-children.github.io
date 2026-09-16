@@ -209,7 +209,7 @@
     opts=opts||{};
     const active=state;const list=await fetchThread(!!opts.fresh);if(dead||!state||state!==active)return list;clearError();
     const changed=threadSig(list)!==threadSig(rows);
-    const shouldRender=!!opts.force||changed;
+    const shouldRender=!initialMessagesRendered||!!opts.force||changed;
     if(shouldRender){
       const stick=opts.stick!==undefined?!!opts.stick:nearBottom();
       render(list,{stick,preserveExact:!!opts.background&&!stick,animateInitial:!initialMessagesRendered});
