@@ -21,7 +21,7 @@
     pushLoading=true;
     const s=document.createElement('script');
     s.async=false;
-    s.src='/notify-client.js?v=20260905-tutor-panel';
+    s.src='/notify-client.js?v=20260920-android-resubscribe-1';
     s.onload=()=>{pushLoading=false;initPush()};
     s.onerror=()=>{pushLoading=false};
     document.head.appendChild(s);

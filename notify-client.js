@@ -17,7 +17,8 @@
     hideButtonTimer: null,
     hideStatusTimer: null,
     hasShownIntro: false,
-    panelVisible: true
+    panelVisible: true,
+    actionBusy: false
   };
 
   function onlyDigits(value) {
@@ -186,11 +187,17 @@
       return;
     }
 
+    if (Notification.permission === 'denied') {
+      setStatus('Разрешите уведомления для сайта в настройках Chrome или Android, затем нажмите кнопку ещё раз.');
+      updateButton({ reveal: true });
+      return;
+    }
+
     setStatus('Подключаем уведомления...');
 
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      setStatus('Уведомления не включены.');
+      setStatus('Уведомления не включены. Разрешите их в настройках сайта.');
       updateButton();
       return;
     }
@@ -210,8 +217,10 @@
   async function unsubscribe() {
     const subscription = await getSubscription();
     if (subscription) {
-      deleteSubscriptionInApp(subscription);
-      await subscription.unsubscribe();
+      // Remove the browser subscription first, then remove the same endpoint
+      // from the server. Android can resolve unsubscribe asynchronously; doing
+      // this in this order prevents a quick re-enable from racing the delete.
+      try { await subscription.unsubscribe(); } finally { deleteSubscriptionInApp(subscription); }
     }
 
     setStatus('Уведомления отключены.');
@@ -353,6 +362,9 @@
     state.button.className = 'medsi-push-btn hidden';
     state.button.textContent = 'Включить уведомления';
     state.button.addEventListener('click', async () => {
+      if (state.actionBusy) return;
+      state.actionBusy = true;
+      state.button.disabled = true;
       try {
         const subscription = await getSubscription();
         if (subscription) {
@@ -362,7 +374,13 @@
 
         await subscribe();
       } catch (e) {
-        setStatus('Не удалось изменить уведомления.');
+        const name = String(e && e.name || '');
+        setStatus(name === 'NotAllowedError'
+          ? 'Разрешите уведомления для сайта в настройках Chrome или Android.'
+          : 'Не удалось изменить уведомления. Попробуйте ещё раз.');
+      } finally {
+        state.actionBusy = false;
+        updateButton({ reveal: true });
       }
     });
 
