@@ -36,7 +36,8 @@
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13.2c1.7 2.1 4.1 3.2 7 3.2s5.3-1.1 7-3.2"></path><path d="M7.2 15.2 5.8 17"></path><path d="M12 16.4v2.2"></path><path d="m16.8 15.2 1.4 1.8"></path></svg>';
   }
   function getPinIconSvg(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.72 5.5 6.07.88-4.4 4.28 1.04 6.04L12 16.84 6.57 19.7l1.04-6.04-4.4-4.28 6.07-.88L12 3"></path></svg>'}
-  function getDeleteIconSvg(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>'}
+  function getCloseIconSvg(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>'}
+  function getDeleteIconSvg(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M7 7l1 13h10l1-13"></path><path d="M10 11v5M14 11v5"></path></svg>'}
 
   function mount(overlay,state){
     const transport=window.MedsiOverlayTransport;
@@ -140,7 +141,7 @@
       const activate=async event=>{
         event.preventDefault();event.stopPropagation();
         const controls=toggle.closest('.chat-controls');
-        if(event.type==='click'&&matchMedia('(hover: none)').matches&&controls&&!controls.classList.contains('is-menu-open')){controls.classList.add('is-menu-open');return}
+        if(event.type==='click'&&matchMedia('(hover: none)').matches&&controls&&!controls.classList.contains('is-menu-open')){openControls(controls);return}
         if(toggle.classList.contains('is-busy'))return;
         toggle.classList.add('is-busy');
         try{
@@ -158,20 +159,28 @@
       toggle.onclick=async event=>{
         event.preventDefault();event.stopPropagation();
         const controls=toggle.closest('.chat-controls');
-        if(primary&&matchMedia('(hover: none)').matches&&controls&&!controls.classList.contains('is-menu-open')){controls.classList.add('is-menu-open');return}
+        if(primary&&matchMedia('(hover: none)').matches&&controls&&!controls.classList.contains('is-menu-open')){openControls(controls);return}
         try{await transport.pin(session,chat.phone,isPinned?'':bucket);await loadChats(false)}catch(err){overlay.showError(err.message)}
       };
       return toggle;
     }
     function requestChildDeletion(chat){deleteTarget=chat;childDeleteModal.querySelector('#childDeleteText').textContent='Вы хотите удалить ребёнка '+(chat.childName||'Без имени ребёнка')+'. Вся история сообщений будет удалена!';childDeleteModal.classList.remove('hidden')}
     function makeDeleteToggle(chat){const toggle=document.createElement('span');toggle.className='chat-delete-toggle';toggle.setAttribute('role','button');toggle.setAttribute('tabindex','0');toggle.title='Удалить ребёнка';toggle.innerHTML=getDeleteIconSvg();toggle.onclick=e=>{e.preventDefault();e.stopPropagation();requestChildDeletion(chat)};return toggle}
+    function makeCloseToggle(controls){const toggle=document.createElement('button');toggle.type='button';toggle.className='chat-menu-close';toggle.setAttribute('aria-label','Закрыть меню действий');toggle.title='Закрыть меню';toggle.innerHTML=getCloseIconSvg();toggle.onclick=e=>{e.preventDefault();e.stopPropagation();controls.classList.remove('is-menu-open');};return toggle}
+    function openControls(controls){controls.classList.add('is-menu-open');clearTimeout(controls._menuCloseTimer);controls._menuCloseTimer=setTimeout(()=>{controls.classList.remove('is-menu-open')},5000)}
+    function resetControlsTimer(controls){if(controls.classList.contains('is-menu-open'))openControls(controls)}
     function makeControls(chat,isRead){
       const controls=document.createElement('div');controls.className='chat-controls';
       const menu=document.createElement('div');menu.className='chat-controls-menu';
       const pinned=chat&&chat.pinnedBucket===bucket;
-      if(pinned){menu.append(makePinToggle(chat,true),makeReadToggle(chat,isRead))}
-      else{menu.append(makeReadToggle(chat,isRead),makePinToggle(chat,false))}
-      menu.appendChild(makeDeleteToggle(chat));controls.appendChild(menu);return controls;
+      menu.appendChild(makeCloseToggle(controls));
+      if(pinned){menu.append(makeReadToggle(chat,isRead),makeDeleteToggle(chat),makePinToggle(chat,true))}
+      else{menu.append(makeReadToggle(chat,isRead),makeDeleteToggle(chat),makePinToggle(chat,false))}
+      controls.appendChild(menu);
+      controls.addEventListener('mouseenter',()=>openControls(controls));
+      controls.addEventListener('mouseleave',()=>{clearTimeout(controls._menuCloseTimer);controls.classList.remove('is-menu-open')});
+      ['pointerdown','pointermove','touchstart','focusin'].forEach(type=>controls.addEventListener(type,()=>resetControlsTimer(controls),{passive:true}));
+      return controls;
     }
     function makeCard(chat){
       const card=document.createElement('button');card.className='chat-card'+(chat.hasUnread?' unread':'')+(chat.pinnedBucket?' pinned':'');card.type='button';card.dataset.phone=chat.phone||'';
@@ -179,7 +188,7 @@
       const cardMeta=document.createElement('div');cardMeta.className='chat-card-meta';cardMeta.textContent='Родитель: '+(chat.parentName||'—')+'\nРебёнок: '+(chat.childName||'—')+'\nНомер телефона: '+(chat.phone?displayPhone(chat.phone):'—');
       const last=document.createElement('div');last.className='chat-card-last '+(chat.lastSide==='educator'?'educator':'parent');last.textContent=preview(chat);
       card.append(makeControls(chat,!chat.hasUnread),cardTitle,cardMeta,last);
-      card.onclick=e=>{if(e.target.closest('.chat-read-toggle,.chat-delete-toggle,.chat-pin-toggle'))return;activeChat=chat;openThread(chat)};
+      card.onclick=e=>{if(e.target.closest('.chat-menu-close,.chat-read-toggle,.chat-delete-toggle,.chat-pin-toggle'))return;activeChat=chat;openThread(chat)};
       return card;
     }
     function renderList(){

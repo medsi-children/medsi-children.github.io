@@ -276,16 +276,15 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
   max-height:34px;
   transition:max-height .18s ease,padding .18s ease,margin .18s ease,background .18s ease,box-shadow .18s ease;
 }
-.chat-controls:hover .chat-controls-menu,
 .chat-controls.is-menu-open .chat-controls-menu{
-  max-height:132px;
+  max-height:172px;
   margin:-6px;
   padding:6px;
   border:1px solid rgba(36,211,218,.18);
   background:rgba(255,255,255,.98);
   box-shadow:0 14px 28px rgba(17,66,74,.18);
 }
-.chat-controls .chat-delete-toggle,.chat-pin-toggle,
+.chat-controls .chat-menu-close,.chat-delete-toggle,.chat-pin-toggle,
 .chat-controls .chat-read-toggle{
   box-sizing:border-box !important;
   flex:0 0 34px !important;
@@ -299,6 +298,18 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
   padding:0 !important;
   line-height:1 !important;
 }
+.chat-menu-close{
+  display:none;
+  align-items:center;
+  justify-content:center;
+  color:#8ca8ad;
+  background:rgba(247,252,253,.98);
+  border:1.5px solid rgba(95,145,153,.22);
+  border-radius:999px;
+  cursor:pointer;
+}
+.chat-menu-close svg{ width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:2.1; stroke-linecap:round; stroke-linejoin:round; }
+.chat-controls.is-menu-open .chat-menu-close{ display:inline-flex; }
 .chat-pin-toggle{
   display:inline-flex;
   align-items:center;
@@ -321,7 +332,7 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
   border-radius:999px;
   cursor:pointer;
 }
-.chat-delete-toggle svg{ width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; }
+.chat-delete-toggle svg{ width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
 
 .chat-info{
   background:linear-gradient(135deg,#28d7dd,#18bcc4);
