@@ -55,6 +55,15 @@
   function showError(msg){const e=$('parentChatError');if(!e)return;e.textContent=String(msg||'Не удалось открыть чат.');e.classList.toggle('is-reconnecting',String(msg).startsWith('Восстанавливаем'));e.classList.remove('hidden')}
   function clearError(){const e=$('parentChatError');if(!e)return;e.textContent='';e.classList.add('hidden')}
   function setBusy(v){busy=!!v;const disabled=busy||chatClosed||chatPending;$('parentChatInput').disabled=disabled;$('parentChatSend').disabled=disabled;$('parentChatAttach').disabled=disabled}
+  function messageText(value){return String(value||'').replace(/\r\n?/g,'\n').trim()}
+  function focusComposer(){
+    const input=$('parentChatInput'),screen=$('screenChat');
+    if(!state||dead||chatClosed||!input||input.disabled||!screen||screen.classList.contains('hidden')||document.body.dataset.screen!=='screenChat')return;
+    requestAnimationFrame(()=>{
+      if(!state||dead||chatClosed||input.disabled||screen.classList.contains('hidden')||document.body.dataset.screen!=='screenChat')return;
+      try{input.focus({preventScroll:true})}catch(_){input.focus()}
+    });
+  }
   function isChatClosedError(error){return !!(error&&(error.code==='CHAT_CLOSED'||Number(error.status)===410))}
   function stopLive(){if(liveTimer){clearTimeout(liveTimer);liveTimer=0}liveRunning=false}
   function chatVisible(){const screen=$('screenChat');return !!state&&!dead&&!chatClosed&&!document.hidden&&document.body.dataset.screen==='screenChat'&&screen&&!screen.classList.contains('hidden')}
@@ -252,12 +261,12 @@
 
   $('parentChatBack').onclick=()=>{if(state&&typeof state.onBack==='function')state.onBack()};
   $('parentChatCompose').onsubmit=async e=>{
-    e.preventDefault();if(!state||busy||chatClosed)return;const text=$('parentChatInput').value.trim();if(!text)return;
+    e.preventDefault();if(!state||busy||chatClosed)return;const text=messageText($('parentChatInput').value);if(!text)return;
     setBusy(true);const optimistic={side:'parent',type:'text',text,timestamp:Date.now(),messageKey:'pending-'+Date.now().toString(36)};
     render(rows.concat(optimistic),{stick:true});$('parentChatInput').value='';
     try{await t.sendMessage(await currentSession(),'parent',state.phone,{type:'text',text});await refresh({stick:true,fresh:true})}
     catch(err){if(isChatClosedError(err))showClosedChat();else{showError(err&&err.message||'Не удалось отправить сообщение.');await refresh({stick:true,fresh:true}).catch(()=>{})}}
-    finally{setBusy(false);if(!chatClosed)$('parentChatInput').focus()}
+    finally{setBusy(false);focusComposer()}
   };
   $('parentChatAttach').onclick=()=>{if(!chatClosed)$('parentChatFile').click()};
   $('parentChatFile').onchange=async()=>{

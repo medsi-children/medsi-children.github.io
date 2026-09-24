@@ -259,7 +259,16 @@
     const p=ensureReplyPreview();if(!p)return;
     p.classList.toggle('hidden',!replyTarget);
     p.querySelector('.medsi-parent-reply-text').textContent=replyTarget?label(replyTarget):'';
-    if(replyTarget)document.getElementById('parentChatInput')?.focus();
+    if(replyTarget)focusParentInput();
+  }
+
+  function focusParentInput(){
+    const input=document.getElementById('parentChatInput'),screen=document.getElementById('screenChat');
+    if(!input||input.disabled||!screen||screen.classList.contains('hidden')||document.body.dataset.screen!=='screenChat')return;
+    requestAnimationFrame(()=>{
+      if(input.disabled||screen.classList.contains('hidden')||document.body.dataset.screen!=='screenChat')return;
+      try{input.focus({preventScroll:true})}catch(_){input.focus()}
+    });
   }
 
   function selectedParentMessage(){
@@ -343,7 +352,7 @@
         const box=document.getElementById('parentChatError');
         if(box){box.textContent=err&&err.message||'Не удалось отправить ответ.';box.classList.remove('hidden')}
       }finally{
-        if(send)send.disabled=false;if(attach)attach.disabled=false;if(input){input.disabled=false;input.focus()}
+        if(send)send.disabled=false;if(attach)attach.disabled=false;if(input)input.disabled=false;focusParentInput()
       }
     },true);
   }

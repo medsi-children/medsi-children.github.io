@@ -94,7 +94,7 @@
   window.MedsiLoadParentChat=function(){
     if(window.MedsiParentChatScreen)return Promise.resolve();
     if(chatPending)return chatPending;
-    chatPending=series(['/chat-overlay/transport.js?v=20260916-parent-recovery','/parents/prewarm.js?v=20260916-parent-recovery','/parents/chat-screen.js?v=20260916-parent-recovery']).finally(function(){chatPending=null;});
+    chatPending=series(['/chat-overlay/transport.js?v=20260916-parent-recovery','/parents/prewarm.js?v=20260916-parent-recovery','/parents/chat-screen.js?v=20260924-message-input-1']).finally(function(){chatPending=null;});
     return chatPending;
   };
   var status=document.getElementById('parentBootStatus');
@@ -103,7 +103,7 @@
     if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
     clearTimeout(notice);status.classList.add('hidden');
     window.MedsiLoadParentChat().then(function(){
-      return series(["/chat-overlay/media-preload.js?v=20260907-1", "/chat-overlay/upload-ux.js?v=20260916-parent-recovery", "/chat-overlay/composer-ui.js?v=20260907-1", "/chat-overlay/reaction-icons.js?v=20260907-twemoji-2", "/chat-overlay/message-enhancements.js?v=20260907-recovery-1", "/chat-overlay/chat-motion.js?v=20260911-first-open-only-1", "/chat-overlay/bottom-lock.js?v=20260906-1", "/chat-overlay/video-link.js?v=1"],true);
+      return series(["/chat-overlay/media-preload.js?v=20260907-1", "/chat-overlay/upload-ux.js?v=20260916-parent-recovery", "/chat-overlay/composer-ui.js?v=20260907-1", "/chat-overlay/reaction-icons.js?v=20260907-twemoji-2", "/chat-overlay/message-enhancements.js?v=20260924-message-input-1", "/chat-overlay/chat-motion.js?v=20260911-first-open-only-1", "/chat-overlay/bottom-lock.js?v=20260906-1", "/chat-overlay/video-link.js?v=1"],true);
     }).catch(function(){});
     series(['/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20260920-android-resubscribe-1'],true).then(function(){window.MedsiParentApp.helpersReady();}).catch(function(){});
     ["/parents/psychology-format.js?v=20260909-leading-dot-1", "/parents/chat-opening.js?v=20260907-1", "/parents/report-disclaimer.js?v=20260907-1", "/chat-overlay/gesture-navigation.js?v=20260907-hint-1"].forEach(function(src){load(src,1).catch(function(){});});

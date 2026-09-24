@@ -84,10 +84,10 @@
     const quickPanel=document.createElement('div');quickPanel.id='quickRepliesPanel';quickPanel.className='quick-panel hidden';
     const quickGrid=document.createElement('div');quickGrid.className='quick-grid';
     const quickDefs=[['meetings','Встречи с детьми','quick-red'],['meetTime','Время встреч','quick-orange'],['calls','Звонки детям','quick-yellow'],['therapy','Терапия и препараты','quick-green'],['delivery','Доставка еды и вещей','quick-cyan'],['routine','Режим дня','quick-blue'],['writeTopic','Пишите по делу','quick-purple']];
-    quickDefs.forEach(([key,label,cls])=>{const b=document.createElement('button');b.type='button';b.className='quick-btn '+cls;b.textContent=label;b.onclick=()=>{editor.textContent=QUICK_REPLIES[key];quickPanel.classList.add('hidden');editor.focus()};quickGrid.appendChild(b)});
+    quickDefs.forEach(([key,label,cls])=>{const b=document.createElement('button');b.type='button';b.className='quick-btn '+cls;b.textContent=label;b.onclick=()=>{editor.textContent=QUICK_REPLIES[key];quickPanel.classList.add('hidden');focusEditor()};quickGrid.appendChild(b)});
     const quickDoctors=document.createElement('button');quickDoctors.type='button';quickDoctors.className='quick-btn quick-doctors';quickDoctors.textContent='Контакты врачей';quickGrid.appendChild(quickDoctors);
     const doctorButtons=document.createElement('div');doctorButtons.id='doctorButtons';doctorButtons.className='quick-subgrid hidden';
-    [['anastasia','Анастасия Михайловна','doctor-anastasia'],['anna','Антон Геннадьевич','doctor-anna'],['kristina','Кристина Федоровна','doctor-kristina']].forEach(([key,label,cls])=>{const b=document.createElement('button');b.type='button';b.className='quick-doctor-btn '+cls;b.textContent=label;b.onclick=()=>{editor.textContent=DOCTORS[key];quickPanel.classList.add('hidden');doctorButtons.classList.add('hidden');editor.focus()};doctorButtons.appendChild(b)});
+    [['anastasia','Анастасия Михайловна','doctor-anastasia'],['anna','Антон Геннадьевич','doctor-anna'],['kristina','Кристина Федоровна','doctor-kristina']].forEach(([key,label,cls])=>{const b=document.createElement('button');b.type='button';b.className='quick-doctor-btn '+cls;b.textContent=label;b.onclick=()=>{editor.textContent=DOCTORS[key];quickPanel.classList.add('hidden');doctorButtons.classList.add('hidden');focusEditor()};doctorButtons.appendChild(b)});
     quickPanel.append(quickGrid,doctorButtons);
     screenChatThread.append(chatThreadHeader,chatThreadBox,chatThreadError,chatReplyPreview,chatCompose,imagePreview,threadRow,quickPanel);
 
@@ -328,8 +328,16 @@
     const contextMenu=document.createElement('div');contextMenu.id='chatContextMenu';contextMenu.className='chat-context-menu hidden';contextMenu.innerHTML='<div class="chat-context-reactions"></div><div class="chat-context-actions"></div>';document.body.appendChild(contextMenu);
     function closeMessageMenu(){contextMenu.classList.add('hidden');contextMenu.querySelector('.chat-context-reactions').replaceChildren();contextMenu.querySelector('.chat-context-actions').replaceChildren()}
     function contextAction(icon,label,fn,danger){const b=document.createElement('button');b.type='button';b.className='chat-context-action'+(danger?' danger':'');b.innerHTML='<span class="chat-context-action-icon">'+icon+'</span><span></span>';b.lastChild.textContent=label;b.onclick=()=>{closeMessageMenu();fn()};return b}
-    function setReply(m){replyTo=m||null;chatReplyPreview.classList.toggle('hidden',!replyTo);chatReplyPreview.querySelector('#chatReplyPreviewTitle').textContent=replyTo?'Ответ на сообщение':'';chatReplyPreview.querySelector('#chatReplyPreviewText').textContent=replyTo?replyLabel(replyTo):'';if(replyTo){editing=null;editor.focus()}}
-    function setEdit(m){editing=m||null;if(editing){replyTo=null;chatReplyPreview.classList.add('hidden');editor.textContent=String(editing.text||'');editor.focus()}}
+    function editorText(){return String(editor.innerText||editor.textContent||'').replace(/\r\n?/g,'\n').trim()}
+    function focusEditor(){
+      if(disposed||!activeChat||sending||document.body.dataset.screen!=='screenChatThread'||screenChatThread.classList.contains('hidden')||!editor.isConnected)return;
+      requestAnimationFrame(()=>{
+        if(disposed||!activeChat||sending||document.body.dataset.screen!=='screenChatThread'||screenChatThread.classList.contains('hidden')||!editor.isConnected)return;
+        try{editor.focus({preventScroll:true})}catch(_){editor.focus()}
+      });
+    }
+    function setReply(m){replyTo=m||null;chatReplyPreview.classList.toggle('hidden',!replyTo);chatReplyPreview.querySelector('#chatReplyPreviewTitle').textContent=replyTo?'Ответ на сообщение':'';chatReplyPreview.querySelector('#chatReplyPreviewText').textContent=replyTo?replyLabel(replyTo):'';if(replyTo){editing=null;focusEditor()}}
+    function setEdit(m){editing=m||null;if(editing){replyTo=null;chatReplyPreview.classList.add('hidden');editor.textContent=String(editing.text||'');focusEditor()}}
     function openMessageMenu(m,el,e){
       if(!m||!m.messageKey||String(m.messageKey).startsWith('pending-'))return;e.preventDefault();e.stopPropagation();closeMessageMenu();
       const rs=contextMenu.querySelector('.chat-context-reactions');REACTIONS.forEach(r=>{const b=document.createElement('button');b.className='msg-reaction-btn';b.type='button';b.textContent=r;b.onclick=async()=>{closeMessageMenu();try{await transport.react(session,m.messageKey,r);refreshThread(true)}catch(err){overlay.showError(err.message)}};rs.appendChild(b)});
@@ -340,7 +348,7 @@
     function clearFile(){pendingFile=null;imagePreview.classList.add('hidden');if(pendingUrl){URL.revokeObjectURL(pendingUrl);pendingUrl=''}imagePreview.querySelector('img').removeAttribute('src')}
     function setSending(v){sending=!!v;send.disabled=sending;attach.disabled=sending;editor.contentEditable=sending?'false':'true'}
     async function submit(){
-      if(!activeChat||sending)return;const value=String(editor.textContent||'').trim();if(!value&&!pendingFile)return;setSending(true);
+      if(!activeChat||sending)return;const value=editorText();if(!value&&!pendingFile)return;setSending(true);
       const targetChat=activeChat;
       const targetPhone=phone10(targetChat.phone);
       const targetFile=pendingFile;
@@ -363,7 +371,7 @@
           if(activeChat===targetChat){setReply(null);setSending(false);refreshThread(false)}
           return
         }
-      }catch(err){overlay.showError(err.message||'Не удалось отправить сообщение.')}finally{setSending(false);editor.focus()}
+      }catch(err){overlay.showError(err.message||'Не удалось отправить сообщение.')}finally{setSending(false);focusEditor()}
     }
 
     btnChatsBack.onclick=()=>overlay.close();
