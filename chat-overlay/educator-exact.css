@@ -278,13 +278,13 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
 }
 .chat-controls.is-menu-open .chat-controls-menu{
   max-height:172px;
-  margin:-6px 0;
+  margin:-6px;
   padding:6px;
   border:1px solid rgba(36,211,218,.18);
   background:rgba(255,255,255,.98);
   box-shadow:0 14px 28px rgba(17,66,74,.18);
 }
-.chat-controls.is-menu-open{ right:6px; z-index:10; }
+.chat-controls.is-menu-open{ z-index:10; }
 .chat-controls .chat-menu-close,.chat-delete-toggle,.chat-pin-toggle,
 .chat-controls .chat-read-toggle{
   box-sizing:border-box !important;
