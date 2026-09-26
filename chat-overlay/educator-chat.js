@@ -402,5 +402,5 @@
     };
   }
 
-  window.__medsiEducatorOverlayChat={mount};
+  window.MedsiEducatorOverlayChat={mount};
 })();
