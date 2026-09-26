@@ -37,7 +37,7 @@
   }
   function getPinIconSvg(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.72 5.5 6.07.88-4.4 4.28 1.04 6.04L12 16.84 6.57 19.7l1.04-6.04-4.4-4.28 6.07-.88L12 3"></path></svg>'}
   function getCloseIconSvg(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>'}
-  function getDeleteIconSvg(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M7 7l1 13h10l1-13"></path><path d="M10 11v5M14 11v5"></path></svg>'}
+  function getDeleteIconSvg(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"></path><path d="M9 7V4h6v3"></path><path d="M8 7v13h8V7"></path><path d="M10 11v5M14 11v5"></path></svg>'}
 
   function mount(overlay,state){
     const transport=window.MedsiOverlayTransport;
