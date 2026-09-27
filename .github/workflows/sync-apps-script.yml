@@ -1,0 +1,45 @@
+name: Sync Apps Script source
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_source_sync:
+        description: Обновить исходники существующего Apps Script-проекта без новой публикации веб-приложения
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medsi-apps-script-production
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: apps-script-production
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+      CONFIRM_SOURCE_SYNC: ${{ inputs.confirm_source_sync }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run verify
+      - name: Verify source-sync approval and credentials
+        run: |
+          test "$CONFIRM_SOURCE_SYNC" = "true"
+          test -n "$CLASPRC_JSON"
+          test -n "$APPS_SCRIPT_ID"
+      - name: Sync source without publishing a new web-app deployment
+        run: |
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          printf '{\n  "scriptId": "%s"\n}\n' "$APPS_SCRIPT_ID" > apps-script/medsi-bot/.clasp.json
+          cd apps-script/medsi-bot
+          npx --yes @google/clasp@3.3.0 push --force

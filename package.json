@@ -5,7 +5,10 @@
   "description": "Medsi web interface with Timeweb gateway, encrypted chat sessions and S3 media storage.",
   "main": "server.js",
   "scripts": {
-    "start": "node -r ./lib/session-preload.js server.js"
+    "start": "node -r ./lib/session-preload.js server.js",
+    "verify:server": "node --check server.js && node --check lib/session-preload.js",
+    "verify:source-control": "node scripts/verify-source-control.mjs",
+    "verify": "npm run verify:server && npm run verify:source-control"
   },
   "engines": {
     "node": ">=20"
