@@ -1,0 +1,16 @@
+# Local dependencies and development state
+node_modules/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+
+# macOS and editor files
+.DS_Store
+
+# Apps Script target is configured only in a local checkout or CI secret.
+apps-script/medsi-bot/.clasp.json
+
+# Local safety copies must never be committed as production source.
+*.backup-*

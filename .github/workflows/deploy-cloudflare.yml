@@ -1,0 +1,61 @@
+name: Deploy Cloudflare component
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Компонент для ручного релиза
+        required: true
+        type: choice
+        options:
+          - chat-worker
+          - chat-gateway
+          - push-worker
+          - d1-migrations
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medsi-cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: cloudflare-production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TARGET: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run verify
+      - name: Verify release credentials
+        run: test -n "$CLOUDFLARE_ACCOUNT_ID" && test -n "$CLOUDFLARE_API_TOKEN"
+      - name: Deploy selected component
+        run: |
+          case "$TARGET" in
+            chat-worker)
+              npx --yes wrangler@4.101.0 deploy --config services/cloudflare/chat-worker/wrangler.production.toml
+              ;;
+            chat-gateway)
+              npx --yes wrangler@4.101.0 deploy --config services/cloudflare/chat-gateway/wrangler.toml
+              ;;
+            push-worker)
+              npm --prefix services/cloudflare/push-worker ci
+              npm --prefix services/cloudflare/push-worker run deploy
+              ;;
+            d1-migrations)
+              npx --yes wrangler@4.101.0 d1 migrations apply medsi-chat-production --remote --config services/cloudflare/chat-worker/wrangler.production.toml
+              ;;
+            *)
+              echo "Unsupported target: $TARGET" >&2
+              exit 1
+              ;;
+          esac
