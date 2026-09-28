@@ -240,13 +240,26 @@ function syncD1ProfileForPhone_(phoneRaw) {
 */
 function reportsD1ProfilesSnapshot_() {
   const snapshot = {};
-  snapshotActiveProfilesForD1_().forEach(function(profile) {
+  const sheet = getDataSheet_();
+  const lastRow = sheet ? sheet.getLastRow() : 0;
+  const rows = lastRow >= 2
+    ? sheet.getRange(2, 1, lastRow - 1, 4).getValues()
+    : [];
+
+  rows.forEach(function(row) {
+    const profile = buildProfileFromReportRow_(row);
     const phone = last10_(profile.phone);
     if (!phone) return;
     snapshot[phone] = {
       phone: phone,
       parentName: String(profile.parentName || '').trim(),
-      childName: String(profile.childName || '').trim()
+      childName: String(profile.childName || '').trim(),
+      // Keep the REPORTS display name and the full family name only in the
+      // local lifecycle snapshot.  D1 still receives its existing public
+      // profile payload above; these fields let a row-deletion trigger remove
+      // exactly "Кирилл Ш.", never another Кирилл, from raw reports.
+      reportChildName: String(row[2] || '').trim(),
+      familyName: String(row[3] || '').trim()
     };
   });
   return snapshot;
@@ -310,9 +323,29 @@ function reconcileReportsProfilesToD1NonDestructive_(reason) {
   const deletionsPending = removed.filter(function(phone) {
     return !moves.some(function(move) { return move.fromPhone === phone; });
   });
+  const removedProfiles = {};
+  deletionsPending.forEach(function(phone) { removedProfiles[phone] = previous[phone]; });
   saveReportsD1ProfilesSnapshot_(current);
-  const result = { ok: true, reason: reason || '', upserted: upserts.length, moved: moves, deletionsPending: deletionsPending, ambiguous: ambiguous };
-  Logger.log('REPORTS_D1_PROFILE_SYNC ' + JSON.stringify(result));
+  const result = {
+    ok: true,
+    reason: reason || '',
+    upserted: upserts.length,
+    moved: moves,
+    deletionsPending: deletionsPending,
+    ambiguous: ambiguous,
+    // Used only by the in-process reconciliation below; keep this identity
+    // data out of the Apps Script log.
+    removedProfiles: removedProfiles,
+    previousProfiles: previous
+  };
+  Logger.log('REPORTS_D1_PROFILE_SYNC ' + JSON.stringify({
+    ok: result.ok,
+    reason: result.reason,
+    upserted: result.upserted,
+    moved: result.moved,
+    deletionsPending: result.deletionsPending,
+    ambiguous: result.ambiguous
+  }));
   return result;
 }
 
@@ -331,13 +364,38 @@ function reconcileReportsProfilesToD1_(reason) {
     const deleted = [];
     const failed = [];
     const cleanupErrors = [];
+    const rawActiveTargets = Object.keys(current)
+      .map(function(phone) { return rawReportChildTargetFromProfileSnapshot_(current[phone]); })
+      .filter(Boolean);
+    const rawCleanupByPhone = {};
+
+    // Raw report cleanup is independent from the D1 inventory.  This also
+    // covers a deletion initiated by the educator panel: that panel closes
+    // D1 first, so the following onChange must not skip raw cleanup simply
+    // because the profile no longer appears in the Worker inventory.
+    Object.keys(sync.removedProfiles || {}).forEach(function(phone) {
+      try {
+        const rawTarget = rawReportChildTargetFromProfileSnapshot_(sync.removedProfiles[phone]);
+        const rawTargets = rawReportTargetsNoLongerActive_([rawTarget], rawActiveTargets);
+        if (!rawTargets.length) return;
+        rawCleanupByPhone[phone] = applyRawReportCleanup_(
+          prepareRawReportCleanupForChildren_(rawTargets, rawActiveTargets.concat(rawTargets))
+        );
+      } catch (error) {
+        cleanupErrors.push('raw reports ' + phone + ': ' + String(error && error.message || error));
+      }
+    });
     // Limit one pass so an unexpectedly empty sheet cannot erase every chat.
     stale.slice(0, 3).forEach(function(phone) {
       try {
         // A parent may have been registered again while the D1 inventory was read.
         if (getProfileByPhone_(phone)) return;
         const result = deleteD1ProfileWithS3Purge_(phone);
-        deleted.push({ phone:phone, purgeComplete:!!(result.purge && result.purge.ok) });
+        deleted.push({
+          phone:phone,
+          purgeComplete:!!(result.purge && result.purge.ok),
+          rawReportBlocks:Number(rawCleanupByPhone[phone] && rawCleanupByPhone[phone].removedBlocks || 0)
+        });
       } catch (error) {
         failed.push({ phone:phone, message:String(error && error.message || error) });
       }
