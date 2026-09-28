@@ -3180,8 +3180,20 @@ function deleteReportChildByPhone(phoneRaw, tutorTokenRaw) {
         if (last10_(row[0]) === phone10) rowNumbers.push(index + 2);
       });
 
+      const rawDeletedTargets = rowNumbers
+        .map(function(rowNumber) { return rawReportChildTargetFromReportRow_(values[rowNumber - 2]); })
+        .filter(Boolean);
+      const rawActiveTargets = values
+        .filter(function(row) { return last10_(row[0]) !== phone10; })
+        .map(rawReportChildTargetFromReportRow_)
+        .filter(Boolean);
+      const rawTargets = rawReportTargetsNoLongerActive_(rawDeletedTargets, rawActiveTargets);
+      const rawAllTargets = rawActiveTargets.concat(rawTargets);
+      const rawCleanupPlan = prepareRawReportCleanupForChildren_(rawTargets, rawAllTargets);
+
       let cleanup = null;
       let d1Cleanup = null;
+      let rawCleanup = null;
       const cleanupErrors = [];
 
       // First close the production chat. If Cloudflare is temporarily
@@ -3193,6 +3205,20 @@ function deleteReportChildByPhone(phoneRaw, tutorTokenRaw) {
           ok: false,
           message: 'Не удалось закрыть чат родителя. Попробуйте удалить ещё раз: ' + String(e && e.message || e)
         };
+      }
+
+      // The D1 profile is closed before REPORTS is changed, but raw report
+      // edits are prepared from the still-authoritative row above.  This keeps
+      // deletion from accidentally selecting a same-named child by first name.
+      try {
+        rawCleanup = applyRawReportCleanup_(rawCleanupPlan);
+      } catch (e) {
+        // Do not leave a parent half-deleted after their production thread was
+        // closed.  Deleting REPORTS below will make the installed onChange
+        // trigger retry this exact cleanup from the saved pre-delete snapshot.
+        const message = String(e && e.message || e);
+        cleanupErrors.push('raw reports: ' + message);
+        Logger.log('Raw report cleanup will retry after REPORTS deletion for ' + phone10 + ': ' + message);
       }
 
       // REPORTS remains the access authority. D1 access is already closed.
@@ -3252,6 +3278,7 @@ function deleteReportChildByPhone(phoneRaw, tutorTokenRaw) {
         ok: true,
         alreadyDeleted: rowNumbers.length === 0,
         deletedReportRows: rowNumbers.length,
+        deletedRawReportBlocks: Number(rawCleanup && rawCleanup.removedBlocks || 0),
         deletedChatRows: Number(cleanup && cleanup.deletedRows || 0),
         deletedD1Profiles: Number(d1Cleanup && d1Cleanup.deleted && 1 || 0),
         cleanupComplete: cleanupErrors.length === 0,
@@ -5956,6 +5983,158 @@ function getSuffixToken_(fullName) {
     .trim()
     .match(/\s+([A-ZА-ЯЁ][A-Za-zА-Яа-яЁё]{0,9})\.?$/);
   return m ? m[1] : '';
+}
+
+/*
+ * Raw MORNING/EVENING reports are the only place where a child can still be
+ * mentioned after their REPORTS row is removed.  Their headers use the short
+ * form (for example, "Кирилл Ш."), while REPORTS also keeps the full family
+ * name.  Keep the two pieces of identity together so a cleanup never removes
+ * another child with the same first name.
+ */
+function rawReportChildTargetFromReportRow_(row) {
+  const displayName = normalizeReportChildName_(row && row[2], row && row[3]);
+  const header = getReportHeaderParts_(displayName);
+  const familyKey = normalizeFamilyName_(row && row[3]);
+  const suffixKey = header.suffixKey || getFamilyInitialSuffix_(row && row[3]).toLowerCase();
+
+  if (!header.baseKey || !suffixKey) return null;
+  return {
+    baseKey: header.baseKey,
+    suffixKey: suffixKey,
+    familyKey: familyKey,
+    displayName: displayName,
+    identityKey: [header.baseKey, suffixKey, familyKey].join('|')
+  };
+}
+
+function rawReportChildTargetFromProfileSnapshot_(profile) {
+  if (!profile) return null;
+  const storedName = String(profile.reportChildName || '').trim();
+  const storedFamily = String(profile.familyName || '').trim();
+
+  if (storedName) {
+    return rawReportChildTargetFromReportRow_(['', '', storedName, storedFamily]);
+  }
+
+  // Snapshots made before this cleanup was introduced only contain the public
+  // form "Имя Фамилия".  It is enough for a conservative one-time fallback:
+  // take the first word as the first name and use the remaining words solely
+  // to derive the family initial.  If either part is absent, leave the raw
+  // report untouched rather than guessing.
+  const legacyParts = String(profile.childName || '').trim().split(/\s+/).filter(Boolean);
+  if (legacyParts.length < 2) return null;
+  return rawReportChildTargetFromReportRow_([
+    '', '', legacyParts.shift(), legacyParts.join(' ')
+  ]);
+}
+
+function rawReportHeaderMatchesTarget_(header, target) {
+  if (!header || !target || header.baseKey !== target.baseKey || !header.hasSuffix) return false;
+  const suffixKey = String(header.suffixKey || '');
+  if (!suffixKey) return false;
+  if (suffixKey === target.suffixKey) return true;
+
+  // A longer beginning of the surname is allowed by the report parser for
+  // cases such as two children with the same first-name initial.
+  return suffixKey.length >= 2 && !!target.familyKey && target.familyKey.indexOf(suffixKey) === 0;
+}
+
+function rawReportHeaderIdentifiesOnlyTarget_(header, target, allTargets) {
+  if (!rawReportHeaderMatchesTarget_(header, target)) return false;
+  const candidatesByIdentity = {};
+  (allTargets || []).forEach(function(candidate) {
+    if (rawReportHeaderMatchesTarget_(header, candidate)) {
+      candidatesByIdentity[candidate.identityKey] = candidate;
+    }
+  });
+  const candidates = Object.keys(candidatesByIdentity).map(function(key) { return candidatesByIdentity[key]; });
+
+  // A lone "Кирилл Ш." is deliberately kept if there are two different
+  // Kirills with that same initial.  A longer surname prefix is safe once it
+  // narrows the header down to this exact child.
+  return candidates.length === 1 && candidates[0].identityKey === target.identityKey;
+}
+
+function rawReportTargetsNoLongerActive_(targetsRaw, activeTargetsRaw) {
+  const active = {};
+  (activeTargetsRaw || []).filter(Boolean).forEach(function(target) {
+    active[target.identityKey] = true;
+  });
+  const unique = {};
+  (targetsRaw || []).filter(Boolean).forEach(function(target) {
+    if (!active[target.identityKey]) unique[target.identityKey] = target;
+  });
+  return Object.keys(unique).map(function(key) { return unique[key]; });
+}
+
+function removeRawReportBlocksForChildren_(textRaw, targets, allTargets) {
+  const text = String(textRaw || '');
+  if (!text || !targets || !targets.length) return { text: text, removedBlocks: 0 };
+
+  const headerRe = /(^|\n)\s*([^:\-–—\n]+?)\s*(?:\.?\s*[:\-–—])\s*/g;
+  const headers = [];
+  let match;
+  while ((match = headerRe.exec(text)) !== null) {
+    headers.push({
+      start: match.index,
+      end: headerRe.lastIndex,
+      header: getReportHeaderParts_(match[2].trim())
+    });
+  }
+
+  const ranges = [];
+  headers.forEach(function(item, index) {
+    const shouldRemove = targets.some(function(target) {
+      return rawReportHeaderIdentifiesOnlyTarget_(item.header, target, allTargets);
+    });
+    if (!shouldRemove) return;
+    ranges.push({ start: item.start, end: index + 1 < headers.length ? headers[index + 1].start : text.length });
+  });
+
+  if (!ranges.length) return { text: text, removedBlocks: 0 };
+
+  let next = text;
+  for (let i = ranges.length - 1; i >= 0; i -= 1) {
+    next = next.slice(0, ranges[i].start) + next.slice(ranges[i].end);
+  }
+  next = next.replace(/^\s*\n/, '').replace(/\n{3,}/g, '\n\n').trim();
+  return { text: next, removedBlocks: ranges.length };
+}
+
+function prepareRawReportCleanupForChildren_(targetsRaw, allTargetsRaw) {
+  const targets = (targetsRaw || []).filter(Boolean);
+  const allTargets = (allTargetsRaw || []).filter(Boolean);
+  if (!targets.length) return { patches: [], removedBlocks: 0 };
+
+  const patches = [];
+  let removedBlocks = 0;
+  [SHEET_MORNING, SHEET_EVENING].forEach(function(sheetName) {
+    const sheet = getSheet_(sheetName);
+    const lastRow = sheet ? sheet.getLastRow() : 0;
+    if (!sheet || lastRow < 1) return;
+    const values = sheet.getRange(1, 1, lastRow, 1).getValues();
+    values.forEach(function(row, index) {
+      const result = removeRawReportBlocksForChildren_(row[0], targets, allTargets);
+      if (!result.removedBlocks) return;
+      patches.push({ sheet: sheet, row: index + 1, before: String(row[0] || ''), after: result.text });
+      removedBlocks += result.removedBlocks;
+    });
+  });
+  return { patches: patches, removedBlocks: removedBlocks };
+}
+
+function applyRawReportCleanup_(plan) {
+  (plan && plan.patches || []).forEach(function(patch) {
+    // Never overwrite a report that was edited after the deletion started.
+    // The next REPORTS change will create a fresh cleanup plan instead.
+    const range = patch.sheet.getRange(patch.row, 1);
+    if (String(range.getValue() || '') !== patch.before) {
+      throw new Error('Сырой отчёт был изменён во время удаления; повторите удаление.');
+    }
+    range.setValue(patch.after);
+  });
+  return { removedBlocks: Number(plan && plan.removedBlocks || 0) };
 }
 
 function distributeChildReports(triggerKindRaw) {
