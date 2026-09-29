@@ -819,6 +819,13 @@
       background-color .18s ease;
   }
 
+  /* Keep an expanded action menu above the next chat card. */
+  .chat-card:hover,
+  .chat-card:focus-within,
+  .chat-card.chat-controls-expanded {
+    z-index:20;
+  }
+
   .chat-card.is-moving-out{
     pointer-events:none;
     animation:chatCardMoveOut .34s cubic-bezier(.2,.72,.22,1) forwards;
@@ -4580,7 +4587,7 @@
       // actions; a deliberate second tap on the eye changes read status.
       if (event.type === 'click' && window.matchMedia && window.matchMedia('(hover: none)').matches &&
           controls && !controls.classList.contains('is-menu-open')) {
-        controls.classList.add('is-menu-open');
+        setChatControlsExpanded_(controls, true);
         return;
       }
       handleChatReadToggle(chat, isRead, toggle);
@@ -4598,6 +4605,29 @@
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.72 5.5 6.07.88-4.4 4.28 1.04 6.04L12 16.84 6.57 19.7l1.04-6.04-4.4-4.28 6.07-.88L12 3"></path></svg>';
   }
 
+  function setChatControlsExpanded_(controls, expanded){
+    if (!controls) return;
+    if (expanded) {
+      document.querySelectorAll('.chat-controls.is-menu-open').forEach(open => {
+        if (open === controls) return;
+        open.classList.remove('is-menu-open');
+        const openCard = open.closest('.chat-card');
+        if (openCard) openCard.classList.remove('chat-controls-expanded');
+      });
+    }
+    controls.classList.toggle('is-menu-open', !!expanded);
+    const card = controls.closest('.chat-card');
+    if (card) card.classList.toggle('chat-controls-expanded', !!expanded);
+  }
+
+  // Close the touch menu when the educator taps elsewhere in the list.
+  document.addEventListener('click', event => {
+    if (event.target && event.target.closest && event.target.closest('.chat-controls')) return;
+    document.querySelectorAll('.chat-controls.is-menu-open').forEach(open => {
+      setChatControlsExpanded_(open, false);
+    });
+  }, true);
+
   function createChatPinToggle(chat, bucket, primary){
     const toggle = document.createElement('button');
     const isPinned = chat && chat.pinnedBucket === bucket;
@@ -4612,13 +4642,7 @@
       event.preventDefault();
       event.stopPropagation();
       const controls = toggle.closest('.chat-controls');
-      // On touch, the first tap only opens the secondary controls; the second
-      // deliberately unpins the chat. This keeps eye and deletion reachable.
-      if (primary && window.matchMedia && window.matchMedia('(hover: none)').matches &&
-          controls && !controls.classList.contains('is-menu-open')) {
-        controls.classList.add('is-menu-open');
-        return;
-      }
+      // The star is the direct pin/unpin action on touch and desktop.
       toggleEducatorChatPin(chat, bucket, toggle);
     });
     return toggle;
