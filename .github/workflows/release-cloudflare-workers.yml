@@ -1,4 +1,4 @@
-name: Медси Бот: публикация Cloudflare Workers
+name: "Медси Бот: публикация Cloudflare Workers"
 
 on:
   pull_request:
