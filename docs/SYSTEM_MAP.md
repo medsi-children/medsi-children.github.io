@@ -206,8 +206,7 @@ polish-v2 → experiment → MutationObserver`. Исторические экс�
 | `tutor-auth.js` | вход и сессии воспитателей |
 | `chat-d1-migration.js` | import/audit истории Sheets ↔ D1, profiles sync, rollback и S3 purge-queue |
 | `chat-adapter.html` | старый Apps Script frontend adapter к D1 |
-| `psychology.html` | отдельная legacy-страница Apps Script; пока сохранена |
-| `archive/apps-script-legacy-ui/` | архив прежних родительской и воспитательской страниц; в Apps Script не отправляется |
+| `archive/apps-script-legacy-ui/` | архив прежних родительской, воспитательской и психологической страниц; в Apps Script не отправляется |
 | `medsi-contacts.js` | синхронизация контактов Medsi |
 | `appsscript.json` | manifest и разрешения проекта |
 
@@ -223,10 +222,9 @@ polish-v2 → experiment → MutationObserver`. Исторические экс�
 Cloudflare отправляет push уже после записи. Это compatibility bridge, а не
 возврат старой архитектуры.
 
-Родительская и воспитательская HTML-страницы удалены из Apps Script после
-сохранения архивных копий в GitHub. `doGet` больше не открывает эти страницы;
-серверные функции, используемые Timeweb, сохранены. Психологическая страница
-оставлена до отдельной проверки её сценариев.
+Старые HTML-страницы всех трёх ролей удалены из Apps Script после сохранения
+архивных копий в GitHub. `doGet` больше не открывает их; серверные функции,
+используемые Timeweb, сохранены. Текущие панели доступны с сайта GitHub/Timeweb.
 
 ## Cloudflare
 

@@ -105,7 +105,7 @@
 
 - `archive/` не участвует в production и не раздаётся Timeweb.
 - `archive/appscript-recovery-tools/` содержит исторические/аварийные Apps Script-страницы и не должен использоваться как источник production UI.
-- Прежние родительская и воспитательская Apps Script страницы сохранены в `archive/apps-script-legacy-ui/` и удалены из активного Apps Script проекта. Не возвращать их в production UI; отдельную психологическую страницу проверять отдельно.
+- Прежние Apps Script страницы родителей, воспитателей и психолога сохранены в `archive/apps-script-legacy-ui/` и удалены из активного Apps Script проекта. Не возвращать их в production UI: актуальные панели всех ролей находятся на GitHub/Timeweb.
 
 ## Безопасный порядок консолидации
 

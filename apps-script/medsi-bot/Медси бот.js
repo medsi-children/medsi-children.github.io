@@ -399,17 +399,7 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
-  const view = (e && e.parameter && String(e.parameter.view || '').toLowerCase()) || '';
-  if (view !== 'psychology') return retiredLegacyUiPage_();
-  const file = 'psychology';
-
-  const template = HtmlService.createTemplateFromFile(file);
-  template.shellMode = (e && e.parameter && String(e.parameter.shellMode || '')) || '';
-
-  return template
-    .evaluate()
-    .setTitle('Отчёты')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return retiredLegacyUiPage_();
 }
 
 function doPost(e) {

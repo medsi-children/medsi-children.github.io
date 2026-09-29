@@ -31,21 +31,20 @@ Exit criteria:
 - Production reports and registration stay correct.
 - GitHub rollback and Apps Script/Cloudflare recovery procedures have been tested or rehearsed.
 
-## Phase 2 — archive legacy UI source (parent and educator pages completed)
+## Phase 2 — archive legacy UI source (all standalone panels completed)
 
 After the stabilization window passes:
 
-1. The prior parent and educator HTML pages are copied to `archive/apps-script-legacy-ui/`.
-2. Their active Apps Script copies are removed; `doGet` shows a retired-page notice for those routes.
-3. Apps Script server functions, `chat-adapter.html`, migration helpers, and the separate psychology page remain untouched.
-4. The psychology page still needs its own dependency audit before removal.
+1. The prior parent, educator, and psychology HTML pages are copied to `archive/apps-script-legacy-ui/`.
+2. Their active Apps Script copies are removed; `doGet` shows a retired-page notice.
+3. Apps Script server functions, `chat-adapter.html`, and migration helpers remain untouched.
 
-The completed parent/educator retirement:
+The completed standalone UI retirement:
 
 - `children.html`
 - `educators.html`
+- `psychology.html`
 - old chat rendering/UI code embedded in those pages
-- `psychology.html` remains out of scope until the standalone GitHub psychology frontend has fully replaced every live Apps Script psychology UI dependency.
 
 Do not remove `chat-adapter.html`, migration helpers, or old chat server functions merely because their names look legacy. First prove whether they are still needed for rollback, server-to-server fallback, migration, or disaster recovery.
 
