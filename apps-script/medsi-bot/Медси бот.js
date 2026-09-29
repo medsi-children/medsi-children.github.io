@@ -379,6 +379,12 @@ function createD1ChatSession_(role, phoneRaw) {
   return { ok:true, token:payload + '.' + signature, expiresAt:exp };
 }
 
+function retiredLegacyUiPage_() {
+  return HtmlService.createHtmlOutput(
+    '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Старая панель больше не используется</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#f7fbfc;color:#11424a;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;text-align:center"><main><h1 style="margin:0 0 12px">Эта старая страница больше не используется</h1><p style="margin:0;color:#5f7f86">Откройте Медси Бот по привычной ссылке. Серверные функции Apps Script продолжают работать.</p></main></body></html>'
+  ).setTitle('Старая панель больше не используется');
+}
+
 function doGet(e) {
   if (e && e.parameter && e.parameter.debugPush === '1') {
     const debugResult = sendPushDebugEvent_({
@@ -394,17 +400,8 @@ function doGet(e) {
   }
 
   const view = (e && e.parameter && String(e.parameter.view || '').toLowerCase()) || '';
-  let file = 'children';
-
-  if (view === 'tutors') {
-    file = 'educators';
-  }
-  else if (view === 'educators') {
-    return HtmlService.createHtmlOutput(
-      '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Доступ закрыт</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#f7fbfc;color:#11424a;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;text-align:center"><main><h1 style="margin:0 0 12px">Доступ закрыт</h1><p style="margin:0;color:#5f7f86">Старая панель воспитателей больше не используется.</p></main></body></html>'
-    ).setTitle('Доступ закрыт');
-  }
-  else if (view === 'psychology') file = 'psychology';
+  if (view !== 'psychology') return retiredLegacyUiPage_();
+  const file = 'psychology';
 
   const template = HtmlService.createTemplateFromFile(file);
   template.shellMode = (e && e.parameter && String(e.parameter.shellMode || '')) || '';
