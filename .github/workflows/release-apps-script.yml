@@ -1,4 +1,4 @@
-name: Медси Бот: публикация Apps Script
+name: "Медси Бот: публикация Apps Script"
 
 on:
   pull_request:
