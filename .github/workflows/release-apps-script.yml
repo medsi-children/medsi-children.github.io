@@ -1,11 +1,9 @@
 name: "Медси Бот: публикация Apps Script"
 
 on:
-  pull_request:
+  push:
     branches:
       - timeweb-next
-    types:
-      - closed
     paths:
       - apps-script/medsi-bot/**
 
@@ -18,13 +16,12 @@ concurrency:
 
 jobs:
   verify:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -41,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
