@@ -4642,7 +4642,13 @@
       event.preventDefault();
       event.stopPropagation();
       const controls = toggle.closest('.chat-controls');
-      // The star is the direct pin/unpin action on touch and desktop.
+      // On touch, the first tap opens the secondary controls; the next tap
+      // activates the star itself to pin or unpin the chat.
+      if (primary && window.matchMedia && window.matchMedia('(hover: none)').matches &&
+          controls && !controls.classList.contains('is-menu-open')) {
+        setChatControlsExpanded_(controls, true);
+        return;
+      }
       toggleEducatorChatPin(chat, bucket, toggle);
     });
     return toggle;
