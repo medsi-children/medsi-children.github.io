@@ -819,6 +819,13 @@
       background-color .18s ease;
   }
 
+  /* Keep an expanded action menu above the next chat card. */
+  .chat-card:hover,
+  .chat-card:focus-within,
+  .chat-card.chat-controls-expanded {
+    z-index:20;
+  }
+
   .chat-card.is-moving-out{
     pointer-events:none;
     animation:chatCardMoveOut .34s cubic-bezier(.2,.72,.22,1) forwards;
@@ -937,6 +944,7 @@
     display:flex;
     flex-direction:column;
     align-items:center;
+    gap:5px;
   }
 
   .chat-controls-menu{
@@ -950,11 +958,10 @@
     background:transparent;
     box-shadow:none;
     overflow:hidden;
-    max-height:34px;
+    max-height:0;
     transition:max-height .18s ease, padding .18s ease, margin .18s ease, background .18s ease, box-shadow .18s ease;
   }
 
-  .chat-controls:hover .chat-controls-menu,
   .chat-controls.is-menu-open .chat-controls-menu{
     max-height:132px;
     margin:-6px;
@@ -965,7 +972,8 @@
   }
 
   .chat-controls .chat-delete-toggle,
-  .chat-pin-toggle{
+  .chat-pin-toggle,
+  .chat-menu-toggle{
     position:static;
     box-sizing:border-box !important;
     flex:0 0 34px !important;
@@ -994,6 +1002,30 @@
     padding:0 !important;
     line-height:1 !important;
   }
+
+  .chat-menu-toggle{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    border:1px solid rgba(92,174,178,.20);
+    border-radius:999px;
+    background:#f5fbfb;
+    color:#91c6c8;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease;
+  }
+
+  .chat-menu-toggle:hover,
+  .chat-menu-toggle:focus-visible{
+    color:#70b4b7;
+    border-color:rgba(92,174,178,.34);
+    background:#edf8f8;
+    transform:scale(1.03);
+  }
+
+  .chat-menu-toggle:active{ transform:scale(.94); }
+  .chat-menu-toggle svg{width:18px;height:18px;display:block;fill:currentColor;pointer-events:none}
 
   .chat-pin-toggle{
     display:inline-flex;
@@ -4575,14 +4607,6 @@
     const activate = (event) => {
       event.preventDefault();
       event.stopPropagation();
-      const controls = toggle.closest('.chat-controls');
-      // Touch screens have no hover. First tap exposes the two secondary
-      // actions; a deliberate second tap on the eye changes read status.
-      if (event.type === 'click' && window.matchMedia && window.matchMedia('(hover: none)').matches &&
-          controls && !controls.classList.contains('is-menu-open')) {
-        controls.classList.add('is-menu-open');
-        return;
-      }
       handleChatReadToggle(chat, isRead, toggle);
     };
 
@@ -4598,6 +4622,58 @@
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.72 5.5 6.07.88-4.4 4.28 1.04 6.04L12 16.84 6.57 19.7l1.04-6.04-4.4-4.28 6.07-.88L12 3"></path></svg>';
   }
 
+  function setChatControlsExpanded_(controls, expanded){
+    if (!controls) return;
+    if (expanded) {
+      document.querySelectorAll('.chat-controls.is-menu-open').forEach(open => {
+        if (open === controls) return;
+        open.classList.remove('is-menu-open');
+        const openCard = open.closest('.chat-card');
+        if (openCard) openCard.classList.remove('chat-controls-expanded');
+        const openToggle = open.querySelector('.chat-menu-toggle');
+        if (openToggle) {
+          openToggle.setAttribute('aria-expanded', 'false');
+          openToggle.setAttribute('aria-label', 'Открыть меню чата');
+          openToggle.setAttribute('title', 'Меню чата');
+        }
+      });
+    }
+    controls.classList.toggle('is-menu-open', !!expanded);
+    const menuToggle = controls.querySelector('.chat-menu-toggle');
+    if (menuToggle) {
+      menuToggle.setAttribute('aria-expanded', String(!!expanded));
+      menuToggle.setAttribute('aria-label', expanded ? 'Закрыть меню чата' : 'Открыть меню чата');
+      menuToggle.setAttribute('title', expanded ? 'Закрыть меню' : 'Меню чата');
+    }
+    const card = controls.closest('.chat-card');
+    if (card) card.classList.toggle('chat-controls-expanded', !!expanded);
+  }
+
+  // Close the touch menu when the educator taps elsewhere in the list.
+  document.addEventListener('click', event => {
+    if (event.target && event.target.closest && event.target.closest('.chat-controls')) return;
+    document.querySelectorAll('.chat-controls.is-menu-open').forEach(open => {
+      setChatControlsExpanded_(open, false);
+    });
+  }, true);
+
+  function createChatMenuToggle(){
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'chat-menu-toggle';
+    toggle.setAttribute('aria-label', 'Открыть меню чата');
+    toggle.setAttribute('title', 'Меню чата');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle></svg>';
+    toggle.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const controls = toggle.closest('.chat-controls');
+      setChatControlsExpanded_(controls, !controls.classList.contains('is-menu-open'));
+    });
+    return toggle;
+  }
+
   function createChatPinToggle(chat, bucket, primary){
     const toggle = document.createElement('button');
     const isPinned = chat && chat.pinnedBucket === bucket;
@@ -4611,14 +4687,6 @@
     toggle.addEventListener('click', event => {
       event.preventDefault();
       event.stopPropagation();
-      const controls = toggle.closest('.chat-controls');
-      // On touch, the first tap only opens the secondary controls; the second
-      // deliberately unpins the chat. This keeps eye and deletion reachable.
-      if (primary && window.matchMedia && window.matchMedia('(hover: none)').matches &&
-          controls && !controls.classList.contains('is-menu-open')) {
-        controls.classList.add('is-menu-open');
-        return;
-      }
       toggleEducatorChatPin(chat, bucket, toggle);
     });
     return toggle;
@@ -4627,6 +4695,7 @@
   function createChatControls(chat, isRead, bucket){
     const controls = document.createElement('div');
     controls.className = 'chat-controls';
+    controls.appendChild(createChatMenuToggle());
     const menu = document.createElement('div');
     menu.className = 'chat-controls-menu';
     const isPinned = chat && chat.pinnedBucket === bucket;
