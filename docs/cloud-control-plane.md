@@ -26,11 +26,23 @@ D1, KV, S3 и секреты остаются в соответствующих 
 
 ## Релизный поток
 
-1. Агент создаёт ветку и PR.
-2. GitHub Actions выполняет `npm run verify`.
-3. После merge в `timeweb-next` Timeweb выпускает веб-интерфейс по существующей настройке.
-4. Cloudflare и Apps Script выпускаются только вручную через отдельные workflow
-   с защищёнными GitHub Environments.
+1. Изменения проходят PR в `timeweb-next`; `Verify Medsi source` запускает
+   `npm run verify`.
+2. После merge Timeweb получает push по уже настроенному webhook. В GitHub Actions
+   также остаётся штатная GitHub Pages публикация, настроенная отдельно.
+3. Закрытый слиянием PR с изменениями `services/cloudflare/` запускает
+   `release-cloudflare-workers.yml`: повторно проверяет исходники и выпускает
+   только затронутые Worker. Если PR меняет любую D1 migration, `chat-worker`
+   остаётся ручным, чтобы код не опередил схему.
+4. D1 migrations применяются только через ручной `deploy-cloudflare.yml` в
+   `cloudflare-production`, где остаётся обязательное одобрение reviewer.
+5. Закрытый слиянием PR с изменениями `apps-script/medsi-bot/` запускает
+   `release-apps-script.yml`: проверяет исходники, делает `clasp push`, затем
+   обновляет заданный существующий веб deployment по его deployment ID.
+6. Ручной `sync-apps-script.yml` остаётся для синхронизации исходников без
+   выпуска веб-приложения.
 
-Это разделение не даёт случайной правке Worker или Apps Script попасть в
-продакшен вместе с обычной правкой интерфейса.
+Автоматические публикации используют отдельные `cloudflare-auto` и
+`apps-script-auto` Environments без обязательного reviewer. Их branch policy
+разрешает только `timeweb-next`. Публикации не запускаются при открытии PR,
+изменениях его ветки или закрытии PR без merge. Автоматический merge не включён.
