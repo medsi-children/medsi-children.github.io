@@ -1,6 +1,8 @@
 # Медси Бот: правила для облачных задач
 
-Этот репозиторий является исходником для Timeweb, Cloudflare и Apps Script.
+Этот репозиторий является исходником сайта Timeweb и хранит только D1-миграции
+для ручного обслуживания базы Cloudflare. Актуальные исходники Apps Script и
+Cloudflare Workers находятся непосредственно в соответствующих сервисах.
 Он не содержит реальных данных пациентов, сообщений, отчётов, медиа, токенов
 или паролей.
 
@@ -22,10 +24,9 @@
 ## Источник истины
 
 - Frontend и Timeweb gateway: корень репозитория.
-- Основной Cloudflare чат-Worker: `services/cloudflare/chat-worker`.
-- Cloudflare gateway: `services/cloudflare/chat-gateway`.
-- Cloudflare push-worker: `services/cloudflare/push-worker`.
-- Apps Script: `apps-script/medsi-bot`.
+- Cloudflare Worker-код и Apps Script в репозитории не хранятся.
+- `services/cloudflare/chat-worker/migrations/` и `wrangler.production.toml` —
+  только файлы ручного применения D1-миграций; это не исходники Worker.
 
-Не считай содержимое dashboard или локальных папок источником истины, пока оно
-не сравнено с соответствующей опубликованной версией и не зафиксировано в Git.
+Для Apps Script и Workers сверяй живой проект непосредственно в платформе;
+старые копии из архивов не считай актуальным исходником.

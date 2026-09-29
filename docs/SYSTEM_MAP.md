@@ -187,95 +187,20 @@ polish-v2 → experiment → MutationObserver`. Исторические экс�
 
 ## Google Sheets и Apps Script
 
-Рабочая локальная копия: `APPS_SCRIPT/medsi-bot/`.
-
-### Листы
-
-- `REPORTS` — родители/дети и доступ;
-- `MORNING`, `EVENING`, `PSYCHOLOGY` — отчёты;
-- `DATABASE`, `MEDSI_CONTACT_SYNC` — служебные и контактные данные;
-- `CHAT_MESSAGES`, `CHAT_INDEX`, `CHAT_PINS` — legacy/rollback-чат;
-- `REPORT_NOTIFICATION_STATE`, `REPORT_INACTIVITY_STATE`,
-  `PUSH_SUBSCRIPTIONS` — состояния уведомлений.
-
-### Основные файлы
-
-| Файл | Назначение |
-|---|---|
-| `Медси бот.js` | главный Apps Script: web app, регистрация, отчёты, доступ, legacy-чат, push-вызовы |
-| `tutor-auth.js` | вход и сессии воспитателей |
-| `chat-d1-migration.js` | import/audit истории Sheets ↔ D1, profiles sync, rollback и S3 purge-queue |
-| `chat-adapter.html` | старый Apps Script frontend adapter к D1 |
-| `archive/apps-script-legacy-ui/` | архив прежних родительской, воспитательской и психологической страниц; в Apps Script не отправляется |
-| `medsi-contacts.js` | синхронизация контактов Medsi |
-| `appsscript.json` | manifest и разрешения проекта |
-
-Современный Timeweb-сайт вызывает Apps Script для регистрации, входа, отчётов,
-профиля и получения подписанной D1 chat-session. Сам чат не должен писать в
-таблицу.
-
-### Старый клиент Apps Script
-
-Старые открытые вкладки/PWA могут существовать до конца текущей смены родителей.
-После инцидента с сообщением Юлии опубликована Apps Script-версия `@936`:
-старый текстовый sender при активном `CHAT_BACKEND=d1` теперь пишет в D1, а
-Cloudflare отправляет push уже после записи. Это compatibility bridge, а не
-возврат старой архитектуры.
-
-Старые HTML-страницы всех трёх ролей удалены из Apps Script после сохранения
-архивных копий в GitHub. `doGet` больше не открывает их; серверные функции,
-используемые Timeweb, сохранены. Текущие панели доступны с сайта GitHub/Timeweb.
+Apps Script — действующий серверный компонент для операций с Google Sheets,
+доступом и данными отчётов. Его исходники, manifest и настройки не хранятся в
+этом GitHub-репозитории. Перед изменениями сверяй и редактируй живой проект
+непосредственно в Google Apps Script; не восстанавливай старые файлы из архива.
 
 ## Cloudflare
 
-Рабочая локальная копия: `CLOUDFLARE/`.
+Cloudflare Workers — действующие компоненты чата и уведомлений. Их исходники и
+конфигурация публикации удалены из GitHub; сверяй и меняй их непосредственно в
+Cloudflare. В GitHub оставлены только SQL-файлы миграций D1 и минимальная
+конфигурация, требуемые отдельным защищённым ручным workflow миграций.
 
-### Chat Worker: `medsi-chat-lab-worker`
-
-Несмотря на имя `lab`, это production worker чата.
-
-- D1: `medsi-chat-production`;
-- хранит `chat_messages`, `chat_profiles`, `chat_pins`;
-- проверяет подписанные D1 sessions;
-- отдаёт список чатов и треды, записывает сообщения, read/unread, реакции,
-  правки, удаления, pin;
-- имеет admin import/export/reconcile для контролируемых миграций;
-- после D1 insert вызывает Push Worker через service binding;
-- старое KV `CHAT_MEDIA` сохранено лишь для исторических вложений/совместимости.
-
-Ключевые пути Worker:
-
-```text
-/lab/messages          запись сообщения
-/lab/chats              список воспитателя
-/lab/threads/:phone     история треда
-/lab/read/*             read/unread
-/lab/reaction/:key      реакция
-/lab/edit/:key          редактирование
-/lab/delete/:key        удаление
-/lab/upload*, /media/*  legacy Cloudflare media
-/admin/*                только защищённые import/export/profile операции
-```
-
-### Push Worker: `medsi-push-worker`
-
-- хранит Web Push subscriptions в отдельном Cloudflare KV;
-- принимает подписки и отправляет уведомления;
-- не является хранилищем сообщений;
-- вызывается Chat Worker после canonical D1 write.
-
-### Другие папки Cloudflare
-
-| Папка | Статус |
-|---|---|
-| `medsi-chat-lab-worker` | рабочий production Chat Worker |
-| `medsi-push-worker` | рабочий production Push Worker |
-| `medsi-chat-gateway` | исторический/вспомогательный gateway, не основной путь современного сайта |
-| `medsi-chat-upload-test` | старый fallback upload worker; применяется Timeweb только если S3 не настроен |
-| `wrangler-local-cache` | локальный служебный cache Wrangler, не production-исходник |
-
-Не публиковать секреты из `.dev.vars`, Script Properties или Timeweb env в
-GitHub, документы либо чат.
+Не публиковать секреты, идентификаторы Apps Script или данные таблицы в GitHub,
+документы либо чат.
 
 ## Резервные копии и архивы
 
@@ -327,12 +252,8 @@ GitHub, документы либо чат.
 Рабочий GitHub checkout:
   GITHUB/medsi-children.github.io
 
-Рабочая локальная копия Apps Script:
-  APPS_SCRIPT/medsi-bot
-
-Рабочие локальные копии Cloudflare:
-  CLOUDFLARE/medsi-chat-lab-worker
-  CLOUDFLARE/medsi-push-worker
+Исходники Apps Script и Cloudflare Workers проверяются непосредственно
+в соответствующих сервисах; копий этих исходников в репозитории нет.
 
 Продакшен:
   https://медси-бот.рф/

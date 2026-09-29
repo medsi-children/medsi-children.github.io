@@ -1,7 +1,0 @@
-{
-  "MEDSI_SPREADSHEET_ID": "Google Sheets spreadsheet ID",
-  "MEDSI_CHAT_PUSH_SECRET": "shared secret for Apps Script and Cloudflare Workers",
-  "MEDSI_TUTOR_ACCESS_LOGIN": "educator login",
-  "MEDSI_TUTOR_ACCESS_PASSWORD": "educator password",
-  "PARENT_AUTH_SECRET": "parent-session signing secret"
-}

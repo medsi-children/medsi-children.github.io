@@ -1,29 +1,7 @@
-name = "medsi-chat-worker"
-main = "src/index.js"
-compatibility_date = "2026-06-23"
-workers_dev = true
-
-[vars]
-CHAT_ENVIRONMENT = "production"
-APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec"
-
-[triggers]
-crons = ["0 13-15 * * *", "0 21-23 * * *"]
-
+# Только конфигурация для ручного применения D1-миграций.
+# Это не конфигурация публикации Cloudflare Worker.
 [[d1_databases]]
 binding = "CHAT_DB"
 database_name = "medsi-chat-production"
 database_id = "e031e5cb-2242-45a7-9c6e-40034ac8cf14"
-
-[[kv_namespaces]]
-binding = "CHAT_MEDIA"
-id = "00035c1a3d9046b087dbafa140b474b3"
-
-
-[[services]]
-binding = "PUSH_WORKER"
-service = "medsi-push-worker"
-
-[[routes]]
-pattern = "chat.xn----btbhdqvtun.xn--p1ai"
-custom_domain = true
+migrations_dir = "migrations"
