@@ -4631,12 +4631,20 @@
         const openCard = open.closest('.chat-card');
         if (openCard) openCard.classList.remove('chat-controls-expanded');
         const openToggle = open.querySelector('.chat-menu-toggle');
-        if (openToggle) openToggle.setAttribute('aria-expanded', 'false');
+        if (openToggle) {
+          openToggle.setAttribute('aria-expanded', 'false');
+          openToggle.setAttribute('aria-label', 'Открыть меню чата');
+          openToggle.setAttribute('title', 'Меню чата');
+        }
       });
     }
     controls.classList.toggle('is-menu-open', !!expanded);
     const menuToggle = controls.querySelector('.chat-menu-toggle');
-    if (menuToggle) menuToggle.setAttribute('aria-expanded', String(!!expanded));
+    if (menuToggle) {
+      menuToggle.setAttribute('aria-expanded', String(!!expanded));
+      menuToggle.setAttribute('aria-label', expanded ? 'Закрыть меню чата' : 'Открыть меню чата');
+      menuToggle.setAttribute('title', expanded ? 'Закрыть меню' : 'Меню чата');
+    }
     const card = controls.closest('.chat-card');
     if (card) card.classList.toggle('chat-controls-expanded', !!expanded);
   }
