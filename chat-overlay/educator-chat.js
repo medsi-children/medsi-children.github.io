@@ -140,8 +140,6 @@
       setState(isRead);
       const activate=async event=>{
         event.preventDefault();event.stopPropagation();
-        const controls=toggle.closest('.chat-controls');
-        if(event.type==='click'&&matchMedia('(hover: none)').matches&&controls&&!controls.classList.contains('is-menu-open')){openControls(controls);return}
         if(toggle.classList.contains('is-busy'))return;
         toggle.classList.add('is-busy');
         try{
@@ -158,16 +156,16 @@
       const toggle=document.createElement('button');toggle.type='button';toggle.className='chat-pin-toggle'+(isPinned?' is-pinned':'')+(primary?' chat-primary-toggle':'');toggle.innerHTML=getPinIconSvg();toggle.title=isPinned?'Открепить':'Закрепить сверху';
       toggle.onclick=async event=>{
         event.preventDefault();event.stopPropagation();
-        const controls=toggle.closest('.chat-controls');
-        if(primary&&matchMedia('(hover: none)').matches&&controls&&!controls.classList.contains('is-menu-open')){openControls(controls);return}
         try{await transport.pin(session,chat.phone,isPinned?'':bucket);await loadChats(false)}catch(err){overlay.showError(err.message)}
       };
       return toggle;
     }
     function requestChildDeletion(chat){deleteTarget=chat;childDeleteModal.querySelector('#childDeleteText').textContent='Вы хотите удалить ребёнка '+(chat.childName||'Без имени ребёнка')+'. Вся история сообщений будет удалена!';childDeleteModal.classList.remove('hidden')}
     function makeDeleteToggle(chat){const toggle=document.createElement('span');toggle.className='chat-delete-toggle';toggle.setAttribute('role','button');toggle.setAttribute('tabindex','0');toggle.title='Удалить ребёнка';toggle.innerHTML=getDeleteIconSvg();toggle.onclick=e=>{e.preventDefault();e.stopPropagation();requestChildDeletion(chat)};return toggle}
-    function makeCloseToggle(controls){const toggle=document.createElement('button');toggle.type='button';toggle.className='chat-menu-close';toggle.setAttribute('aria-label','Закрыть меню действий');toggle.title='Закрыть меню';toggle.innerHTML=getCloseIconSvg();toggle.onclick=e=>{e.preventDefault();e.stopPropagation();controls.classList.remove('is-menu-open');};return toggle}
-    function openControls(controls){controls.classList.add('is-menu-open');clearTimeout(controls._menuCloseTimer);controls._menuCloseTimer=setTimeout(()=>{controls.classList.remove('is-menu-open')},5000)}
+    function closeControls(controls){clearTimeout(controls._menuCloseTimer);controls.classList.remove('is-menu-open');controls.closest('.chat-card')?.classList.remove('chat-controls-expanded');const menuToggle=controls.querySelector('.chat-menu-toggle');if(menuToggle){menuToggle.setAttribute('aria-expanded','false');menuToggle.setAttribute('aria-label','Показать действия чата')}}
+    function makeMenuToggle(controls){const toggle=document.createElement('button');toggle.type='button';toggle.className='chat-menu-toggle';toggle.setAttribute('aria-label','Показать действия чата');toggle.setAttribute('aria-expanded','false');toggle.title='Действия чата';toggle.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>';toggle.onclick=e=>{e.preventDefault();e.stopPropagation();if(controls.classList.contains('is-menu-open')){closeControls(controls);return}openControls(controls)};return toggle}
+    function makeCloseToggle(controls){const toggle=document.createElement('button');toggle.type='button';toggle.className='chat-menu-close';toggle.setAttribute('aria-label','Закрыть меню действий');toggle.title='Закрыть меню';toggle.innerHTML=getCloseIconSvg();toggle.onclick=e=>{e.preventDefault();e.stopPropagation();closeControls(controls);};return toggle}
+    function openControls(controls){controls.classList.add('is-menu-open');controls.closest('.chat-card')?.classList.add('chat-controls-expanded');const menuToggle=controls.querySelector('.chat-menu-toggle');if(menuToggle){menuToggle.setAttribute('aria-expanded','true');menuToggle.setAttribute('aria-label','Скрыть действия чата')}clearTimeout(controls._menuCloseTimer);controls._menuCloseTimer=setTimeout(()=>closeControls(controls),5000)}
     function resetControlsTimer(controls){if(controls.classList.contains('is-menu-open'))openControls(controls)}
     function makeControls(chat,isRead){
       const controls=document.createElement('div');controls.className='chat-controls';
@@ -176,9 +174,8 @@
       menu.appendChild(makeCloseToggle(controls));
       if(pinned){menu.append(makeReadToggle(chat,isRead),makeDeleteToggle(chat),makePinToggle(chat,true))}
       else{menu.append(makeReadToggle(chat,isRead),makeDeleteToggle(chat),makePinToggle(chat,false))}
-      controls.appendChild(menu);
-      controls.addEventListener('mouseenter',()=>openControls(controls));
-      controls.addEventListener('mouseleave',()=>{clearTimeout(controls._menuCloseTimer);controls.classList.remove('is-menu-open')});
+      controls.append(makeMenuToggle(controls),menu);
+      controls.addEventListener('mouseleave',()=>{if(matchMedia('(hover: hover)').matches&&controls.classList.contains('is-menu-open'))closeControls(controls)});
       ['pointerdown','pointermove','touchstart','focusin'].forEach(type=>controls.addEventListener(type,()=>resetControlsTimer(controls),{passive:true}));
       return controls;
     }
@@ -188,7 +185,7 @@
       const cardMeta=document.createElement('div');cardMeta.className='chat-card-meta';cardMeta.textContent='Родитель: '+(chat.parentName||'—')+'\nРебёнок: '+(chat.childName||'—')+'\nНомер телефона: '+(chat.phone?displayPhone(chat.phone):'—');
       const last=document.createElement('div');last.className='chat-card-last '+(chat.lastSide==='educator'?'educator':'parent');last.textContent=preview(chat);
       card.append(makeControls(chat,!chat.hasUnread),cardTitle,cardMeta,last);
-      card.onclick=e=>{if(e.target.closest('.chat-menu-close,.chat-read-toggle,.chat-delete-toggle,.chat-pin-toggle'))return;activeChat=chat;openThread(chat)};
+      card.onclick=e=>{if(e.target.closest('.chat-menu-toggle,.chat-menu-close,.chat-read-toggle,.chat-delete-toggle,.chat-pin-toggle'))return;activeChat=chat;openThread(chat)};
       return card;
     }
     function renderList(){
