@@ -1,4 +1,4 @@
-name: Release changed Cloudflare Workers
+name: Медси Бот: публикация Cloudflare Workers
 
 on:
   pull_request:

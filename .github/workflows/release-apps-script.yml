@@ -1,4 +1,4 @@
-name: Release Apps Script web app
+name: Медси Бот: публикация Apps Script
 
 on:
   pull_request:
