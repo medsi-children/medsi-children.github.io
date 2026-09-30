@@ -1,3 +1,4 @@
+# Этот файл публикуется автоматически из GitHub после успешной проверки исходников.
 name = "medsi-push-worker"
 main = "src/index.js"
 compatibility_date = "2026-06-16"
