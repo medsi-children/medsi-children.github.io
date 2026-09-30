@@ -13,18 +13,25 @@
 ## Script Properties
 
 Настройки и Script Properties активного Apps Script проверяются непосредственно
-в Google Apps Script. Примеров его конфигурации в этом репозитории нет; секреты,
-ID таблиц и учётные данные нельзя записывать в GitHub.
+в Google Apps Script. В `apps-script/medsi-bot/script-properties.example.json`
+есть только названия требуемых настроек. Секреты, ID таблиц и учётные данные
+нельзя записывать в GitHub.
 
 ## Что делает каждый workflow
 
 - `verify.yml` — только проверки; не выпускает ничего.
+- `release-apps-script.yml` — после прямого изменения Apps Script в
+  `timeweb-next` и успешной проверки обновляет его существующее веб-приложение.
+- `release-cloudflare-workers.yml` — после прямого изменения Worker в
+  `timeweb-next` и успешной проверки выпускает только изменённый Worker.
 - `deploy-cloudflare.yml` — единственный оставшийся workflow для production D1-миграций. Он запускается вручную, требует явного подтверждения и использует защищённое окружение `cloudflare-production` с обязательным reviewer.
-- Публикаций и копий Apps Script и Worker-кода в GitHub нет. Их нужно редактировать и публиковать непосредственно в соответствующей платформе.
 
-Секреты Apps Script и токен окружения `cloudflare-auto`, если они ранее были
-созданы, не используются оставшимися GitHub Actions. Секреты `cloudflare-production`
-нужны для ручных D1-миграций.
+Для автоматической публикации Apps Script нужны repository secrets
+`APPS_SCRIPT_ID`, `CLASPRC_JSON` и environment secret
+`APPS_SCRIPT_DEPLOYMENT_ID` в `apps-script-auto`. Для Workers нужны repository
+secret `CLOUDFLARE_ACCOUNT_ID` и environment secret `CLOUDFLARE_API_TOKEN` в
+`cloudflare-auto`. Секреты `cloudflare-production` нужны только для ручных
+D1-миграций.
 
 На момент настройки для `timeweb-next` не обнаружены branch protection rules или
 repository rulesets: API вернул 404/пустой список. Автоматические workflow не

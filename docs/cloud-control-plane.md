@@ -12,11 +12,11 @@
 
 ## Где находятся исходники
 
-GitHub содержит исходники сайта Timeweb и историю D1-миграций. Исходники
-Apps Script хранятся в Google Apps Script, а код Workers — в Cloudflare.
-Репозиторий намеренно не содержит их копий: изменения в сервисах не отражаются
-в GitHub автоматически, и файлы репозитория не являются источником кода для
-этих сервисов.
+GitHub содержит исходники сайта Timeweb, Apps Script и Cloudflare Workers и
+является их единственным источником. Apps Script находится в
+`apps-script/medsi-bot/`, Workers — в `services/cloudflare/`. Изменения в
+Google Apps Script или Cloudflare Dashboard не считаются правкой исходного
+кода и должны быть сначала перенесены в GitHub.
 
 Не печатай секреты, токены, Script ID, deployment ID, данные таблиц или
 персональные данные в логи, коммиты и отчёты.
@@ -25,13 +25,14 @@ Apps Script хранятся в Google Apps Script, а код Workers — в Clo
 
 1. Push в `timeweb-next` запускает Timeweb webhook и штатную GitHub Pages
    публикацию сайта. Проверки исходников запускаются через `verify.yml`.
-2. Apps Script редактируется и публикуется непосредственно в Google или через
-   авторизованный локальный `clasp`. Копии его кода в GitHub нет.
-3. Cloudflare Workers редактируются и публикуются непосредственно через
-   Cloudflare Dashboard или Wrangler. Копии их кода в GitHub нет.
+2. Изменение `apps-script/medsi-bot/` после `npm run verify` автоматически
+   обновляет существующее веб-приложение Apps Script. Его URL сохраняется.
+3. Изменение исходников одного Worker после `npm run verify` автоматически
+   публикует только этот Worker. Параллельные публикации блокируются.
 4. D1 migrations остаются отдельной ручной операцией через `deploy-cloudflare.yml`
    в защищённом окружении `cloudflare-production`; для запуска нужны явное
    подтверждение и reviewer.
 
-GitHub Actions не синхронизируют и не публикуют Apps Script или Worker-код.
-Cloudflare secrets, необходимые для ручных D1-миграций, нужно сохранить.
+GitHub Actions не создают новые Apps Script deployment и не применяют
+D1-миграции автоматически. Секреты находятся только в GitHub Environments и
+в настройках Cloudflare.

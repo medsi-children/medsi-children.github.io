@@ -1,0 +1,5 @@
+{
+  "MEDSI_SPREADSHEET_ID": "set in Apps Script Script Properties",
+  "CHAT_BACKEND": "set in Apps Script Script Properties",
+  "D1_SESSION_SECRET": "set in Apps Script Script Properties"
+}
