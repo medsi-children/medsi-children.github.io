@@ -14,8 +14,28 @@
   let busy = false;
   let awaitingTherapyChoice = false;
   let awaitingReportDelayChoice = false;
+  let pendingChoice = '';
   let pointerActiveUntil = 0;
   let lastReportKind = '';
+  let lastIntentKey = '';
+  let typingItem = null;
+  const BLINK_CYCLE_MS = 5200;
+  let blinkEpoch = 0;
+
+  function syncBlinks() {
+    const allEyes = [botEyes, ...conversation.querySelectorAll('.mini-eyes')];
+    allEyes.forEach(eyes => eyes.style.setProperty('animation', 'none', 'important'));
+    void botEyes.offsetWidth;
+    blinkEpoch = performance.now();
+    allEyes.forEach(eyes => {
+      eyes.style.animationDelay = '0ms';
+      eyes.style.removeProperty('animation');
+    });
+  }
+  syncBlinks();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) syncBlinks();
+  });
 
   const setGaze = (x, y) => {
     // У большого блоба правый верхний край сужается: держим глаза чуть глубже внутри формы.
@@ -34,19 +54,30 @@
 
   const scenarios = {
     reports: { question: 'Когда ждать отчёт?', answer: 'Утренний отчёт с 15:00 до 16:00.\nВечерний — с 21:00 до 22:00.\n\nХотите посмотреть отчёт?', mood: 'neutral', after: 'reportChoices' },
+    chooseReport: { question: 'Да', answer: 'Какой отчёт?', after: 'reportChoices' },
+    noThanks: { question: 'Нет', answer: 'Хорошо. Если понадобится, я рядом.' },
+    reportQuestion: { question: 'Вопрос по отчёту', answer: 'Если у вас вопрос по содержанию отчёта, напишите воспитателям в чате.', after: 'educatorChat' },
+    childStatus: { question: 'Как ребёнок?', answer: 'Последние наблюдения о ребёнке есть в отчётах. Какой показать?', after: 'reportChoices' },
     educators: { question: 'Почему воспитатели не отвечают?', answer: 'Воспитатели находятся с детьми и не могут отвечать в чате круглосуточно. Пожалуйста, наберитесь терпения: они ответят, как только смогут.' },
     writeEducators: { question: 'Написать воспитателям', answer: 'Напишите воспитателям в чате — они ответят, как только смогут.', after: 'educatorChat' },
+    openEducatorChat: { question: 'Да', answer: 'Открываю чат с воспитателями.', after: 'navigateChat' },
     delivery: {
       question: 'Что можно передать ребёнку?',
-      answer: 'Адрес: Гринвуд, с11, Путилково\nКомментарий: «на 5 этаж» и имя ребёнка\n\nВы можете привезти или оформить доставку любых продуктов, напитков, еды, одежды и других вещей — в рамках ограничений по безопасности.\n\n🚫 Что запрещено:\nКолюще-режущее, стекло, металл.\n\n✅ Что можно заказать:\nЛюбую еду, одежду, вещи, творческие наборы, книги.'
+      answer: 'Адрес: Гринвуд, с11, Путилково\nКомментарий для курьера: «на 5 этаж» и имя ребёнка\n\n✅ Что можно привезти или заказать:\nЕду и напитки в безопасной упаковке: например, пиццу, суши, сладости, фрукты, сок. Также можно передать одежду, книги, раскраски, канцелярию и творческие наборы — без опасных деталей.\n\n🚫 Что нельзя передавать:\nОстрые и режущие предметы (ножницы, лезвия, точилки), стекло, металлические банки, аэрозоли и столовые приборы. Одежду — с ремнями, цепочками и металлическими подвесками; наборы — с металлическими деталями. Также нельзя кофе, энергетики, табак, вейпы и личную электронику. Жвачку лучше не передавать.\n\nЛекарства — только по назначению и после согласования с лечащим врачом. Ноутбук или планшет возможен только для онлайн-уроков. Если сомневаетесь насчёт вещи, уточните у воспитателей.',
+      variants: {
+        address: 'Адрес: Гринвуд, с11, Путилково\nКомментарий для курьера: «на 5 этаж» и имя ребёнка.',
+        restricted: 'Нельзя передавать острые и режущие предметы, стекло, металлические банки и аэрозоли, столовые приборы, кофе, энергетики, табак, вейпы и личную электронику. На одежде и в творческих наборах не должно быть ремней, цепочек или опасных металлических деталей. Жвачку лучше не передавать.\n\nЕсли сомневаетесь насчёт конкретной вещи, уточните у воспитателей.',
+        allowed: 'Можно привезти или заказать еду и напитки в безопасной упаковке: например, пиццу, суши, сладости, фрукты, сок. Также подходят одежда, книги, раскраски, канцелярия и творческие наборы — без острых, стеклянных и металлических деталей. Лекарства — только по назначению и после согласования с лечащим врачом; ноутбук или планшет — только для онлайн-уроков.\n\nАдрес: Гринвуд, с11, Путилково\nКомментарий для курьера: «на 5 этаж» и имя ребёнка.',
+        medicine: 'Лекарства можно передать только по назначению и после предварительного согласования с лечащим врачом. Пожалуйста, сначала обсудите с ним препарат и способ передачи.'
+      }
     },
     payment: { question: 'Как оплатить?', answer: 'По вопросам оплаты свяжитесь с лечащим врачом. Оплата производится на ресепшене клиники.' },
     meetings: { question: 'Как договориться о встрече?', answer: 'Встречу с ребёнком, пожалуйста, согласуйте с лечащим врачом. Он поможет выбрать время с учётом состояния ребёнка.' },
     meetTime: { question: 'Когда можно встретиться с ребёнком?', answer: 'Встречи с детьми проходят с 17:00 до 20:00. Пожалуйста, согласуйте встречу с лечащим врачом.' },
     calls: { question: 'Как договориться о звонке?', answer: 'Звонок ребёнку, пожалуйста, согласуйте с лечащим врачом. Он поможет выбрать подходящее время.' },
     doctors: { question: 'Как связаться с лечащим врачом?', answer: 'Анастасия Михайловна\n+79253394090\n\nАнтон Геннадьевич\n+79859927884' },
-    medical: { question: 'Вопрос о лечении', answer: 'Вопросы о лечении, препаратах, процедурах и анализах, пожалуйста, обсуждайте с лечащим врачом. Воспитатели не владеют такой информацией.' },
-    urgent: { question: 'У меня срочный вопрос', answer: 'Если вопрос срочный, пожалуйста, напишите его в чате с воспитателями. Они ответят, как только смогут.', after: 'educatorChat' },
+    medical: { question: 'Вопрос о лечении', answer: 'Вопросы о лечении, препаратах, процедурах и анализах, пожалуйста, обсуждайте с лечащим врачом. Воспитатели не владеют такой информацией.', variants: { medicine: 'Вопросы о лекарствах, назначениях и дозировках, пожалуйста, обсуждайте с лечащим врачом. Воспитатели не владеют такой информацией.' } },
+    urgent: { question: 'У меня срочный вопрос', answer: 'Если вопрос срочный, пожалуйста, напишите его в чате с воспитателями. Они ответят, как только смогут.', after: 'educatorChat', variants: { medical: 'Если медицинский вопрос требует срочного решения, пожалуйста, позвоните лечащему врачу.\n\nАнастасия Михайловна: +79253394090\nАнтон Геннадьевич: +79859927884' } },
     signIn: { question: 'Не получается войти', answer: 'По вопросам входа, кода подтверждения и доступа к системе, пожалуйста, напишите воспитателям в чате.', after: 'educatorChat' },
     therapy: { question: 'Психотерапия', answer: 'Что вас интересует: занятия с психологом или групповая терапия?', after: 'therapyChoices' },
     groupTherapy: { question: 'Групповая психотерапия', answer: 'Чтобы посмотреть отчёт по групповой психотерапии, нажмите кнопку ниже.', after: 'therapy' },
@@ -157,6 +188,7 @@
     const avatar = element('span', 'message-avatar');
     avatar.setAttribute('aria-hidden', 'true');
     avatar.innerHTML = avatarMarkup();
+    syncMiniBlink(avatar);
     const content = element('div', 'message-content');
     const card = element('div', 'report-card');
     const heading = element('div', 'report-card-heading');
@@ -171,6 +203,7 @@
 
   async function answerReport(kind, delayed) {
     setThinking(true);
+    showTyping();
     try {
       const current = await readParent('/lab/report-current');
       if (!current) {
@@ -215,19 +248,49 @@
       if (delayed && kind) message('bot', `${reportDelayText(kind)}\n\nСейчас я не смог проверить, опубликован ли новый отчёт.`, reportStatus(kind) === 'late' ? 'sad' : 'neutral');
       else message('bot', 'Сейчас не получилось загрузить отчёт. Пожалуйста, попробуйте ещё раз чуть позже.', 'sad');
       offerReportChoices();
-    } finally { setThinking(false); busy = false; }
+    } finally { clearTyping(); setThinking(false); busy = false; }
   }
 
   function avatarMarkup() {
     return '<img class="mini-body" src="/new/blob.png" alt=""><span class="mini-eyes"><i></i><i></i></span>';
   }
 
+  function syncMiniBlink(avatar) {
+    const eyes = avatar.querySelector('.mini-eyes');
+    if (eyes) eyes.style.animationDelay = `${-((performance.now() - blinkEpoch) % BLINK_CYCLE_MS)}ms`;
+  }
+
+  function clearTyping() {
+    if (typingItem) typingItem.remove();
+    typingItem = null;
+  }
+
+  function showTyping() {
+    clearTyping();
+    const item = element('article', 'message bot bot-typing');
+    const avatar = element('span', 'message-avatar mood-thinking');
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.innerHTML = avatarMarkup();
+    syncMiniBlink(avatar);
+    const content = element('div', 'message-content');
+    const bubble = element('div', 'message-bubble typing-bubble');
+    bubble.setAttribute('aria-label', 'Медси Бот печатает');
+    for (let dot = 0; dot < 3; dot++) bubble.appendChild(element('span', 'typing-dot'));
+    content.appendChild(bubble);
+    item.append(avatar, content);
+    conversation.appendChild(item);
+    typingItem = item;
+    scrollToEnd();
+  }
+
   function message(side, text, mood = 'neutral', iconFile = '', iconPosition = 'before') {
+    if (side === 'bot') clearTyping();
     const item = element('article', `message ${side}`);
     if (side === 'bot') {
       const avatar = element('span', `message-avatar mood-${mood}`);
       avatar.setAttribute('aria-hidden', 'true');
       avatar.innerHTML = avatarMarkup();
+      syncMiniBlink(avatar);
       item.appendChild(avatar);
     }
     const content = element('div', 'message-content');
@@ -257,6 +320,7 @@
     });
     actions.appendChild(open);
     conversation.appendChild(actions);
+    pendingChoice = 'educatorChat';
     scrollToEnd();
   }
 
@@ -274,6 +338,7 @@
       actions.appendChild(actionButton(label, iconFile, () => requestReport(kind)));
     });
     conversation.appendChild(actions);
+    pendingChoice = 'reports';
     scrollToEnd();
   }
 
@@ -281,6 +346,8 @@
     if (busy) return;
     busy = true;
     awaitingReportDelayChoice = false;
+    pendingChoice = '';
+    lastIntentKey = 'reportRequest';
     lastReportKind = kind;
     message('user', reportTitle(kind));
     answerReport(kind, false);
@@ -302,6 +369,7 @@
     actions.appendChild(actionButton('Занятия с психологом', '1f9e0.svg', () => runScenario('individualTherapy')));
     actions.appendChild(actionButton('Групповая терапия', '1f9e0.svg', () => runScenario('groupTherapy')));
     conversation.appendChild(actions);
+    pendingChoice = 'therapy';
     scrollToEnd();
   }
 
@@ -311,10 +379,13 @@
       if (busy) return;
       busy = true;
       awaitingReportDelayChoice = false;
+      pendingChoice = '';
+      lastIntentKey = parsed.key;
       message('user', question || (parsed.key === 'reportDelay' ? 'Почему ещё нет отчёта?' : 'Покажи отчёт'));
       const kind = parsed.kind || (parsed.key === 'reportDelay' ? lastReportKind : '');
       if (parsed.key === 'reportDelay' && !kind) {
         awaitingReportDelayChoice = true;
+        pendingChoice = 'reportDelay';
         message('bot', 'Какой отчёт вы ожидаете — утренний или вечерний?');
         offerReportDelayChoices();
         busy = false;
@@ -325,20 +396,26 @@
     if (busy || !scenario) return;
     busy = true;
     awaitingTherapyChoice = false;
+    awaitingReportDelayChoice = false;
+    pendingChoice = '';
+    lastIntentKey = parsed.key;
     message('user', question || scenario.question);
     setThinking(true);
+    showTyping();
     window.setTimeout(() => {
       const answer = scenario.variants && scenario.variants[parsed.variant] || scenario.answer;
       if (answer) message('bot', answer, scenario.mood || 'neutral', scenario.icon || '', scenario.iconPosition || 'before');
-      if (scenario.after === 'reportChoices') offerReportChoices();
-      if (scenario.after === 'educatorChat') offerEducatorChat();
-      if (scenario.after === 'therapy') offerTherapy();
-      if (scenario.after === 'therapyChoices') offerTherapyChoices();
-      if (scenario.after === 'therapyChoices') awaitingTherapyChoice = true;
+      const after = parsed.key === 'urgent' && parsed.variant === 'medical' ? '' : scenario.after;
+      if (after === 'reportChoices') { offerReportChoices(); pendingChoice = 'reports'; }
+      if (after === 'educatorChat') { offerEducatorChat(); pendingChoice = 'educatorChat'; }
+      if (after === 'therapy') offerTherapy();
+      if (after === 'therapyChoices') { offerTherapyChoices(); awaitingTherapyChoice = true; pendingChoice = 'therapy'; }
+      if (after === 'navigateChat') window.setTimeout(() => window.location.assign('https://медси-бот.рф/?openChat=1'), 180);
       if (scenario.after === 'greetingFollowup') window.setTimeout(() => message('bot', 'Как я могу вам помочь?'), 230);
+      clearTyping();
       setThinking(false);
       busy = false;
-    }, 380);
+    }, Math.min(720, 320 + String(question || scenario.question).length * 6));
   }
 
   function offerReportDelayChoices() {
@@ -359,11 +436,20 @@
 
   function classify(text) {
     const simple = String(text || '').toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[^а-я]+/g, ' ').trim();
+    if (/^(?:да|ага|угу|конечно|давай|хочу|пожалуйста)$/.test(simple)) {
+      if (pendingChoice === 'educatorChat') return 'openEducatorChat';
+      if (pendingChoice === 'reports' || pendingChoice === 'reportDelay') return 'chooseReport';
+      if (pendingChoice === 'therapy') return 'therapy';
+    }
+    if (/^(?:нет|не надо|не нужно|спасибо не надо|пока нет)$/.test(simple) && pendingChoice) return 'noThanks';
     if (awaitingReportDelayChoice) {
       if (/^(?:утренн[а-я]*|утренн[а-я]* отчет)$/.test(simple)) return { key: 'reportDelay', kind: 'morning' };
       if (/^(?:вечерн[а-я]*|вечерн[а-я]* отчет)$/.test(simple)) return { key: 'reportDelay', kind: 'evening' };
     }
+    if (pendingChoice === 'reports' && /^(?:а )?(?:утренн[а-я]*|вечерн[а-я]*)(?: отчет)?$/.test(simple)) return { key: 'reportRequest', kind: simple.includes('утренн') ? 'morning' : 'evening' };
     if (lastReportKind && /^(?:почему|а почему) (?:его |ее )?(?:нет|не пришел|не появился)$/.test(simple)) return { key: 'reportDelay', kind: lastReportKind };
+    if (lastReportKind && /^(?:покажи|отправь|скинь|пришли|дай)(?: его)?$/.test(simple)) return { key: 'reportRequest', kind: lastReportKind };
+    if (['reports', 'reportRequest', 'reportDelay'].includes(lastIntentKey) && /^(?:а )?(?:когда|во сколько)$/.test(simple)) return 'reports';
     if (awaitingTherapyChoice) {
       if (/^(?:групп[а-я]*|групповая терапия|отчет по группе)$/.test(simple)) return 'groupTherapy';
       if (/^(?:индивидуал[а-я]*|занятия с психологом|психолог)$/.test(simple)) return 'individualTherapy';
@@ -380,12 +466,17 @@
     const scenario = classify(text);
     if (scenario) return runScenario(scenario, text);
     awaitingTherapyChoice = false;
+    pendingChoice = '';
     message('user', text);
     setThinking(true);
+    showTyping();
     busy = true;
     window.setTimeout(() => {
       message('bot', 'Этот вопрос лучше задать в чате с воспитателями. Хотите открыть чат?', 'thinking');
       offerEducatorChat();
+      pendingChoice = 'educatorChat';
+      lastIntentKey = '';
+      clearTyping();
       setThinking(false);
       busy = false;
     }, 380);
