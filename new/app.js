@@ -13,8 +13,10 @@
 
   const setGaze = (x, y) => {
     // У большого блоба правый верхний край сужается: держим глаза чуть глубже внутри формы.
-    botEyes.style.setProperty('--gaze-x', `${x - bot.clientWidth * .06}px`);
-    botEyes.style.setProperty('--gaze-y', `${y + bot.clientHeight * .025}px`);
+    const safeX = Math.max(-bot.clientWidth * .055, Math.min(bot.clientWidth * .055, x - bot.clientWidth * .055));
+    const safeY = Math.max(-bot.clientHeight * .065, Math.min(bot.clientHeight * .055, y + bot.clientHeight * .025));
+    botEyes.style.setProperty('--gaze-x', `${safeX}px`);
+    botEyes.style.setProperty('--gaze-y', `${safeY}px`);
     document.querySelectorAll('.mini-eyes').forEach(eyes => {
       // Мини-аватар намного меньше основного персонажа: глаза всегда остаются в блобе.
       const miniX = Math.max(-2, Math.min(2, x * .035));
@@ -208,7 +210,7 @@
       setGaze(bot.clientWidth * (.025 + (Math.random() - .5) * .09), bot.clientHeight * (-.04 + (Math.random() - .5) * .07));
     }, 2100);
   }
-  setGaze(bot.clientWidth * .055, bot.clientHeight * -.055);
+  setGaze(bot.clientWidth * .10, bot.clientHeight * -.08);
   window.setTimeout(() => {
     message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1f499.svg', 'after');
   }, 220);
