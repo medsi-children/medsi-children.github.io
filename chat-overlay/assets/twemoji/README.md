@@ -1,6 +1,6 @@
 # Local Twemoji subset
 
-This folder contains the small Twemoji SVG subset used by Medsi Bot for chat reactions and menu-card icons.
+This folder contains the small Twemoji SVG subset used by Medsi Bot for chat reactions, menu-card icons, and the Smart Bot laboratory.
 
 Graphics source: Twitter Twemoji — https://github.com/twitter/twemoji
 License: Creative Commons Attribution 4.0 International (CC BY 4.0) — https://creativecommons.org/licenses/by/4.0/

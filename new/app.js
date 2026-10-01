@@ -7,6 +7,7 @@
   const input = document.getElementById('messageInput');
   const bot = document.getElementById('bot');
   const botEyes = document.getElementById('botEyes');
+  const EMOJI_BASE = '/chat-overlay/assets/twemoji/';
   let busy = false;
   let pointerActiveUntil = 0;
 
@@ -14,8 +15,11 @@
     botEyes.style.setProperty('--gaze-x', `${x}px`);
     botEyes.style.setProperty('--gaze-y', `${y}px`);
     document.querySelectorAll('.mini-eyes').forEach(eyes => {
-      eyes.style.setProperty('--mini-gaze-x', `${Math.round(x * .13)}px`);
-      eyes.style.setProperty('--mini-gaze-y', `${Math.round(y * .13)}px`);
+      // Мини-аватар намного меньше основного персонажа: глаза всегда остаются в блобе.
+      const miniX = Math.max(-2, Math.min(2, x * .035));
+      const miniY = Math.max(-1.5, Math.min(1.5, y * .035));
+      eyes.style.setProperty('--mini-gaze-x', `${miniX}px`);
+      eyes.style.setProperty('--mini-gaze-y', `${miniY}px`);
     });
   };
 
@@ -25,6 +29,7 @@
     educators: { question: 'Почему воспитатели не отвечают?', answer: 'Воспитатели находятся с детьми и не могут отвечать в чате круглосуточно. Пожалуйста, наберитесь терпения: они ответят, как только смогут.' },
     delivery: {
       question: 'Что можно передать ребёнку?',
+      icon: '1f4e6.svg',
       answer: 'Передать ребёнку можно еду, одежду и нужные вещи в безопасной упаковке.\n\nАдрес доставки: Гринвуд, с11, Путилково. В комментарии для курьера обязательно укажите: «доставка на 5 этаж» и имя ребёнка.\n\nНельзя передавать острые предметы, стекло, металлические банки, энергетики, табачные изделия и личную электронику. Если есть сомнения насчёт вещи или продукта, лучше заранее уточнить у воспитателей.',
       variants: {
         order: 'Доставку можно оформить по адресу: Гринвуд, с11, Путилково. В комментарии для курьера обязательно укажите: «доставка на 5 этаж» и имя ребёнка.\n\nМожно заказать еду, напитки, одежду и нужные вещи в безопасной упаковке.\n\nНельзя заказывать острые предметы, стекло, металлические банки, энергетики, табачные изделия и личную электронику. Если есть сомнения, лучше заранее уточнить у воспитателей.',
@@ -34,11 +39,12 @@
     },
     payment: { question: 'Как оплатить?', answer: 'По вопросам оплаты свяжитесь с лечащим врачом. Оплата производится на ресепшене клиники.' },
     meetings: { question: 'Как договориться о встрече или звонке?', answer: 'Встречи и звонки нужно согласовать с лечащим врачом. Он поможет выбрать время с учётом состояния ребёнка и расписания отделения.' },
-    doctors: { question: 'Как связаться с лечащим врачом?', answer: 'Анастасия Михайловна\n+79253394090\n\nАнтон Геннадьевич\n+79859927884' },
+    doctors: { question: 'Как связаться с лечащим врачом?', answer: 'Анастасия Михайловна\n+79253394090\n\nАнтон Геннадьевич\n+79859927884', icon: '1f4de.svg' },
     medical: { question: 'Вопрос о лечении', answer: 'Вопросы о лечении, препаратах, процедурах и анализах, пожалуйста, обсуждайте с лечащим врачом. У воспитателей и психологов этой информации может не быть.' },
     urgent: { question: 'У меня срочный вопрос', answer: 'Если вопрос срочный, пожалуйста, напишите его в чате с воспитателями. Они ответят, как только смогут.', after: 'educatorChat' },
     signIn: { question: 'Не получается войти', answer: 'По вопросам входа, кода подтверждения и доступа к системе, пожалуйста, напишите воспитателям в чате.', after: 'educatorChat' },
     therapy: { question: 'Где посмотреть психотерапию?', answer: '', after: 'therapy' },
+    greeting: { question: 'Добрый день', answer: 'Добрый день', icon: '1fac2.svg', after: 'greetingFollowup' },
     routine: { question: 'Где посмотреть режим дня?', answer: 'Режим дня находится на главном экране системы: нажмите карточку «Режим дня». Там указано расписание занятий, приёмов пищи, прогулок и сна.' },
     home: { question: 'Как добавить систему на экран «Домой»?', answer: 'На главном экране есть подсказка по добавлению Медси Бота на экран «Домой». После этого система будет открываться как обычное приложение.' },
     thanks: { question: 'Спасибо!', answer: 'Пожалуйста! Я рядом, если понадобится подсказка.', mood: 'happy' }
@@ -51,13 +57,21 @@
     if (text !== undefined) node.textContent = text;
     return node;
   };
+  const emoji = (file, label = '') => {
+    const image = document.createElement('img');
+    image.className = 'smart-emoji';
+    image.src = EMOJI_BASE + file;
+    image.alt = label;
+    image.decoding = 'async';
+    return image;
+  };
   const scrollToEnd = () => { conversation.scrollTop = conversation.scrollHeight; };
 
   function avatarMarkup() {
     return '<svg viewBox="0 0 160 160" aria-hidden="true"><path d="M61 6C98 5 145 31 154 70C164 111 128 147 87 156C44 165 4 136 2 95C-1 55 25 8 61 6Z"/></svg><span class="mini-eyes"><i></i><i></i></span>';
   }
 
-  function message(side, text, mood = 'neutral') {
+  function message(side, text, mood = 'neutral', iconFile = '') {
     const item = element('article', `message ${side}`);
     if (side === 'bot') {
       const avatar = element('span', `message-avatar mood-${mood}`);
@@ -66,7 +80,12 @@
       item.appendChild(avatar);
     }
     const content = element('div', 'message-content');
-    content.append(element('div', 'message-bubble', text), element('time', 'message-time', clock()));
+    const bubble = element('div', 'message-bubble', text);
+    if (iconFile) {
+      bubble.prepend(emoji(iconFile, ''));
+      bubble.classList.add('message-bubble-with-icon');
+    }
+    content.append(bubble, element('time', 'message-time', clock()));
     item.appendChild(content);
     conversation.appendChild(item);
     scrollToEnd();
@@ -76,9 +95,7 @@
 
   function offerEducatorChat() {
     const actions = element('div', 'choices');
-    const open = element('button', '', 'Открыть чат с воспитателями');
-    open.type = 'button';
-    open.addEventListener('click', () => {
+    const open = actionButton('Открыть чат с воспитателями', '1f4ac.svg', () => {
       // При встраивании в основную панель этот обработчик вызывает её openChat().
       if (typeof window.openMedsiEducatorChat === 'function') return window.openMedsiEducatorChat();
       window.location.assign('/?openChat=1');
@@ -88,13 +105,18 @@
     scrollToEnd();
   }
 
+  function actionButton(label, iconFile, click) {
+    const button = element('button', 'smart-action', label);
+    button.type = 'button';
+    button.prepend(emoji(iconFile, ''));
+    button.addEventListener('click', click);
+    return button;
+  }
+
   function offerReportChoices() {
     const actions = element('div', 'choices');
-    [['morning', 'Утренний отчёт'], ['evening', 'Вечерний отчёт']].forEach(([kind, label]) => {
-      const button = element('button', '', label);
-      button.type = 'button';
-      button.addEventListener('click', () => requestReport(kind));
-      actions.appendChild(button);
+    [['morning', 'Утренний отчёт', '2600.svg'], ['evening', 'Вечерний отчёт', '1f319.svg']].forEach(([kind, label, iconFile]) => {
+      actions.appendChild(actionButton(label, iconFile, () => requestReport(kind)));
     });
     conversation.appendChild(actions);
     scrollToEnd();
@@ -109,9 +131,7 @@
 
   function offerTherapy() {
     const actions = element('div', 'choices');
-    const open = element('button', '', 'Психотерапия');
-    open.type = 'button';
-    open.addEventListener('click', () => {
+    const open = actionButton('Психотерапия', '1f9e0.svg', () => {
       if (typeof window.openMedsiTherapy === 'function') return window.openMedsiTherapy();
       window.location.assign('/?openTherapy=1');
     });
@@ -129,17 +149,22 @@
     setThinking(true);
     window.setTimeout(() => {
       const answer = scenario.variants && scenario.variants[parsed.variant] || scenario.answer;
-      if (answer) message('bot', answer, scenario.mood || 'neutral');
+      if (answer) message('bot', answer, scenario.mood || 'neutral', scenario.icon || '');
       if (scenario.after === 'reportChoices') offerReportChoices();
       if (scenario.after === 'educatorChat') offerEducatorChat();
       if (scenario.after === 'therapy') offerTherapy();
+      if (scenario.after === 'greetingFollowup') window.setTimeout(() => message('bot', 'Как я могу вам помочь?'), 230);
       setThinking(false);
       busy = false;
     }, 380);
   }
 
   function classify(text) {
-    return window.MedsiSmartBot && window.MedsiSmartBot.classify(text);
+    const known = window.MedsiSmartBot && window.MedsiSmartBot.classify(text);
+    if (known) return known;
+    const simple = String(text || '').toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[^а-я]+/g, ' ').trim();
+    if (/^(?:привет|здравствуй|здравствуйте|добрый день|доброе утро|добрый вечер)(?: медси бот)?$/.test(simple)) return 'greeting';
+    return null;
   }
 
   composer.addEventListener('submit', event => {
@@ -181,6 +206,6 @@
   }
   setGaze(bot.clientWidth * .14, bot.clientHeight * -.12);
   window.setTimeout(() => {
-    message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы 🙂');
+    message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1fac2.svg');
   }, 220);
 })();
