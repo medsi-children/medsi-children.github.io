@@ -37,7 +37,7 @@
     if (side === 'bot') {
       const icon = element('div', 'mini-avatar');
       icon.setAttribute('aria-hidden', 'true');
-      icon.innerHTML = '<span class="bot-face"><span class="bot-eye"></span><span class="bot-eye"></span><span class="bot-mouth"></span></span>';
+      icon.innerHTML = '<span class="bot-face"><span class="bot-eye"></span><span class="bot-eye"></span></span>';
       row.appendChild(icon);
     }
     const stack = element('div', 'message-stack');
@@ -69,9 +69,9 @@
 
   function report(kind) {
     const types = {
-      morning: { icon: 'morning', title: 'Утренний отчёт', className: 'morning' },
-      evening: { icon: 'evening', title: 'Вечерний отчёт', className: 'evening' },
-      therapy: { icon: 'therapy', title: 'Групповая психотерапия', className: 'therapy' }
+      morning: { cardIcon: '☀️', title: 'Утренний отчёт', className: 'morning' },
+      evening: { cardIcon: '🌙', title: 'Вечерний отчёт', className: 'evening' },
+      therapy: { cardIcon: '🧠', title: 'Групповая психотерапия', className: 'therapy' }
     };
     const type = types[kind];
     const stack = message('bot', 'Последний отчёт:');
@@ -81,7 +81,7 @@
     heading.append(element('strong', '', type.title), element('small', '', 'В карточке будет показан последний текст'));
     const reportIcon = element('span', 'report-icon');
     reportIcon.setAttribute('aria-hidden', 'true');
-    reportIcon.innerHTML = icons[type.icon];
+    reportIcon.textContent = type.cardIcon;
     top.append(reportIcon, heading);
     const body = element('div', 'report-body');
     body.append(element('p', '', 'Текст отчёта появится здесь после подключения учётной записи.'), element('div', 'demo-line'), element('div', 'demo-line short'));
@@ -100,7 +100,7 @@
     const top = element('div', 'report-top');
     const scheduleIcon = element('span', 'report-icon');
     scheduleIcon.setAttribute('aria-hidden', 'true');
-    scheduleIcon.innerHTML = icons.schedule;
+    scheduleIcon.textContent = '🕘';
     top.append(scheduleIcon, element('strong', '', 'Режим дня'));
     const body = element('div', 'report-body');
     const list = element('ul', 'schedule-list');
@@ -166,7 +166,7 @@
     const row = element('div', 'message-row bot');
     const icon = element('div', 'mini-avatar');
     icon.setAttribute('aria-hidden', 'true');
-    icon.innerHTML = '<span class="bot-face"><span class="bot-eye"></span><span class="bot-eye"></span><span class="bot-mouth"></span></span>';
+    icon.innerHTML = '<span class="bot-face"><span class="bot-eye"></span><span class="bot-eye"></span></span>';
     const typing = element('div', 'bubble typing');
     typing.innerHTML = '<i></i><i></i><i></i>';
     row.append(icon, typing);
