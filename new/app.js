@@ -12,8 +12,9 @@
   let pointerActiveUntil = 0;
 
   const setGaze = (x, y) => {
-    botEyes.style.setProperty('--gaze-x', `${x}px`);
-    botEyes.style.setProperty('--gaze-y', `${y}px`);
+    // У большого блоба правый верхний край сужается: держим глаза чуть глубже внутри формы.
+    botEyes.style.setProperty('--gaze-x', `${x - bot.clientWidth * .06}px`);
+    botEyes.style.setProperty('--gaze-y', `${y + bot.clientHeight * .025}px`);
     document.querySelectorAll('.mini-eyes').forEach(eyes => {
       // Мини-аватар намного меньше основного персонажа: глаза всегда остаются в блобе.
       const miniX = Math.max(-2, Math.min(2, x * .035));
@@ -192,8 +193,8 @@
     const rect = bot.getBoundingClientRect();
     const dx = point.clientX - (rect.left + rect.width / 2);
     const dy = point.clientY - (rect.top + rect.height / 2);
-    const x = Math.max(-rect.width * .17, Math.min(rect.width * .17, dx / 4));
-    const y = Math.max(-rect.height * .12, Math.min(rect.height * .12, dy / 4));
+    const x = Math.max(-rect.width * .10, Math.min(rect.width * .10, dx / 4));
+    const y = Math.max(-rect.height * .08, Math.min(rect.height * .08, dy / 4));
     setGaze(x, y);
     pointerActiveUntil = Date.now() + 1500;
   }
@@ -204,10 +205,10 @@
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     window.setInterval(() => {
       if (Date.now() < pointerActiveUntil) return;
-      setGaze(bot.clientWidth * (.045 + (Math.random() - .5) * .13), bot.clientHeight * (-.06 + (Math.random() - .5) * .11));
+      setGaze(bot.clientWidth * (.025 + (Math.random() - .5) * .09), bot.clientHeight * (-.04 + (Math.random() - .5) * .07));
     }, 2100);
   }
-  setGaze(bot.clientWidth * .10, bot.clientHeight * -.08);
+  setGaze(bot.clientWidth * .055, bot.clientHeight * -.055);
   window.setTimeout(() => {
     message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1f499.svg', 'after');
   }, 220);
