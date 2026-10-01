@@ -68,7 +68,7 @@
   const scrollToEnd = () => { conversation.scrollTop = conversation.scrollHeight; };
 
   function avatarMarkup() {
-    return '<svg viewBox="0 0 160 160" aria-hidden="true"><path d="M70 4C102 1 143 20 155 50C169 84 151 125 118 148C90 167 53 160 27 139C2 119-6 87 7 56C18 28 41 7 70 4Z"/></svg><span class="mini-eyes"><i></i><i></i></span>';
+    return '<svg viewBox="0 0 160 160" aria-hidden="true"><path d="M39 6C63 1 104 4 128 16C149 27 157 50 157 75C158 100 150 126 132 143C113 160 84 163 57 158C30 153 10 139 4 118C-2 97 2 67 10 44C17 22 27 9 39 6Z"/></svg><span class="mini-eyes"><i></i><i></i></span>';
   }
 
   function message(side, text, mood = 'neutral', iconFile = '', iconPosition = 'before') {
