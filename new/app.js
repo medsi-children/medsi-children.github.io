@@ -68,7 +68,7 @@
   const scrollToEnd = () => { conversation.scrollTop = conversation.scrollHeight; };
 
   function avatarMarkup() {
-    return '<svg viewBox="0 0 160 160" aria-hidden="true"><path d="M61 6C98 5 145 31 154 70C164 111 128 147 87 156C44 165 4 136 2 95C-1 55 25 8 61 6Z"/></svg><span class="mini-eyes"><i></i><i></i></span>';
+    return '<svg viewBox="0 0 160 160" aria-hidden="true"><path d="M76 5C118 5 151 29 157 70C164 112 132 149 88 157C44 165 5 138 2 98C0 57 28 8 76 5Z"/></svg><span class="mini-eyes"><i></i><i></i></span>';
   }
 
   function message(side, text, mood = 'neutral', iconFile = '', iconPosition = 'before') {
@@ -192,8 +192,8 @@
     const rect = bot.getBoundingClientRect();
     const dx = point.clientX - (rect.left + rect.width / 2);
     const dy = point.clientY - (rect.top + rect.height / 2);
-    const x = Math.max(-rect.width * .24, Math.min(rect.width * .24, dx / 4));
-    const y = Math.max(-rect.height * .19, Math.min(rect.height * .19, dy / 4));
+    const x = Math.max(-rect.width * .17, Math.min(rect.width * .17, dx / 4));
+    const y = Math.max(-rect.height * .12, Math.min(rect.height * .12, dy / 4));
     setGaze(x, y);
     pointerActiveUntil = Date.now() + 1500;
   }
