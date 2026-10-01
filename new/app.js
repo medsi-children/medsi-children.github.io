@@ -183,8 +183,13 @@
         try { history = (await readParent('/lab/report-history')).reports || []; } catch (_) { /* current report still remains available */ }
       }
       if (!kind) {
+        const changed = currentReports.filter(item => {
+          const previous = history.find(saved => saved.kind === item.kind && String(saved.text || '').trim());
+          return previous && String(previous.text).trim() !== String(item.text).trim();
+        });
+        if (changed.length === 1) { reportCard(changed[0].kind, changed[0].text); lastReportKind = changed[0].kind; return; }
         const latest = history.find(item => ['morning', 'evening'].includes(item.kind) && String(item.text || '').trim());
-        if (latest) { reportCard(latest.kind, latest.text, latest.reportDate); lastReportKind = latest.kind; return; }
+        if (latest && changed.length === 0) { reportCard(latest.kind, latest.text, latest.reportDate); lastReportKind = latest.kind; return; }
         if (currentReports.length === 1) kind = currentReports[0].kind;
         else { message('bot', 'Какой отчёт показать — утренний или вечерний?'); offerReportChoices(); return; }
       }
