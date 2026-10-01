@@ -3,30 +3,41 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#eaf7f5">
-  <title>Медси Бот — пробный интерфейс</title>
+  <meta name="theme-color" content="#f4fbfa">
+  <title>Медси Бот — помощник</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/new/style.css?v=20261001-2">
-  <script defer src="/new/app.js?v=20261001-2"></script>
+  <link rel="stylesheet" href="/new/style.css?v=20261001-3">
+  <script defer src="/new/app.js?v=20261001-3"></script>
 </head>
 <body>
-  <div class="page-shell">
-    <main class="chat-shell" aria-label="Демонстрация нового родительского интерфейса">
-      <header class="chat-header">
-        <div class="header-avatar" aria-hidden="true"><span class="bot-face"><span class="bot-eye"></span><span class="bot-eye"></span></span></div>
-        <div class="header-copy"><strong>Медси Бот</strong><span class="header-status"><span></span> На связи</span></div>
+  <main class="assistant-lab" aria-label="Медси Бот">
+    <section class="bot-stage" aria-label="Анимированный Медси Бот">
+      <div class="stage-copy">
+        <span class="eyebrow">Медси Бот</span>
+        <h1>Ваш помощник<br>в системе</h1>
+        <p>Подскажет, где найти нужную информацию.</p>
+      </div>
+      <div id="bot" class="bot" aria-hidden="true">
+        <span class="bot-glow"></span>
+        <span class="bot-body"><span id="botEyes" class="bot-eyes"><i class="bot-eye"></i><i class="bot-eye"></i></span></span>
+      </div>
+      <p class="stage-hint">Попробуйте подвигать курсором рядом с ботом.</p>
+    </section>
+
+    <section class="help-panel" aria-label="Диалог с помощником">
+      <header class="help-header">
+        <div><span class="eyebrow">Помощник</span><h2>Здравствуйте!</h2></div>
+        <span class="online"><i></i> На связи</span>
       </header>
 
-      <div id="conversation" class="conversation" role="log" aria-live="polite" aria-relevant="additions text">
-        <div class="date-divider"><span>Сегодня</span></div>
-      </div>
+      <div id="conversation" class="conversation" role="log" aria-live="polite" aria-relevant="additions text"></div>
 
       <form id="composer" class="composer" autocomplete="off">
-        <label class="sr-only" for="messageInput">Ваше сообщение</label>
-        <input id="messageInput" type="text" maxlength="500" placeholder="Спросите об отчёте или напишите сообщение…" enterkeyhint="send">
-        <button class="send-button" type="submit" aria-label="Отправить сообщение"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h13m-5-5 5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <label class="sr-only" for="messageInput">Ваш вопрос</label>
+        <input id="messageInput" type="text" maxlength="500" placeholder="Напишите ваш вопрос…" enterkeyhint="send">
+        <button type="submit" aria-label="Отправить вопрос"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13m-5-5 5 5-5 5"/></svg></button>
       </form>
-    </main>
-  </div>
+    </section>
+  </main>
 </body>
 </html>
