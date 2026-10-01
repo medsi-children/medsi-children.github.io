@@ -421,7 +421,5 @@
     }, 2100);
   }
   setGaze(bot.clientWidth * .10, bot.clientHeight * -.08);
-  window.setTimeout(() => {
-    message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1f499.svg', 'after');
-  }, 220);
+  message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1f499.svg', 'after');
 })();
