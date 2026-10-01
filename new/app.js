@@ -1,16 +1,20 @@
 (() => {
   'use strict';
 
-  // Лаборатория помощника: она не читает данные ребёнка и не отправляет сообщения.
+  // Лаборатория не отправляет сообщения воспитателям. Отчёты читает только через
+  // существующую защищённую родительскую сессию на основном домене.
   const conversation = document.getElementById('conversation');
   const composer = document.getElementById('composer');
+  const promptStrip = document.getElementById('promptStrip');
   const input = document.getElementById('messageInput');
   const bot = document.getElementById('bot');
   const botEyes = document.getElementById('botEyes');
   const EMOJI_BASE = '/chat-overlay/assets/twemoji/';
   let busy = false;
   let awaitingTherapyChoice = false;
+  let awaitingReportDelayChoice = false;
   let pointerActiveUntil = 0;
+  let lastReportKind = '';
 
   const setGaze = (x, y) => {
     // У большого блоба правый верхний край сужается: держим глаза чуть глубже внутри формы.
@@ -29,7 +33,6 @@
 
   const scenarios = {
     reports: { question: 'Когда ждать отчёт?', answer: 'Утренний отчёт с 15:00 до 16:00.\nВечерний — с 21:00 до 22:00.\n\nХотите посмотреть отчёт?', mood: 'neutral', after: 'reportChoices' },
-    reportDelay: { question: 'Почему до сих пор нет отчёта?', answer: 'Отчёт уже должен был прийти. Пожалуйста, перезагрузите приложение и попробуйте открыть его ещё раз. Если после этого виден старый отчёт, возникла техническая неполадка — команда уже решает этот вопрос.', mood: 'sad' },
     educators: { question: 'Почему воспитатели не отвечают?', answer: 'Воспитатели находятся с детьми и не могут отвечать в чате круглосуточно. Пожалуйста, наберитесь терпения: они ответят, как только смогут.' },
     delivery: {
       question: 'Что можно передать ребёнку?',
@@ -74,6 +77,136 @@
     parts.forEach(part => bubble.append(part === '🚫' ? emoji('1f6ab.svg', '') : part === '✅' ? emoji('2705.svg', '') : document.createTextNode(part)));
   };
   const scrollToEnd = () => { conversation.scrollTop = conversation.scrollHeight; };
+  const moscowParts = date => Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(date).filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
+  const moscowDate = date => {
+    const part = moscowParts(date);
+    return `${part.year}-${String(part.month).padStart(2, '0')}-${String(part.day).padStart(2, '0')}`;
+  };
+  const safeGet = key => { try { return localStorage.getItem(key) || ''; } catch (_) { return ''; } };
+
+  async function parentSession(force = false) {
+    const phone = (safeGet('medsi_parent_phone') || safeGet('medsi_phone')).replace(/\D/g, '');
+    const auth = safeGet('medsi_parent_auth_session_v1');
+    if (phone.length < 10 || !auth) return null;
+    const phone10 = phone.slice(-10);
+    if (!force) {
+      try {
+        const saved = JSON.parse(safeGet('medsi_d1_parent_session_v1'));
+        if (saved && saved.phone === phone10 && saved.session && saved.session.token && Number(saved.session.expiresAt) > Date.now() + 30000) return saved.session;
+      } catch (_) { /* ask the existing gateway for a fresh session */ }
+    }
+    const response = await fetch('/__session/apps-script', {
+      method: 'POST', headers: { 'content-type': 'text/plain;charset=UTF-8' }, cache: 'no-store',
+      body: JSON.stringify({ action: 'api', method: 'getD1ChatSession', args: ['parent', phone, auth] })
+    });
+    const value = await response.json();
+    const session = value && value.result && (value.result.session || value.result);
+    if (!response.ok || !value.ok || !session || !session.token) throw new Error('SESSION_UNAVAILABLE');
+    try { localStorage.setItem('medsi_d1_parent_session_v1', JSON.stringify({ phone: phone10, session })); } catch (_) { /* optional cache */ }
+    return session;
+  }
+
+  async function readParent(path) {
+    let session = await parentSession();
+    if (!session) return null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      try {
+        const response = await fetch(path, { headers: { 'X-Medsi-Chat-Session': session.token }, cache: 'no-store', signal: controller.signal });
+        if (response.status === 401 && attempt === 0) { session = await parentSession(true); continue; }
+        const value = await response.json();
+        if (!response.ok || !value || !value.ok) throw new Error('REPORT_UNAVAILABLE');
+        return value;
+      } finally { clearTimeout(timeout); }
+    }
+    throw new Error('REPORT_UNAVAILABLE');
+  }
+
+  function reportStatus(kind) {
+    const now = moscowParts(new Date());
+    const minutes = now.hour * 60 + now.minute;
+    if (kind === 'evening' && minutes < 3 * 60) return 'late';
+    const start = kind === 'morning' ? 15 * 60 : 21 * 60;
+    const end = kind === 'morning' ? 16 * 60 : 22 * 60;
+    return minutes < start ? 'before' : minutes < end ? 'publishing' : 'late';
+  }
+
+  function reportTitle(kind) { return kind === 'morning' ? 'Утренний отчёт' : 'Вечерний отчёт'; }
+  function reportWindow(kind) { return kind === 'morning' ? 'с 15:00 до 16:00' : 'с 21:00 до 22:00'; }
+  function reportDelayText(kind) {
+    const status = reportStatus(kind);
+    if (status === 'before') return `${reportTitle(kind)} обычно появляется ${reportWindow(kind)}. Пожалуйста, дождитесь этого времени.`;
+    if (status === 'publishing') return `Сейчас время публикации: ${reportTitle(kind).toLowerCase()} появляется ${reportWindow(kind)}. Попробуйте посмотреть немного позже.`;
+    return `${reportTitle(kind)} уже должен был появиться. Пожалуйста, обновите приложение и проверьте отчёт ещё раз. Если он по-прежнему старый, возможно, возникла техническая неполадка.`;
+  }
+  function expectedReportDate(kind) {
+    const now = new Date();
+    if (kind === 'evening' && moscowParts(now).hour < 3) return moscowDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+    return moscowDate(now);
+  }
+
+  function reportCard(kind, text, reportDate = '') {
+    const item = element('article', 'message bot');
+    const avatar = element('span', 'message-avatar');
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.innerHTML = avatarMarkup();
+    const content = element('div', 'message-content');
+    const card = element('div', 'report-card');
+    const heading = element('div', 'report-card-heading');
+    heading.append(emoji(kind === 'morning' ? '2600.svg' : '1f319.svg', ''), element('strong', '', reportTitle(kind)));
+    if (reportDate) heading.append(element('span', 'report-card-date', reportDate.split('-').reverse().join('.')));
+    card.append(heading, element('div', 'report-card-text', text));
+    content.append(card, element('time', 'message-time', clock()));
+    item.append(avatar, content);
+    conversation.appendChild(item);
+    scrollToEnd();
+  }
+
+  async function answerReport(kind, delayed) {
+    setThinking(true);
+    try {
+      const current = await readParent('/lab/report-current');
+      if (!current) {
+        if (delayed && kind) message('bot', `${reportDelayText(kind)}\n\nЧтобы проверить сам отчёт, откройте родительскую панель.`, reportStatus(kind) === 'late' ? 'sad' : 'neutral');
+        else message('bot', 'Чтобы посмотреть отчёт ребёнка, откройте помощника в вашей родительской панели.', 'neutral');
+        offerParentPanel();
+        return;
+      }
+      const currentReports = (current.reports || []).filter(item => ['morning', 'evening'].includes(item.kind) && String(item.text || '').trim());
+      let history = [];
+      if (delayed || !kind) {
+        try { history = (await readParent('/lab/report-history')).reports || []; } catch (_) { /* current report still remains available */ }
+      }
+      if (!kind) {
+        const latest = history.find(item => ['morning', 'evening'].includes(item.kind) && String(item.text || '').trim());
+        if (latest) { reportCard(latest.kind, latest.text, latest.reportDate); lastReportKind = latest.kind; return; }
+        if (currentReports.length === 1) kind = currentReports[0].kind;
+        else { message('bot', 'Какой отчёт показать — утренний или вечерний?'); offerReportChoices(); return; }
+      }
+      lastReportKind = kind;
+      const found = currentReports.find(item => item.kind === kind);
+      if (!delayed) {
+        if (found) reportCard(kind, found.text);
+        else message('bot', `Пока нет доступного ${kind === 'morning' ? 'утреннего' : 'вечернего'} отчёта. Обычно он появляется ${reportWindow(kind)}.`, 'sad');
+        return;
+      }
+      const today = expectedReportDate(kind);
+      const published = history.find(item => item.kind === kind && item.reportDate === today && String(item.text || '').trim());
+      if (published) { reportCard(kind, published.text, published.reportDate); return; }
+      const previous = history.find(item => item.kind === kind && String(item.text || '').trim());
+      if (found && previous && String(found.text).trim() !== String(previous.text).trim()) {
+        reportCard(kind, found.text);
+        return;
+      }
+      message('bot', reportDelayText(kind), reportStatus(kind) === 'late' ? 'sad' : 'neutral');
+    } catch (_) {
+      if (delayed && kind) message('bot', `${reportDelayText(kind)}\n\nСейчас я не смог проверить, опубликован ли новый отчёт.`, reportStatus(kind) === 'late' ? 'sad' : 'neutral');
+      else message('bot', 'Сейчас не получилось проверить отчёт. Пожалуйста, попробуйте ещё раз чуть позже или откройте его в главном меню.', 'sad');
+    } finally { setThinking(false); busy = false; }
+  }
 
   function avatarMarkup() {
     return '<img class="mini-body" src="/new/blob.png" alt=""><span class="mini-eyes"><i></i><i></i></span>';
@@ -117,6 +250,13 @@
     scrollToEnd();
   }
 
+  function offerParentPanel() {
+    const actions = element('div', 'choices');
+    actions.appendChild(actionButton('Открыть родительскую панель', '1f4ac.svg', () => window.location.assign('https://медси-бот.рф/')));
+    conversation.appendChild(actions);
+    scrollToEnd();
+  }
+
   function actionButton(label, iconFile, click) {
     const button = element('button', 'smart-action', label);
     button.type = 'button';
@@ -135,10 +275,12 @@
   }
 
   function requestReport(kind) {
-    // В основной панели обработчик получит тот же защищённый актуальный отчёт,
-    // который уже показывается родителю в её главном меню.
-    if (typeof window.openMedsiCurrentReport === 'function') return window.openMedsiCurrentReport(kind);
-    message('bot', 'В этой лаборатории нет доступа к данным ребёнка. В основной панели здесь будет показан последний доступный отчёт.', 'thinking');
+    if (busy) return;
+    busy = true;
+    awaitingReportDelayChoice = false;
+    lastReportKind = kind;
+    message('user', reportTitle(kind));
+    answerReport(kind, false);
   }
 
   function offerTherapy() {
@@ -162,6 +304,20 @@
 
   function runScenario(intent, question) {
     const parsed = typeof intent === 'string' ? { key: intent } : intent;
+    if (parsed && (parsed.key === 'reportRequest' || parsed.key === 'reportDelay')) {
+      if (busy) return;
+      busy = true;
+      awaitingReportDelayChoice = false;
+      message('user', question || (parsed.key === 'reportDelay' ? 'Почему ещё нет отчёта?' : 'Покажи отчёт'));
+      const kind = parsed.kind || (parsed.key === 'reportDelay' ? lastReportKind : '');
+      if (parsed.key === 'reportDelay' && !kind) {
+        awaitingReportDelayChoice = true;
+        message('bot', 'Какой отчёт вы ожидаете — утренний или вечерний?');
+        offerReportDelayChoices();
+        busy = false;
+      } else answerReport(kind, parsed.key === 'reportDelay');
+      return;
+    }
     const scenario = scenarios[parsed && parsed.key];
     if (busy || !scenario) return;
     busy = true;
@@ -182,8 +338,29 @@
     }, 380);
   }
 
+  function offerReportDelayChoices() {
+    const actions = element('div', 'choices');
+    [['morning', 'Утренний отчёт', '2600.svg'], ['evening', 'Вечерний отчёт', '1f319.svg']].forEach(([kind, label, iconFile]) => {
+      actions.appendChild(actionButton(label, iconFile, () => {
+        if (busy) return;
+        busy = true;
+        awaitingReportDelayChoice = false;
+        lastReportKind = kind;
+        message('user', label);
+        answerReport(kind, true);
+      }));
+    });
+    conversation.appendChild(actions);
+    scrollToEnd();
+  }
+
   function classify(text) {
     const simple = String(text || '').toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[^а-я]+/g, ' ').trim();
+    if (awaitingReportDelayChoice) {
+      if (/^(?:утренн[а-я]*|утренн[а-я]* отчет)$/.test(simple)) return { key: 'reportDelay', kind: 'morning' };
+      if (/^(?:вечерн[а-я]*|вечерн[а-я]* отчет)$/.test(simple)) return { key: 'reportDelay', kind: 'evening' };
+    }
+    if (lastReportKind && /^(?:почему|а почему) (?:его |ее )?(?:нет|не пришел|не появился)$/.test(simple)) return { key: 'reportDelay', kind: lastReportKind };
     if (awaitingTherapyChoice) {
       if (/^(?:групп[а-я]*|групповая терапия|отчет по группе)$/.test(simple)) return 'groupTherapy';
       if (/^(?:индивидуал[а-я]*|занятия с психологом|психолог)$/.test(simple)) return 'individualTherapy';
@@ -194,9 +371,7 @@
     return null;
   }
 
-  composer.addEventListener('submit', event => {
-    event.preventDefault();
-    const text = input.value.trim();
+  function submitQuestion(text) {
     if (!text || busy) return;
     input.value = '';
     const scenario = classify(text);
@@ -211,6 +386,17 @@
       setThinking(false);
       busy = false;
     }, 380);
+  }
+
+  composer.addEventListener('submit', event => {
+    event.preventDefault();
+    submitQuestion(input.value.trim());
+  });
+
+  promptStrip.addEventListener('click', event => {
+    const button = event.target.closest('button[data-prompt]');
+    if (!button || busy) return;
+    submitQuestion(button.dataset.prompt);
   });
 
   function follow(point) {

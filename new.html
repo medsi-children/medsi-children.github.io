@@ -9,9 +9,9 @@
   <meta name="theme-color" content="#f4fbfa">
   <title>Медси Бот — помощник</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/new/style.css?v=20261001-15">
-  <script defer src="/parents/smart-bot.js?v=20261001-6"></script>
-  <script defer src="/new/app.js?v=20261001-18"></script>
+  <link rel="stylesheet" href="/new/style.css?v=20261002-3">
+  <script defer src="/parents/smart-bot.js?v=20261002-3"></script>
+  <script defer src="/new/app.js?v=20261002-3"></script>
   <script>
     // После первого открытия сервис-воркер всегда берёт /new и её файлы из сети.
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=20261001-new-live-1').catch(() => {});
@@ -38,6 +38,23 @@
       </header>
 
       <div id="conversation" class="conversation" role="log" aria-live="polite" aria-relevant="additions text"></div>
+
+      <div id="promptStrip" class="prompt-strip" aria-label="Готовые вопросы. Пролистайте в сторону, чтобы увидеть остальные">
+        <button type="button" data-prompt="Утренний отчёт">Утренний отчёт</button>
+        <button type="button" data-prompt="Вечерний отчёт">Вечерний отчёт</button>
+        <button type="button" data-prompt="Доставка">Доставка</button>
+        <button type="button" data-prompt="Когда можно встретиться с ребёнком?">Встречи с детьми</button>
+        <button type="button" data-prompt="Режим дня">Режим дня</button>
+        <button type="button" data-prompt="Групповая психотерапия">Групповая терапия</button>
+        <button type="button" data-prompt="Занятия с психологом">Занятия с психологом</button>
+        <button type="button" data-prompt="Почему нет отчёта?">Нет отчёта</button>
+        <button type="button" data-prompt="Как оплатить?">Оплата</button>
+        <button type="button" data-prompt="Телефон врача">Телефон врача</button>
+        <button type="button" data-prompt="Почему воспитатели не отвечают?">Ответ воспитателей</button>
+        <button type="button" data-prompt="Не получается войти">Вход в систему</button>
+        <button type="button" data-prompt="Срочный вопрос">Срочный вопрос</button>
+        <button type="button" data-prompt="Как добавить приложение на экран Домой?">На экран Домой</button>
+      </div>
 
       <form id="composer" class="composer" autocomplete="off">
         <label class="sr-only" for="messageInput">Ваш вопрос</label>
