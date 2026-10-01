@@ -23,3 +23,5 @@
 
 /* Акцентные кнопки повторяют насыщенный оттенок Медси Бота. */
 .composer button,.user .message-bubble{background:linear-gradient(135deg,#55d7d2,#20bec9)!important;box-shadow:0 5px 13px #21bac940}.composer:focus-within{border-color:#78d9d8;box-shadow:0 9px 25px #2d746f14,0 0 0 3px #49cbc62b}
+
+.composer button{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#4fd6d2,#1db9c8)!important;box-shadow:0 6px 15px #1eafba48}.composer .send-plane{width:20px;height:20px;fill:#fff;stroke:none;transform:translate(-.5px,.5px)}
