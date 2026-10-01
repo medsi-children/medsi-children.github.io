@@ -87,6 +87,8 @@
   const safeGet = key => { try { return localStorage.getItem(key) || ''; } catch (_) { return ''; } };
 
   async function parentSession(force = false) {
+    // На GitHub Pages нет родительской авторизации и защищённого шлюза.
+    if (location.origin !== new URL('https://медси-бот.рф').origin) return null;
     const phone = (safeGet('medsi_parent_phone') || safeGet('medsi_phone')).replace(/\D/g, '');
     const auth = safeGet('medsi_parent_auth_session_v1');
     if (phone.length < 10 || !auth) return null;
