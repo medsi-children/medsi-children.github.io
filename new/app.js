@@ -76,14 +76,21 @@
   }
 
   function classify(text) {
-    const query = text.toLocaleLowerCase('ru').replace(/ё/g, 'е');
-    if (/отчет|отчёт|утрен|вечерн/.test(query)) return 'reports';
-    if (/не отвеч|ответ|воспитател|чат/.test(query)) return 'educators';
-    if (/достав|передач|привез|вещи|посыл/.test(query)) return 'delivery';
-    if (/встреч|звон|позвон/.test(query)) return 'meetings';
-    if (/врач|лечен|препарат|анализ|процедур/.test(query)) return 'medical';
-    if (/режим|расписан|сон|завтрак|обед/.test(query)) return 'routine';
-    if (/домой|приложен|экран/.test(query)) return 'home';
+    const query = ` ${text.toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[^а-яa-z0-9]+/g, ' ').trim()} `;
+    const has = pattern => pattern.test(query);
+
+    // Сначала темы, где ошибка маршрутизации особенно нежелательна.
+    if (has(/ (?:врач|лечащ|лечение|лечить|препарат|таблет|лекарств|анализ|процедур|диагноз|терапи)/)) return 'medical';
+    if (has(/ (?:встреч|увидет|повидат|навещ|звон|созвон|позвон|поговор|общен)/)) return 'meetings';
+    if (has(/ (?:отчет|утренн|вечерн|наблюден)/)) return 'reports';
+    if (has(/ (?:режим|расписан|распоряд|подьем|завтрак|обед|полдник|ужин|сон час|отбой|прогулк|занят)/)) return 'routine';
+
+    const deliveryVerb = has(/ (?:достав|переда|привез|принес|заказ|отправ|полож|куп)/);
+    const deliveryThing = has(/ (?:еда|еду|вкусн|сладост|фрукт|пицц|суш|напит|одежд|вещ|посыл|передач|игрушк|книг|продукт)/);
+    if (deliveryVerb || deliveryThing) return 'delivery';
+
+    if (has(/(?:не отвеч|нет ответ|долго молч|почему молч|когда ответ|воспитател|написат.*вопрос| чат )/)) return 'educators';
+    if (has(/(?:экран домой| домой |приложен|установ|ярлык)/)) return 'home';
     return null;
   }
 
