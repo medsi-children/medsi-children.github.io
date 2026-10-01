@@ -5,6 +5,7 @@
   // существующую защищённую родительскую сессию на основном домене.
   const conversation = document.getElementById('conversation');
   const composer = document.getElementById('composer');
+  const backButton = document.getElementById('botBack');
   const promptStrip = document.getElementById('promptStrip');
   const input = document.getElementById('messageInput');
   const bot = document.getElementById('bot');
@@ -34,6 +35,7 @@
   const scenarios = {
     reports: { question: 'Когда ждать отчёт?', answer: 'Утренний отчёт с 15:00 до 16:00.\nВечерний — с 21:00 до 22:00.\n\nХотите посмотреть отчёт?', mood: 'neutral', after: 'reportChoices' },
     educators: { question: 'Почему воспитатели не отвечают?', answer: 'Воспитатели находятся с детьми и не могут отвечать в чате круглосуточно. Пожалуйста, наберитесь терпения: они ответят, как только смогут.' },
+    writeEducators: { question: 'Написать воспитателям', answer: 'Напишите воспитателям в чате — они ответят, как только смогут.', after: 'educatorChat' },
     delivery: {
       question: 'Что можно передать ребёнку?',
       answer: 'Адрес: Гринвуд, с11, Путилково\nКомментарий: «на 5 этаж» и имя ребёнка\n\nВы можете привезти или оформить доставку любых продуктов, напитков, еды, одежды и других вещей — в рамках ограничений по безопасности.\n\n🚫 Что запрещено:\nКолюще-режущее, стекло, металл.\n\n✅ Что можно заказать:\nЛюбую еду, одежду, вещи, творческие наборы, книги.'
@@ -172,9 +174,9 @@
     try {
       const current = await readParent('/lab/report-current');
       if (!current) {
-        if (delayed && kind) message('bot', `${reportDelayText(kind)}\n\nЧтобы проверить сам отчёт, откройте родительскую панель.`, reportStatus(kind) === 'late' ? 'sad' : 'neutral');
-        else message('bot', 'Чтобы посмотреть отчёт ребёнка, откройте помощника в вашей родительской панели.', 'neutral');
-        offerParentPanel();
+        if (delayed && kind) message('bot', reportDelayText(kind), reportStatus(kind) === 'late' ? 'sad' : 'neutral');
+        else message('bot', kind ? `Сейчас не получилось загрузить ${kind === 'morning' ? 'утренний' : 'вечерний'} отчёт. Можно попробовать ещё раз.` : 'Какой отчёт хотите посмотреть — утренний или вечерний?');
+        offerReportChoices();
         return;
       }
       const currentReports = (current.reports || []).filter(item => ['morning', 'evening'].includes(item.kind) && String(item.text || '').trim());
@@ -211,7 +213,8 @@
       message('bot', reportDelayText(kind), reportStatus(kind) === 'late' ? 'sad' : 'neutral');
     } catch (_) {
       if (delayed && kind) message('bot', `${reportDelayText(kind)}\n\nСейчас я не смог проверить, опубликован ли новый отчёт.`, reportStatus(kind) === 'late' ? 'sad' : 'neutral');
-      else message('bot', 'Сейчас не получилось проверить отчёт. Пожалуйста, попробуйте ещё раз чуть позже или откройте его в главном меню.', 'sad');
+      else message('bot', 'Сейчас не получилось загрузить отчёт. Пожалуйста, попробуйте ещё раз чуть позже.', 'sad');
+      offerReportChoices();
     } finally { setThinking(false); busy = false; }
   }
 
@@ -250,16 +253,9 @@
     const open = actionButton('Открыть чат с воспитателями', '1f4ac.svg', () => {
       // При встраивании в основную панель этот обработчик вызывает её openChat().
       if (typeof window.openMedsiEducatorChat === 'function') return window.openMedsiEducatorChat();
-      window.location.assign('/?openChat=1');
+      window.location.assign('https://медси-бот.рф/?openChat=1');
     });
     actions.appendChild(open);
-    conversation.appendChild(actions);
-    scrollToEnd();
-  }
-
-  function offerParentPanel() {
-    const actions = element('div', 'choices');
-    actions.appendChild(actionButton('Открыть родительскую панель', '1f4ac.svg', () => window.location.assign('https://медси-бот.рф/')));
     conversation.appendChild(actions);
     scrollToEnd();
   }
@@ -294,7 +290,7 @@
     const actions = element('div', 'choices');
     const open = actionButton('Психотерапия', '1f9e0.svg', () => {
       if (typeof window.openMedsiTherapy === 'function') return window.openMedsiTherapy();
-      window.location.assign('/?openTherapy=1');
+      window.location.assign('https://медси-бот.рф/?openTherapy=1');
     });
     actions.appendChild(open);
     conversation.appendChild(actions);
@@ -405,6 +401,8 @@
     if (!button || busy) return;
     submitQuestion(button.dataset.prompt);
   });
+
+  backButton.addEventListener('click', () => window.location.assign('https://медси-бот.рф/'));
 
   function follow(point) {
     const rect = bot.getBoundingClientRect();

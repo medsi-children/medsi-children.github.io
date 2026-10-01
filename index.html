@@ -99,7 +99,7 @@
   };
   var status=document.getElementById('parentBootStatus');
   var notice=setTimeout(function(){if(!window.MedsiParentApp||!window.MedsiParentApp.ready)status.classList.remove('hidden');},4000);
-  load('/parents/full-web.js?v=20260916-parent-recovery').then(function(){
+  load('/parents/full-web.js?v=20261002-smart-bot-links').then(function(){
     if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
     clearTimeout(notice);status.classList.add('hidden');
     window.MedsiLoadParentChat().then(function(){
