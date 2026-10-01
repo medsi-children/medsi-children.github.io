@@ -6,35 +6,19 @@
   <meta name="theme-color" content="#eaf7f5">
   <title>Медси Бот — пробный интерфейс</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/new/style.css?v=20261001-1">
-  <script defer src="/new/app.js?v=20261001-1"></script>
+  <link rel="stylesheet" href="/new/style.css?v=20261001-2">
+  <script defer src="/new/app.js?v=20261001-2"></script>
 </head>
 <body>
-  <div class="ambient ambient-one" aria-hidden="true"></div>
-  <div class="ambient ambient-two" aria-hidden="true"></div>
   <div class="page-shell">
-    <aside class="sidebar" aria-label="О пробной версии">
-      <div class="wordmark"><span class="brand-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span>Медси Бот</span></div>
-      <div class="sidebar-main">
-        <span class="eyebrow">Новый взгляд на привычное</span>
-        <h1>Забота —<br><em>в диалоге.</em></h1>
-        <p>Отчёты, связь с воспитателями и важные моменты дня — в одном спокойном пространстве.</p>
-        <div class="sidebar-art" aria-hidden="true"><span class="art-line art-line-one"></span><span class="art-line art-line-two"></span><span class="art-orbit"></span><span class="art-core"></span></div>
-      </div>
-      <div class="sidebar-foot"><span class="status-dot"></span> Экспериментальный интерфейс <span class="foot-index">01 / 01</span></div>
-    </aside>
-
     <main class="chat-shell" aria-label="Демонстрация нового родительского интерфейса">
       <header class="chat-header">
         <div class="header-avatar" aria-hidden="true"><span class="bot-face"><span class="bot-eye"></span><span class="bot-eye"></span><span class="bot-mouth"></span></span></div>
-        <div class="header-copy"><span class="header-kicker">Ваш помощник</span><strong>Медси Бот</strong><span class="header-status"><span></span> Всегда рядом</span></div>
-        <span class="demo-pill">Пробная версия</span>
+        <div class="header-copy"><strong>Медси Бот</strong><span class="header-status"><span></span> На связи</span></div>
       </header>
 
-      <div class="demo-note"><span class="note-star">✳</span><span>Это визуальный макет. Здесь пока нет входа в аккаунт, настоящих отчётов и отправки сообщений воспитателям.</span></div>
-
       <div id="conversation" class="conversation" role="log" aria-live="polite" aria-relevant="additions text">
-        <div class="date-divider"><span>Новая беседа</span></div>
+        <div class="date-divider"><span>Сегодня</span></div>
       </div>
 
       <form id="composer" class="composer" autocomplete="off">
@@ -42,16 +26,7 @@
         <input id="messageInput" type="text" maxlength="500" placeholder="Спросите об отчёте или напишите сообщение…" enterkeyhint="send">
         <button class="send-button" type="submit" aria-label="Отправить сообщение"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h13m-5-5 5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </form>
-      <p class="composer-hint">Ответы здесь показывают только будущий сценарий работы бота</p>
     </main>
-
-    <aside class="info-panel" aria-label="Возможности макета">
-      <span class="info-label">В ПРОБНОЙ ВЕРСИИ</span>
-      <div class="info-card"><span class="info-number">01</span><strong>Отчёты в диалоге</strong><p>Утренний, вечерний и групповая психотерапия — отдельными сообщениями в ленте.</p></div>
-      <div class="info-card"><span class="info-number">02</span><strong>Один шаг до чата</strong><p>Бот предложит связаться с воспитателями, когда вопрос адресован им.</p></div>
-      <div class="info-card"><span class="info-number">03</span><strong>Ничего лишнего</strong><p>Служебные сообщения бота останутся только у родителя.</p></div>
-      <div class="info-bottom">Время, чтобы быть рядом.<span class="mini-brand-dots" aria-hidden="true">● ● ● ● ●</span></div>
-    </aside>
   </div>
 </body>
 </html>

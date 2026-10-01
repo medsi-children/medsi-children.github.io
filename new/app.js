@@ -16,6 +16,21 @@
     if (content !== undefined) node.textContent = content;
     return node;
   };
+  const icons = {
+    morning: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 2v2.2M12 19.8V22M2 12h2.2M19.8 12H22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M19.1 4.9l-1.6 1.6M6.5 17.5l-1.6 1.6"></path></svg>',
+    evening: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 15.1A8.2 8.2 0 0 1 8.9 4.6 8.2 8.2 0 1 0 19.4 15.1Z"></path></svg>',
+    therapy: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.2a3.1 3.1 0 0 1 5.2-1.4 3.1 3.1 0 0 1 3 4.8 3.4 3.4 0 0 1-1.5 6.2 3.2 3.2 0 0 1-5.4 3 3.1 3.1 0 0 1-5.8-1.1 3.3 3.3 0 0 1-3.7-4.9 3.2 3.2 0 0 1 1.3-5.8A3.1 3.1 0 0 1 12 5.2Z"></path><path d="M12 5v14M8.3 9.2h3.6M12 14.5h3.4"></path></svg>',
+    schedule: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2"></circle><path d="M12 7v5l3.4 2"></path></svg>',
+    chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.4a7.2 7.2 0 0 1-7.4 7.1 8.6 8.6 0 0 1-3.3-.7L4 19.5l1.5-4.1A7 7 0 0 1 5 12.7a7.2 7.2 0 0 1 7.4-7.1A7.2 7.2 0 0 1 20 11.4Z"></path><path d="M8.9 11.7h.1M12.3 11.7h.1M15.7 11.7h.1"></path></svg>',
+    arrow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13m-5-5 5 5-5 5"></path></svg>',
+    back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6m5-5-5 5 5 5"></path></svg>'
+  };
+  const iconElement = name => {
+    const node = element('span', 'action-icon');
+    node.setAttribute('aria-hidden', 'true');
+    node.innerHTML = icons[name] || icons.chat;
+    return node;
+  };
 
   function message(side, text) {
     const row = element('div', `message-row ${side}`);
@@ -40,9 +55,7 @@
     for (const choice of choices) {
       const button = element('button', `quick-action${choice.full ? ' full' : ''}`, '');
       button.type = 'button';
-      const icon = element('span', 'action-icon', choice.icon);
-      icon.setAttribute('aria-hidden', 'true');
-      button.append(icon, element('span', '', choice.label));
+      button.append(iconElement(choice.icon), element('span', '', choice.label));
       button.addEventListener('click', () => {
         if (busy) return;
         message('user', choice.label);
@@ -56,33 +69,39 @@
 
   function report(kind) {
     const types = {
-      morning: { icon: '☀️', title: 'Утренний отчёт', className: 'morning' },
-      evening: { icon: '☾', title: 'Вечерний отчёт', className: 'evening' },
-      therapy: { icon: '✿', title: 'Групповая психотерапия', className: 'therapy' }
+      morning: { icon: 'morning', title: 'Утренний отчёт', className: 'morning' },
+      evening: { icon: 'evening', title: 'Вечерний отчёт', className: 'evening' },
+      therapy: { icon: 'therapy', title: 'Групповая психотерапия', className: 'therapy' }
     };
     const type = types[kind];
-    const stack = message('bot', 'Вот как последний актуальный отчёт будет появляться прямо в беседе.');
+    const stack = message('bot', 'Последний отчёт:');
     const card = element('article', 'report-preview');
     const top = element('div', `report-top ${type.className}`);
     const heading = element('div');
-    heading.append(element('strong', '', type.title), element('small', '', 'Карточка будущего отчёта'));
-    top.append(element('span', 'report-icon', type.icon), heading);
+    heading.append(element('strong', '', type.title), element('small', '', 'В карточке будет показан последний текст'));
+    const reportIcon = element('span', 'report-icon');
+    reportIcon.setAttribute('aria-hidden', 'true');
+    reportIcon.innerHTML = icons[type.icon];
+    top.append(reportIcon, heading);
     const body = element('div', 'report-body');
-    body.append(element('p', '', 'Здесь появится последний настоящий отчёт после подключения защищённого входа.'), element('div', 'demo-line'), element('div', 'demo-line short'));
-    card.append(top, body, element('div', 'report-foot', 'Демонстрация оформления · без данных ребёнка'));
+    body.append(element('p', '', 'Текст отчёта появится здесь после подключения учётной записи.'), element('div', 'demo-line'), element('div', 'demo-line short'));
+    card.append(top, body);
     stack.insertBefore(card, stack.lastChild);
     actions(stack, [
-      { icon: '💬', label: 'Написать воспитателям', action: 'educators', full: true },
-      { icon: '☀️', label: 'Утренний', action: 'morning' },
-      { icon: '☾', label: 'Вечерний', action: 'evening' }
+      { icon: 'chat', label: 'Написать воспитателям', action: 'educators', full: true },
+      { icon: 'morning', label: 'Утренний', action: 'morning' },
+      { icon: 'evening', label: 'Вечерний', action: 'evening' }
     ]);
   }
 
   function schedule() {
-    const stack = message('bot', 'Пример того, как будет выглядеть режим дня.');
+    const stack = message('bot', 'Режим дня:');
     const card = element('article', 'report-preview');
     const top = element('div', 'report-top');
-    top.append(element('span', 'report-icon', '◷'), element('strong', '', 'Режим дня'));
+    const scheduleIcon = element('span', 'report-icon');
+    scheduleIcon.setAttribute('aria-hidden', 'true');
+    scheduleIcon.innerHTML = icons.schedule;
+    top.append(scheduleIcon, element('strong', '', 'Режим дня'));
     const body = element('div', 'report-body');
     const list = element('ul', 'schedule-list');
     for (const [time, activity] of [['08:00', 'Подъём'], ['09:00', 'Завтрак'], ['10:00', 'Групповая психотерапия'], ['13:00', 'Обед'], ['17:00', 'Игры и творчество'], ['22:00', 'Отбой']]) {
@@ -91,7 +110,7 @@
       list.appendChild(item);
     }
     body.appendChild(list);
-    card.append(top, body, element('div', 'report-foot', 'Пример расписания · уточняется в рабочей версии'));
+    card.append(top, body);
     stack.insertBefore(card, stack.lastChild);
   }
 
@@ -101,20 +120,20 @@
     if (action === 'report-choice') {
       const stack = message('bot', 'Какой отчёт показать?');
       actions(stack, [
-        { icon: '☀️', label: 'Утренний отчёт', action: 'morning' },
-        { icon: '☾', label: 'Вечерний отчёт', action: 'evening' },
-        { icon: '✿', label: 'Психотерапия', action: 'therapy', full: true }
+        { icon: 'morning', label: 'Утренний отчёт', action: 'morning' },
+        { icon: 'evening', label: 'Вечерний отчёт', action: 'evening' },
+        { icon: 'therapy', label: 'Психотерапия', action: 'therapy', full: true }
       ]);
       return;
     }
     if (action === 'educators') {
-      const stack = message('bot', 'Переход к воспитателям будет открывать обычную переписку с ними. Мои подсказки и отчёты в их панели не появятся. Сейчас это только пример интерфейса — сообщение никому не отправляется.');
-      actions(stack, [{ icon: '↗', label: 'Посмотреть будущий чат', action: 'educator-preview', full: true }]);
+      const stack = message('bot', 'Открою чат с воспитателями. В нём будут только ваши сообщения и их ответы.');
+      actions(stack, [{ icon: 'arrow', label: 'Открыть чат с воспитателями', action: 'educator-preview', full: true }]);
       return;
     }
     if (action === 'educator-preview') {
-      const stack = message('bot', 'Так может выглядеть переход: отдельный чат с воспитателями, где будут только ваши и их сообщения. Подключение настоящей переписки сделаем после утверждения дизайна.');
-      actions(stack, [{ icon: '←', label: 'Вернуться к помощнику', action: 'home', full: true }]);
+      const stack = message('bot', 'Чат с воспитателями подключим после утверждения этого интерфейса.');
+      actions(stack, [{ icon: 'back', label: 'Вернуться к помощнику', action: 'home', full: true }]);
       return;
     }
     if (action === 'home') {
@@ -123,21 +142,21 @@
       return;
     }
     if (action === 'offer-educators') {
-      const stack = message('bot', 'Похоже, этот вопрос лучше адресовать воспитателям. Хотите открыть чат с ними? Ваш текст пока остаётся только в этой пробной беседе.');
+      const stack = message('bot', 'Похоже, этот вопрос лучше адресовать воспитателям. Открыть чат с ними?');
       actions(stack, [
-        { icon: '💬', label: 'Да, открыть чат', action: 'educators' },
-        { icon: '✳', label: 'Нет, к возможностям', action: 'home' }
+        { icon: 'chat', label: 'Да, открыть чат', action: 'educators' },
+        { icon: 'back', label: 'Нет, к возможностям', action: 'home' }
       ]);
     }
   }
 
   function homeActions(stack) {
     actions(stack, [
-      { icon: '☀️', label: 'Утренний отчёт', action: 'morning' },
-      { icon: '☾', label: 'Вечерний отчёт', action: 'evening' },
-      { icon: '✿', label: 'Психотерапия', action: 'therapy' },
-      { icon: '◷', label: 'Режим дня', action: 'schedule' },
-      { icon: '💬', label: 'Написать воспитателям', action: 'educators', full: true }
+      { icon: 'morning', label: 'Утренний отчёт', action: 'morning' },
+      { icon: 'evening', label: 'Вечерний отчёт', action: 'evening' },
+      { icon: 'therapy', label: 'Психотерапия', action: 'therapy' },
+      { icon: 'schedule', label: 'Режим дня', action: 'schedule' },
+      { icon: 'chat', label: 'Написать воспитателям', action: 'educators', full: true }
     ]);
   }
 
@@ -182,7 +201,7 @@
   });
 
   setTimeout(() => {
-    const stack = message('bot', 'Здравствуйте! Я Медси Бот ✳\n\nЗдесь можно быстро получить нужный отчёт, посмотреть режим дня или перейти к разговору с воспитателями. С чего начнём?');
+    const stack = message('bot', 'Здравствуйте! Что хотите посмотреть?');
     homeActions(stack);
   }, 350);
 })();
