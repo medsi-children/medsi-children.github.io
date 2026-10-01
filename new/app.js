@@ -207,7 +207,7 @@
       setGaze(bot.clientWidth * (.045 + (Math.random() - .5) * .13), bot.clientHeight * (-.06 + (Math.random() - .5) * .11));
     }, 2100);
   }
-  setGaze(bot.clientWidth * .14, bot.clientHeight * -.12);
+  setGaze(bot.clientWidth * .10, bot.clientHeight * -.08);
   window.setTimeout(() => {
     message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1f499.svg', 'after');
   }, 220);
