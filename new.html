@@ -13,28 +13,27 @@
   <main class="assistant-lab" aria-label="Медси Бот">
     <section class="bot-stage" aria-label="Анимированный Медси Бот">
       <div class="stage-copy">
-        <span class="eyebrow">Медси Бот</span>
-        <h1>Ваш помощник<br>в системе</h1>
-        <p>Подскажет, где найти нужную информацию.</p>
+        <h1>Медси Бот</h1>
+        <p>Ваш ИИ-помощник</p>
       </div>
       <div id="bot" class="bot" aria-hidden="true">
         <span class="bot-glow"></span>
-        <span class="bot-body"><span id="botEyes" class="bot-eyes"><i class="bot-eye"></i><i class="bot-eye"></i></span></span>
+        <svg class="bot-body" viewBox="0 0 160 160"><defs><linearGradient id="botFill" x1="18" y1="14" x2="142" y2="149" gradientUnits="userSpaceOnUse"><stop stop-color="#7be0c5"/><stop offset=".55" stop-color="#52cfbc"/><stop offset="1" stop-color="#3bc4bd"/></linearGradient></defs><path d="M61 6C98 5 145 31 154 70C164 111 128 147 87 156C44 165 4 136 2 95C-1 55 25 8 61 6Z" fill="url(#botFill)"/></svg>
+        <span id="botEyes" class="bot-eyes"><i class="bot-eye"></i><i class="bot-eye"></i></span>
       </div>
-      <p class="stage-hint">Попробуйте подвигать курсором рядом с ботом.</p>
     </section>
 
     <section class="help-panel" aria-label="Диалог с помощником">
       <header class="help-header">
-        <div><span class="eyebrow">Помощник</span><h2>Здравствуйте!</h2></div>
-        <span class="online"><i></i> На связи</span>
+        <div><h2>Медси Бот</h2><span class="assistant-subtitle">Ваш ИИ-помощник</span></div>
+        <span class="online"><i></i> Онлайн</span>
       </header>
 
       <div id="conversation" class="conversation" role="log" aria-live="polite" aria-relevant="additions text"></div>
 
       <form id="composer" class="composer" autocomplete="off">
         <label class="sr-only" for="messageInput">Ваш вопрос</label>
-        <input id="messageInput" type="text" maxlength="500" placeholder="Напишите ваш вопрос…" enterkeyhint="send">
+        <input id="messageInput" type="text" maxlength="500" placeholder="" enterkeyhint="send">
         <button type="submit" aria-label="Отправить вопрос"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13m-5-5 5 5-5 5"/></svg></button>
       </form>
     </section>
