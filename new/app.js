@@ -209,6 +209,6 @@
   }
   setGaze(bot.clientWidth * .14, bot.clientHeight * -.12);
   window.setTimeout(() => {
-    message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1f917.svg');
+    message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1f917.svg', 'after');
   }, 220);
 })();
