@@ -3,12 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="0">
   <meta name="theme-color" content="#f4fbfa">
   <title>Медси Бот — помощник</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/new/style.css?v=20261001-9">
-  <script defer src="/parents/smart-bot.js?v=20261001-4"></script>
-  <script defer src="/new/app.js?v=20261001-8"></script>
+  <link rel="stylesheet" href="/new/style.css?v=20261001-10">
+  <script defer src="/parents/smart-bot.js?v=20261001-5"></script>
+  <script defer src="/new/app.js?v=20261001-9"></script>
+  <script>
+    // После первого открытия сервис-воркер всегда берёт /new и её файлы из сети.
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=20261001-new-live-1').catch(() => {});
+  </script>
 </head>
 <body>
   <main class="assistant-lab" aria-label="Медси Бот">

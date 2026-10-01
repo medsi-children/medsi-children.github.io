@@ -6,6 +6,15 @@ self.addEventListener('activate', event => {
   event.waitUntil(self.clients.claim());
 });
 
+// Лаборатория Медси Бота часто меняется во время настройки. Для неё не держим
+// копии документа, стилей и скриптов: каждое открытие получает свежую версию.
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname !== '/new' && url.pathname !== '/new.html' && !url.pathname.startsWith('/new/')) return;
+  event.respondWith(fetch(event.request, { cache: 'no-store' }));
+});
+
 self.addEventListener('push', event => {
   let payload = {};
 
