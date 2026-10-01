@@ -19,4 +19,4 @@
 .stage-copy h1,.help-header h2{font-family:ui-rounded,"Avenir Next",Avenir,"Nunito Sans",system-ui,sans-serif;font-weight:650;letter-spacing:-.045em}.message-bubble{white-space:pre-line}
 
 /* Все значки в диалоге — локальные Twemoji, как на карточках главного меню. */
-.smart-emoji{display:inline-block;width:1.1em;height:1.1em;object-fit:contain;vertical-align:-.17em;pointer-events:none;user-select:none;-webkit-user-drag:none}.message-bubble-with-icon .smart-emoji{margin-right:.38em}.choices .smart-action{display:flex;align-items:center;gap:.45em}.choices .smart-action .smart-emoji{width:1.18em;height:1.18em;flex:none;margin:0}
+.smart-emoji{display:inline-block;width:1.1em;height:1.1em;object-fit:contain;vertical-align:-.17em;pointer-events:none;user-select:none;-webkit-user-drag:none}.message-bubble-icon-before .smart-emoji{margin-right:.38em}.message-bubble-icon-after .smart-emoji{margin-left:.38em}.choices .smart-action{display:flex;align-items:center;gap:.45em}.choices .smart-action .smart-emoji{width:1.18em;height:1.18em;flex:none;margin:0}

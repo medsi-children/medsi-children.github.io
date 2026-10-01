@@ -44,7 +44,7 @@
     urgent: { question: 'У меня срочный вопрос', answer: 'Если вопрос срочный, пожалуйста, напишите его в чате с воспитателями. Они ответят, как только смогут.', after: 'educatorChat' },
     signIn: { question: 'Не получается войти', answer: 'По вопросам входа, кода подтверждения и доступа к системе, пожалуйста, напишите воспитателям в чате.', after: 'educatorChat' },
     therapy: { question: 'Где посмотреть психотерапию?', answer: '', after: 'therapy' },
-    greeting: { question: 'Добрый день', answer: 'Добрый день', icon: '1f917.svg', after: 'greetingFollowup' },
+    greeting: { question: 'Добрый день', answer: 'Добрый день', icon: '1f917.svg', iconPosition: 'after', after: 'greetingFollowup' },
     routine: { question: 'Где посмотреть режим дня?', answer: 'Режим дня находится на главном экране системы: нажмите карточку «Режим дня». Там указано расписание занятий, приёмов пищи, прогулок и сна.' },
     home: { question: 'Как добавить систему на экран «Домой»?', answer: 'На главном экране есть подсказка по добавлению Медси Бота на экран «Домой». После этого система будет открываться как обычное приложение.' },
     thanks: { question: 'Спасибо!', answer: 'Пожалуйста! Я рядом, если понадобится подсказка.', mood: 'happy' }
@@ -71,7 +71,7 @@
     return '<svg viewBox="0 0 160 160" aria-hidden="true"><path d="M61 6C98 5 145 31 154 70C164 111 128 147 87 156C44 165 4 136 2 95C-1 55 25 8 61 6Z"/></svg><span class="mini-eyes"><i></i><i></i></span>';
   }
 
-  function message(side, text, mood = 'neutral', iconFile = '') {
+  function message(side, text, mood = 'neutral', iconFile = '', iconPosition = 'before') {
     const item = element('article', `message ${side}`);
     if (side === 'bot') {
       const avatar = element('span', `message-avatar mood-${mood}`);
@@ -82,8 +82,11 @@
     const content = element('div', 'message-content');
     const bubble = element('div', 'message-bubble', text);
     if (iconFile) {
-      bubble.prepend(emoji(iconFile, ''));
+      const image = emoji(iconFile, '');
+      if (iconPosition === 'after') bubble.append(image);
+      else bubble.prepend(image);
       bubble.classList.add('message-bubble-with-icon');
+      bubble.classList.add(`message-bubble-icon-${iconPosition}`);
     }
     content.append(bubble, element('time', 'message-time', clock()));
     item.appendChild(content);
@@ -149,7 +152,7 @@
     setThinking(true);
     window.setTimeout(() => {
       const answer = scenario.variants && scenario.variants[parsed.variant] || scenario.answer;
-      if (answer) message('bot', answer, scenario.mood || 'neutral', scenario.icon || '');
+      if (answer) message('bot', answer, scenario.mood || 'neutral', scenario.icon || '', scenario.iconPosition || 'before');
       if (scenario.after === 'reportChoices') offerReportChoices();
       if (scenario.after === 'educatorChat') offerEducatorChat();
       if (scenario.after === 'therapy') offerTherapy();
