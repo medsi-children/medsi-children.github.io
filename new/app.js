@@ -80,8 +80,8 @@
     urgent: { question: 'У меня срочный вопрос', answer: 'Если вопрос срочный, пожалуйста, напишите его в чате с воспитателями. Они ответят, как только смогут.', after: 'educatorChat', variants: { medical: 'Если медицинский вопрос требует срочного решения, пожалуйста, позвоните лечащему врачу.\n\nАнастасия Михайловна: +79253394090\nАнтон Геннадьевич: +79859927884' } },
     signIn: { question: 'Не получается войти', answer: 'По вопросам входа, кода подтверждения и доступа к системе, пожалуйста, напишите воспитателям в чате.', after: 'educatorChat' },
     therapy: { question: 'Психотерапия', answer: 'Что вас интересует: занятия с психологом или групповая терапия?', after: 'therapyChoices' },
-    groupTherapy: { question: 'Групповая психотерапия', answer: 'Чтобы посмотреть отчёт по групповой психотерапии, нажмите кнопку ниже.', after: 'therapy' },
-    groupTherapyTime: { question: 'Когда групповая психотерапия?', answer: 'В режиме дня групповая психотерапия указана на 10:00. Чтобы посмотреть отчёт по занятию, нажмите кнопку ниже.', after: 'therapy' },
+    groupTherapy: { question: 'Групповая психотерапия' },
+    groupTherapyTime: { question: 'Когда групповая психотерапия?', answer: 'В режиме дня групповая психотерапия указана на 10:00. Отчёт по занятию могу показать здесь.', after: 'therapy' },
     individualTherapy: { question: 'Индивидуальные занятия с психологом', answer: 'По вопросам индивидуальной психотерапии, пожалуйста, связывайтесь напрямую с вашим психологом.' },
     greeting: { question: 'Добрый день', answer: 'Добрый день', icon: '1f499.svg', iconPosition: 'after', after: 'greetingFollowup' },
     routine: { question: 'Какой режим дня?', answer: 'Утро\n8:00 — Подъём\n8:30 — Зарядка\n9:00 — Завтрак\n9:30 — Игры и творчество\n10:00 — Групповая психотерапия\n11:00 — Прогулка\n12:00 — Игры и творчество\n13:00 — Обед\n14:00 — Сон-час\n\nВечер\n16:00 — Йога / Танцы\n16:30 — Полдник\n17:00 — Игры и творчество\n18:00 — Ужин\n18:15 — Киносеанс\n21:00 — Подготовка ко сну / медицинские процедуры\n22:00 — Отбой\n\nВстречи с детьми: 17:00–20:00.' },
@@ -199,6 +199,54 @@
     item.append(avatar, content);
     conversation.appendChild(item);
     scrollToEnd();
+  }
+
+  function therapyReportCard(text) {
+    const item = element('article', 'message bot therapy-message');
+    const avatar = element('span', 'message-avatar');
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.innerHTML = avatarMarkup();
+    syncMiniBlink(avatar);
+    const content = element('div', 'message-content');
+    const card = element('div', 'report-card therapy-report-card');
+    const heading = element('div', 'report-card-heading');
+    heading.append(emoji('1f9e0.svg', ''), element('strong', '', 'Групповая психотерапия'));
+    const body = element('div', 'therapy-report-body');
+    const formatter = window.MedsiPsychologyFormatter;
+    if (formatter && typeof formatter.render === 'function') formatter.render(body, text);
+    else body.textContent = text;
+    card.append(heading, body);
+    content.append(card, element('time', 'message-time', clock()));
+    item.append(avatar, content);
+    conversation.appendChild(item);
+    scrollToEnd();
+  }
+
+  async function answerTherapyReport() {
+    setThinking(true);
+    showTyping();
+    try {
+      const current = await readParent('/lab/report-current');
+      if (!current) {
+        message('bot', 'Чтобы показать отчёт, откройте Медси Бот на основном адресе и войдите в аккаунт.');
+        return;
+      }
+      const report = (current.reports || []).find(item => item.kind === 'psychology' && String(item.text || '').trim());
+      if (report) therapyReportCard(report.text);
+      else message('bot', 'Отчёта по групповой психотерапии пока нет. Пожалуйста, попробуйте позже.');
+    } catch (_) {
+      message('bot', 'Сейчас не получилось загрузить отчёт по групповой психотерапии. Пожалуйста, попробуйте ещё раз чуть позже.', 'sad');
+    } finally { clearTyping(); setThinking(false); busy = false; }
+  }
+
+  function requestTherapyReport(question = 'Групповая психотерапия') {
+    if (busy) return;
+    busy = true;
+    awaitingTherapyChoice = false;
+    pendingChoice = '';
+    lastIntentKey = 'groupTherapy';
+    message('user', question);
+    answerTherapyReport();
   }
 
   async function answerReport(kind, delayed) {
@@ -355,10 +403,7 @@
 
   function offerTherapy() {
     const actions = element('div', 'choices');
-    const open = actionButton('Психотерапия', '1f9e0.svg', () => {
-      if (typeof window.openMedsiTherapy === 'function') return window.openMedsiTherapy();
-      window.location.assign('https://медси-бот.рф/?openTherapy=1');
-    });
+    const open = actionButton('Психотерапия', '1f9e0.svg', () => requestTherapyReport());
     actions.appendChild(open);
     conversation.appendChild(actions);
     scrollToEnd();
@@ -375,6 +420,10 @@
 
   function runScenario(intent, question) {
     const parsed = typeof intent === 'string' ? { key: intent } : intent;
+    if (parsed && parsed.key === 'groupTherapy') {
+      requestTherapyReport(question || scenarios.groupTherapy.question);
+      return;
+    }
     if (parsed && (parsed.key === 'reportRequest' || parsed.key === 'reportDelay')) {
       if (busy) return;
       busy = true;
