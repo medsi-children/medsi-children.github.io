@@ -13,6 +13,12 @@
       .trim()} `;
   }
 
+  function isGreetingOnly(text) {
+    const greeting = normalize(text).trim().replace(/^(?:медси бот|бот) /, '').replace(/ (?:медси бот|бот)$/, '');
+    return /^(?:привет(?!стви)[а-я]*|здравств[а-я]*|здраст[а-я]*|здрасьт[а-я]*|здаров[а-я]*|здорово|салют[а-я]*|хай|хеллоу|хелло|hello|hi|ку)(?: (?:вам|тебе|всем))?$/.test(greeting)
+      || /^(?:доброе|добрый|доброго|доброй) (?:утр[а-я]*|день|дня|ден[а-я]*|вечер[а-я]*|ноч[а-я]*|времен[а-я]* суток)$/.test(greeting);
+  }
+
   function classify(text) {
     const query = normalize(text);
     const tokens = query.trim().split(/\s+/).filter(Boolean);
@@ -24,7 +30,10 @@
     const medicine = has('лекарств', 'таблет', 'препарат', 'медикамент', 'дозиров', 'рецепт');
     const treatment = has('лечен', 'лечи', 'лечу', 'анализ', 'процедур', 'диагноз', 'назначен', 'выписк', 'обследован', 'симптом');
     const therapy = has('психотерап', 'психолог') || has('терапи') && !medicine;
-    const report = has('отчет', 'сводк', 'наблюден') || has('утренн', 'вечерн') && has('покаж', 'отправ', 'скин', 'пришл', 'присл', 'посмотр', 'откры', 'когда', 'будет', 'готов', 'нов', 'почему', 'нет', 'задерж');
+    const report = has('отчет', 'сводк', 'наблюден') || has('утренн', 'вечерн') && (
+      has('покаж', 'отправ', 'скин', 'пришл', 'присл', 'посмотр', 'откры', 'когда', 'будет', 'готов', 'нов', 'почему', 'нет', 'задерж', 'опазд', 'приш', 'появ', 'обнов', 'где', 'жду', 'ждем')
+      || says(/ (?:не было|не приш[а-я]*|не появ[а-я]*|не виж[а-я]*|до сих пор) /)
+    );
     const deliveryAction = has('достав', 'переда', 'привез', 'привоз', 'принес', 'принос', 'заказ', 'курьер', 'посыл', 'гринвуд');
     const deliveryItem = has('еда', 'еду', 'еды', 'вкусн', 'сладост', 'фрукт', 'пицц', 'суши', 'напит', 'одежд', 'вещ', 'игрушк', 'книг', 'продукт', 'творческ');
 
@@ -38,11 +47,13 @@
     if (individual) return 'individualTherapy';
     if (therapy) return 'therapy';
 
+    if (has('спасибо', 'благодар') && !question && !has('покаж', 'отправ', 'скин', 'пришл', 'присл', 'посмотр')) return 'thanks';
+
     if (report) {
       const kind = has('утренн') && !has('вечерн') ? 'morning' : has('вечерн') && !has('утренн') ? 'evening' : '';
       const aboutContent = has('информац', 'напис', 'сказан', 'указан', 'данн', 'текст', 'содержан', 'описан', 'ошибк', 'неточн', 'неверн', 'неправил', 'неправд', 'исправ')
         || (medicine || treatment) && (has('почему', 'зачем') || says(/ (?:нет|нету) [а-я ]*(?:лечен|лекарств|препарат)/));
-      const missing = !aboutContent && (has('задерж', 'опозд', 'пропал', 'стар') || says(/ (?:нет|нету|не было|не приш[а-я]*|не появ[а-я]*|не обнов[а-я]*|не виж[а-я]*|не получ[а-я]*|не готов[а-я]*|до сих пор) /)
+      const missing = !aboutContent && (has('задерж', 'опозд', 'опазд', 'пропал', 'стар') || says(/ (?:нет|нету|не было|не приш[а-я]*|не появ[а-я]*|не обнов[а-я]*|не виж[а-я]*|не получ[а-я]*|не готов[а-я]*|до сих пор) /)
         || has('где') && !has('посмотр', 'откры', 'найти'));
       const askingTime = has('когда', 'время', 'расписан', 'ждать') || says(/ во сколько/);
       const askingContent = aboutContent || has('почему', 'зачем', 'ошибк', 'неправд', 'неверн') && !missing;
@@ -65,8 +76,8 @@
     if (urgent && (medicine || treatment || doctor || has('плохо', 'состояни'))) return { key: 'urgent', variant: 'medical' };
     if (medicine && deliveryAction) return { key: 'delivery', variant: 'medicine' };
     if (deliveryAction && has('оплат', 'стоимост', 'цен', 'платеж', 'заплат')) return 'writeEducators';
-    if (medicine || treatment || doctor) return { key: 'medical', variant: medicine ? 'medicine' : '' };
     if (has('оплат', 'стоимост', 'цен', 'платеж', 'заплат', 'квитанц', 'счет') && !deliveryAction) return 'payment';
+    if (medicine || treatment || doctor) return { key: 'medical', variant: medicine ? 'medicine' : '' };
     if (deliveryAction || deliveryItem) {
       const variant = has('адрес', 'куда', 'где', 'этаж', 'корпус') ? 'address'
         : has('ножниц', 'нож', 'лезви', 'остр', 'стекл', 'металл') ? 'restricted'
@@ -105,5 +116,5 @@
     return { intent, confidence };
   }
 
-  window.MedsiSmartBot = Object.freeze({ normalize, classify, analyze });
+  window.MedsiSmartBot = Object.freeze({ normalize, classify, analyze, isGreetingOnly });
 })();

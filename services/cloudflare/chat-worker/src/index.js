@@ -1,3 +1,5 @@
+import { saveBotLog, listBotLogs } from './bot-logs.js';
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -954,6 +956,9 @@ export default {
     if (request.method === 'GET' && url.pathname.startsWith('/media/')) {
       return serveMedia(env, decodeURIComponent(url.pathname.slice('/media/'.length)));
     }
+    if (request.method === 'GET' && url.pathname === '/admin/bot-logs') {
+      return listBotLogs(request, env);
+    }
     if (url.pathname.startsWith('/admin/')) {
       if (!await requireAdmin(request, env)) return json({ ok: false, message: 'Unauthorized' }, 401);
       if (request.method === 'POST' && url.pathname === '/admin/import') return importBatch(request, env);
@@ -1008,6 +1013,9 @@ export default {
     }
     if (request.method === 'GET' && url.pathname === '/lab/profile') {
       return getOwnProfile(env, auth);
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/bot-log') {
+      return saveBotLog(request, env, auth);
     }
     if (request.method === 'POST' && url.pathname === '/lab/messages') {
       if (!['parent', 'educator'].includes(auth.role)) return json({ ok: false, message: 'Forbidden' }, 403);

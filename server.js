@@ -198,6 +198,12 @@ app.all(/^\/lab(?:\/.*)?$/, (req, res) => {
   proxy(req, res, CHAT_UPSTREAM + req.originalUrl);
 });
 
+// The viewer credential is checked by the Worker; the gateway only keeps the
+// browser on the same origin. Parent chat sessions cannot read this route.
+app.get('/__bot-log-view', (req, res) => {
+  proxy(req, res, CHAT_UPSTREAM + '/admin/bot-logs' + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''));
+});
+
 app.all(/^\/push(?:\/.*)?$/, (req, res) => {
   const suffix = req.originalUrl.replace(/^\/push/, '') || '/';
   proxy(req, res, PUSH_UPSTREAM + suffix);

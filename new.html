@@ -10,10 +10,10 @@
   <title>Медси Бот — помощник</title>
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/parents/psychology-format.css?v=20260905-production">
-  <link rel="stylesheet" href="/new/style.css?v=20261002-13">
+  <link rel="stylesheet" href="/new/style.css?v=20261002-15">
   <script defer src="/parents/psychology-format.js?v=20260909-leading-dot-1"></script>
-  <script defer src="/parents/smart-bot.js?v=20261002-13"></script>
-  <script defer src="/new/app.js?v=20261002-14"></script>
+  <script defer src="/parents/smart-bot.js?v=20261002-15"></script>
+  <script defer src="/new/app.js?v=20261002-15"></script>
   <script>
     // После первого открытия сервис-воркер всегда берёт /new и её файлы из сети.
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js?v=20261001-new-live-1').catch(() => {});
@@ -25,6 +25,7 @@
       <div class="stage-copy">
         <h1>Медси Бот</h1>
         <p>Ваш ИИ-помощник</p>
+        <a id="botLogLink" class="bot-log-link" href="/new/logs.html" hidden>Журнал диалогов</a>
       </div>
       <div id="bot" class="bot" aria-hidden="true">
         <span class="bot-glow"></span>

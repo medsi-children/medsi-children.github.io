@@ -8,7 +8,8 @@
     "start": "node -r ./lib/session-preload.js server.js",
     "verify:server": "node --check server.js && node --check lib/session-preload.js",
     "verify:source-control": "node scripts/verify-source-control.mjs",
-    "verify": "npm run verify:server && npm run verify:source-control"
+    "verify:bot": "node scripts/verify-smart-bot.mjs && node scripts/verify-bot-logs.mjs && node --check new/app.js && node --check new/logs.js",
+    "verify": "npm run verify:server && npm run verify:source-control && npm run verify:bot"
   },
   "engines": {
     "node": ">=20"

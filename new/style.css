@@ -45,3 +45,5 @@
 
 /* Длинный отчёт читается в одной ленте без внутренней прокрутки. */
 .therapy-report-card .psych-intro-value,.therapy-report-card .psych-step-title{font-size:.86rem}.therapy-report-card .psych-paragraph,.therapy-report-card .psych-list li,.therapy-report-card .psych-subsection p{font-size:.83rem;line-height:1.6}.therapy-report-card .psych-intro-label{font-size:.74rem}.therapy-report-card .psych-step{padding-bottom:21px}
+
+.bot-log-link{display:inline-block;margin-top:12px;color:#278f94;font-size:.8rem;text-decoration:underline;text-underline-offset:3px}.bot-log-link[hidden]{display:none}

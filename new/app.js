@@ -11,6 +11,23 @@
   const bot = document.getElementById('bot');
   const botEyes = document.getElementById('botEyes');
   const EMOJI_BASE = '/chat-overlay/assets/twemoji/';
+  const logLink = document.getElementById('botLogLink');
+  if (logLink && new URLSearchParams(location.search).has('logs')) logLink.hidden = false;
+  const IS_PRIMARY_HOST = location.origin === new URL('https://медси-бот.рф').origin;
+  const createLogId = () => {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  };
+  const logSessionId = createLogId();
+  const pendingLogEntries = [];
+  let logTimer = null;
+  let logBusy = false;
+  let logFailures = 0;
+  let hasUserLog = false;
   let busy = false;
   let awaitingTherapyChoice = false;
   let awaitingReportDelayChoice = false;
@@ -124,6 +141,61 @@
   };
   const safeGet = key => { try { return localStorage.getItem(key) || ''; } catch (_) { return ''; } };
 
+  function queueBotLog(side, text) {
+    if (!IS_PRIMARY_HOST || !text) return;
+    pendingLogEntries.push({ side, text: String(text) });
+    if (side === 'user') hasUserLog = true;
+    if (!hasUserLog) return;
+    window.clearTimeout(logTimer);
+    logTimer = window.setTimeout(() => { void flushBotLog(); }, 800);
+  }
+
+  async function flushBotLog() {
+    window.clearTimeout(logTimer);
+    if (!IS_PRIMARY_HOST || !hasUserLog || !pendingLogEntries.length) return;
+    if (logBusy) { logTimer = window.setTimeout(() => { void flushBotLog(); }, 1000); return; }
+    logBusy = true;
+    const entries = [];
+    const encoder = new TextEncoder();
+    let bytes = 0;
+    let characters = 0;
+    while (pendingLogEntries.length && entries.length < 12
+      && bytes + encoder.encode(pendingLogEntries[0].text).byteLength <= 80000
+      && characters + pendingLogEntries[0].text.length <= 70000) {
+      const entry = pendingLogEntries.shift();
+      entries.push(entry);
+      bytes += encoder.encode(entry.text).byteLength;
+      characters += entry.text.length;
+    }
+    if (!entries.length) { pendingLogEntries.shift(); logBusy = false; return; }
+    const payload = JSON.stringify({ sessionId: logSessionId, eventId: createLogId(), entries });
+    try {
+      let session = await parentSession();
+      if (!session) return;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const response = await fetch('/lab/bot-log', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'X-Medsi-Chat-Session': session.token },
+          body: payload,
+          cache: 'no-store',
+          keepalive: encoder.encode(payload).byteLength < 60000
+        });
+        if (response.status === 401 && attempt === 0) { session = await parentSession(true); continue; }
+        if (!response.ok) throw new Error('BOT_LOG_UNAVAILABLE');
+        logFailures = 0;
+        return;
+      }
+    } catch (_) {
+      if (++logFailures < 3) {
+        pendingLogEntries.unshift(...entries);
+        logTimer = window.setTimeout(() => { void flushBotLog(); }, 5000);
+      }
+    } finally {
+      logBusy = false;
+      if (pendingLogEntries.length && logFailures === 0) logTimer = window.setTimeout(() => { void flushBotLog(); }, 800);
+    }
+  }
+
   async function parentSession(force = false) {
     // На GitHub Pages нет родительской авторизации и защищённого шлюза.
     if (location.origin !== new URL('https://медси-бот.рф').origin) return null;
@@ -176,6 +248,11 @@
 
   function reportTitle(kind) { return kind === 'morning' ? 'Утренний отчёт' : 'Вечерний отчёт'; }
   function reportWindow(kind) { return kind === 'morning' ? 'с 15:00 до 16:00' : 'с 21:00 до 22:00'; }
+  function reportAccessText() {
+    return location.origin === new URL('https://медси-бот.рф').origin
+      ? 'Чтобы я мог проверить отчёт, пожалуйста, войдите в Медси Бот.'
+      : 'Чтобы я мог проверить отчёт, откройте Медси Бот на основном адресе и войдите в аккаунт.';
+  }
   function reportDelayText(kind) {
     const status = reportStatus(kind);
     if (status === 'before') return `${reportTitle(kind)} обычно появляется ${reportWindow(kind)}. Пожалуйста, дождитесь этого времени.`;
@@ -208,6 +285,7 @@
     content.append(card, element('time', 'message-time', clock()));
     item.append(avatar, content);
     conversation.appendChild(item);
+    queueBotLog('bot', text);
     scrollToEnd();
   }
 
@@ -229,6 +307,7 @@
     content.append(card, element('time', 'message-time', clock()));
     item.append(avatar, content);
     conversation.appendChild(item);
+    queueBotLog('bot', text);
     scrollToEnd();
   }
 
@@ -265,15 +344,14 @@
     try {
       const current = await readParent('/lab/report-current');
       if (!current) {
-        if (delayed && kind) showReportDelay(kind);
-        else message('bot', kind ? `Сейчас не получилось загрузить ${kind === 'morning' ? 'утренний' : 'вечерний'} отчёт. Можно попробовать ещё раз.` : 'Какой отчёт хотите посмотреть — утренний или вечерний?');
-        offerReportChoices();
+        message('bot', reportAccessText());
         return;
       }
       const currentReports = (current.reports || []).filter(item => ['morning', 'evening'].includes(item.kind) && String(item.text || '').trim());
       let history = [];
+      let historyAvailable = true;
       if (delayed || !kind) {
-        try { history = (await readParent('/lab/report-history')).reports || []; } catch (_) { /* current report still remains available */ }
+        try { history = (await readParent('/lab/report-history')).reports || []; } catch (_) { historyAvailable = false; }
       }
       if (!kind) {
         const changed = currentReports.filter(item => {
@@ -301,11 +379,20 @@
         reportCard(kind, found.text);
         return;
       }
+      if (found && (!historyAvailable || !previous)) {
+        message('bot', 'Я вижу последний доступный отчёт, но сейчас не могу точно проверить дату публикации нового. Покажу доступный отчёт.');
+        reportCard(kind, found.text);
+        return;
+      }
+      if (!historyAvailable) {
+        message('bot', 'Сейчас не получилось проверить, опубликован ли новый отчёт. Пожалуйста, попробуйте ещё раз чуть позже.', 'sad');
+        return;
+      }
       showReportDelay(kind);
     } catch (_) {
-      if (delayed && kind) showReportDelay(kind, '\n\nСейчас не получилось проверить, опубликован ли новый отчёт.');
-      else message('bot', 'Сейчас не получилось загрузить отчёт. Пожалуйста, попробуйте ещё раз чуть позже.', 'sad');
-      offerReportChoices();
+      message('bot', delayed
+        ? 'Сейчас не получилось проверить, опубликован ли новый отчёт. Пожалуйста, попробуйте ещё раз чуть позже.'
+        : 'Сейчас не получилось загрузить отчёт. Пожалуйста, попробуйте ещё раз чуть позже.', 'sad');
     } finally { clearTyping(); setThinking(false); busy = false; }
   }
 
@@ -364,6 +451,7 @@
     content.append(bubble, element('time', 'message-time', clock()));
     item.appendChild(content);
     conversation.appendChild(item);
+    queueBotLog(side, text);
     scrollToEnd();
   }
 
@@ -386,6 +474,7 @@
     const open = actionButton('Открыть чат с воспитателями', '1f4ac.svg', () => {
       // При встраивании в основную панель этот обработчик вызывает её openChat().
       if (typeof window.openMedsiEducatorChat === 'function') return window.openMedsiEducatorChat();
+      void flushBotLog();
       window.location.assign('https://медси-бот.рф/?openChat=1');
     });
     actions.appendChild(open);
@@ -496,7 +585,7 @@
       if (after === 'therapy') offerTherapy();
       if (after === 'therapyChoices') { offerTherapyChoices(); awaitingTherapyChoice = true; pendingChoice = 'therapy'; }
       if (after === 'clarifyReportMedical' || after === 'clarifyDoctorMeeting' || after === 'clarifyDelivery') offerClarification(after);
-      if (after === 'navigateChat') window.setTimeout(() => window.location.assign('https://медси-бот.рф/?openChat=1'), 180);
+      if (after === 'navigateChat') window.setTimeout(() => { void flushBotLog(); window.location.assign('https://медси-бот.рф/?openChat=1'); }, 180);
       if (scenario.after === 'greetingFollowup') window.setTimeout(() => message('bot', 'Как я могу вам помочь?'), 230);
       clearTyping();
       setThinking(false);
@@ -518,12 +607,6 @@
     });
     conversation.appendChild(actions);
     scrollToEnd();
-  }
-
-  function isGreetingOnly(simple) {
-    const greeting = simple.replace(/^(?:медси бот|бот) /, '').replace(/ (?:медси бот|бот)$/, '');
-    return /^(?:привет(?!стви)[а-я]*|здравств[а-я]*|здраст[а-я]*|здрасьт[а-я]*|здаров[а-я]*|здорово|салют[а-я]*|хай|хеллоу|хелло|hello|hi|ку)(?: (?:вам|тебе|всем))?$/.test(greeting)
-      || /^(?:доброе|добрый|доброго|доброй) (?:утр[а-я]*|день|дня|ден[а-я]*|вечер[а-я]*|ноч[а-я]*|времен[а-я]* суток)$/.test(greeting);
   }
 
   function classify(text) {
@@ -557,7 +640,7 @@
       if (/^(?:групп[а-я]*|групповая терапия|отчет по группе)$/.test(simple)) return 'groupTherapy';
       if (/^(?:индивидуал[а-я]*|занятия с психологом|психолог)$/.test(simple)) return 'individualTherapy';
     }
-    if (isGreetingOnly(simple)) return 'greeting';
+    if (window.MedsiSmartBot && window.MedsiSmartBot.isGreetingOnly(text)) return 'greeting';
     const analyzed = window.MedsiSmartBot && window.MedsiSmartBot.analyze(text);
     const known = analyzed && analyzed.confidence < .75 && analyzed.intent && analyzed.intent.key === 'delivery'
       ? { key: 'clarifyDelivery' } : analyzed && analyzed.intent;
@@ -606,7 +689,8 @@
     submitQuestion(button.dataset.prompt);
   });
 
-  backButton.addEventListener('click', () => window.location.assign('https://медси-бот.рф/'));
+  backButton.addEventListener('click', () => { void flushBotLog(); window.location.assign('https://медси-бот.рф/'); });
+  window.addEventListener('pagehide', () => { void flushBotLog(); });
 
   function follow(point) {
     const rect = bot.getBoundingClientRect();
