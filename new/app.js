@@ -12,8 +12,10 @@
   const botEyes = document.getElementById('botEyes');
   const EMOJI_BASE = '/chat-overlay/assets/twemoji/';
   const logLink = document.getElementById('botLogLink');
+  const embedded = document.documentElement.dataset.embedded === '1' && window.parent !== window;
   if (logLink && new URLSearchParams(location.search).has('logs')) logLink.hidden = false;
   const IS_PRIMARY_HOST = location.origin === new URL('https://медси-бот.рф').origin;
+  const tellParent = type => { if (embedded) window.parent.postMessage({ type }, location.origin); };
   const createLogId = () => {
     if (crypto.randomUUID) return crypto.randomUUID();
     const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -473,9 +475,7 @@
     const actions = element('div', 'choices');
     const open = actionButton('Открыть чат с воспитателями', '1f4ac.svg', () => {
       // При встраивании в основную панель этот обработчик вызывает её openChat().
-      if (typeof window.openMedsiEducatorChat === 'function') return window.openMedsiEducatorChat();
-      void flushBotLog();
-      window.location.assign('https://медси-бот.рф/?openChat=1');
+      openEducatorChat();
     });
     actions.appendChild(open);
     conversation.appendChild(actions);
@@ -585,7 +585,7 @@
       if (after === 'therapy') offerTherapy();
       if (after === 'therapyChoices') { offerTherapyChoices(); awaitingTherapyChoice = true; pendingChoice = 'therapy'; }
       if (after === 'clarifyReportMedical' || after === 'clarifyDoctorMeeting' || after === 'clarifyDelivery') offerClarification(after);
-      if (after === 'navigateChat') window.setTimeout(() => { void flushBotLog(); window.location.assign('https://медси-бот.рф/?openChat=1'); }, 180);
+      if (after === 'navigateChat') window.setTimeout(openEducatorChat, 180);
       if (scenario.after === 'greetingFollowup') window.setTimeout(() => message('bot', 'Как я могу вам помочь?'), 230);
       clearTyping();
       setThinking(false);
@@ -689,7 +689,23 @@
     submitQuestion(button.dataset.prompt);
   });
 
-  backButton.addEventListener('click', () => { void flushBotLog(); window.location.assign('https://медси-бот.рф/'); });
+  async function openEducatorChat() {
+    await flushBotLog();
+    if (embedded) return tellParent('medsi-bot:open-educators');
+    if (typeof window.openMedsiEducatorChat === 'function') return window.openMedsiEducatorChat();
+    window.location.assign('https://медси-бот.рф/?openChat=1');
+  }
+
+  backButton.addEventListener('click', async () => {
+    await flushBotLog();
+    if (embedded) return tellParent('medsi-bot:closed');
+    window.location.assign('https://медси-бот.рф/');
+  });
+  if (embedded) window.addEventListener('message', async event => {
+    if (event.source !== window.parent || event.origin !== location.origin || event.data?.type !== 'medsi-bot:close-request') return;
+    await flushBotLog();
+    tellParent('medsi-bot:closed');
+  });
   window.addEventListener('pagehide', () => { void flushBotLog(); });
 
   function follow(point) {
