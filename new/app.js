@@ -19,6 +19,8 @@
   let lastReportKind = '';
   let lastIntentKey = '';
   let typingItem = null;
+  let contextUntil = 0;
+  let moodTimer = null;
   const BLINK_CYCLE_MS = 5200;
   let blinkEpoch = 0;
 
@@ -56,6 +58,9 @@
     reports: { question: 'Когда ждать отчёт?', answer: 'Утренний отчёт с 15:00 до 16:00.\nВечерний — с 21:00 до 22:00.\n\nХотите посмотреть отчёт?', mood: 'neutral', after: 'reportChoices' },
     chooseReport: { question: 'Да', answer: 'Какой отчёт?', after: 'reportChoices' },
     noThanks: { question: 'Нет', answer: 'Хорошо. Если понадобится, я рядом.' },
+    clarifyReportMedical: { question: 'Вопрос об отчёте и лечении', answer: 'Вы хотите посмотреть отчёт или задать вопрос о лечении?', after: 'clarifyReportMedical' },
+    clarifyDoctorMeeting: { question: 'Встреча с врачом', answer: 'Вы спрашиваете о встрече с ребёнком или о связи с лечащим врачом?', after: 'clarifyDoctorMeeting' },
+    clarifyDelivery: { question: 'Еда и вещи', answer: 'Вы спрашиваете, что можно передать ребёнку?', after: 'clarifyDelivery' },
     reportQuestion: { question: 'Вопрос по отчёту', answer: 'Если у вас вопрос по содержанию отчёта, напишите воспитателям в чате.', after: 'educatorChat' },
     childStatus: { question: 'Как ребёнок?', answer: 'Последние наблюдения о ребёнке есть в отчётах. Какой показать?', after: 'reportChoices' },
     educators: { question: 'Почему воспитатели не отвечают?', answer: 'Воспитатели находятся с детьми и не могут отвечать в чате круглосуточно. Пожалуйста, наберитесь терпения: они ответят, как только смогут.' },
@@ -166,7 +171,7 @@
     if (kind === 'evening' && minutes < 3 * 60) return 'late';
     const start = kind === 'morning' ? 15 * 60 : 21 * 60;
     const end = kind === 'morning' ? 16 * 60 : 22 * 60;
-    return minutes < start ? 'before' : minutes < end ? 'publishing' : 'late';
+    return minutes < start ? 'before' : minutes < end ? 'publishing' : minutes < end + 60 ? 'grace' : 'late';
   }
 
   function reportTitle(kind) { return kind === 'morning' ? 'Утренний отчёт' : 'Вечерний отчёт'; }
@@ -174,8 +179,13 @@
   function reportDelayText(kind) {
     const status = reportStatus(kind);
     if (status === 'before') return `${reportTitle(kind)} обычно появляется ${reportWindow(kind)}. Пожалуйста, дождитесь этого времени.`;
-    if (status === 'publishing') return `Сейчас время публикации: ${reportTitle(kind).toLowerCase()} появляется ${reportWindow(kind)}. Попробуйте посмотреть немного позже.`;
-    return `${reportTitle(kind)} уже должен был появиться. Пожалуйста, обновите приложение и проверьте отчёт ещё раз. Если он по-прежнему старый, возможно, возникла техническая неполадка.`;
+    if (status === 'publishing' || status === 'grace') return 'Похоже, сегодня подготовка отчёта занимает немного больше времени. Пожалуйста, подождите ещё немного.';
+    return 'Отчёт уже должен был появиться. Обновите страницу и проверьте ещё раз. Если отчёта всё ещё нет или показывается старый, вероятно, возникла ошибка. Пожалуйста, сообщите воспитателям в чате.';
+  }
+  function showReportDelay(kind, suffix = '') {
+    const late = reportStatus(kind) === 'late';
+    message('bot', reportDelayText(kind) + suffix, 'sad');
+    if (late) offerEducatorChat();
   }
   function expectedReportDate(kind) {
     const now = new Date();
@@ -255,7 +265,7 @@
     try {
       const current = await readParent('/lab/report-current');
       if (!current) {
-        if (delayed && kind) message('bot', reportDelayText(kind), reportStatus(kind) === 'late' ? 'sad' : 'neutral');
+        if (delayed && kind) showReportDelay(kind);
         else message('bot', kind ? `Сейчас не получилось загрузить ${kind === 'morning' ? 'утренний' : 'вечерний'} отчёт. Можно попробовать ещё раз.` : 'Какой отчёт хотите посмотреть — утренний или вечерний?');
         offerReportChoices();
         return;
@@ -291,9 +301,9 @@
         reportCard(kind, found.text);
         return;
       }
-      message('bot', reportDelayText(kind), reportStatus(kind) === 'late' ? 'sad' : 'neutral');
+      showReportDelay(kind);
     } catch (_) {
-      if (delayed && kind) message('bot', `${reportDelayText(kind)}\n\nСейчас я не смог проверить, опубликован ли новый отчёт.`, reportStatus(kind) === 'late' ? 'sad' : 'neutral');
+      if (delayed && kind) showReportDelay(kind, '\n\nСейчас не получилось проверить, опубликован ли новый отчёт.');
       else message('bot', 'Сейчас не получилось загрузить отчёт. Пожалуйста, попробуйте ещё раз чуть позже.', 'sad');
       offerReportChoices();
     } finally { clearTyping(); setThinking(false); busy = false; }
@@ -358,6 +368,18 @@
   }
 
   function setThinking(active) { bot.classList.toggle('thinking', active); }
+  function setMood(mood, duration = 0) {
+    window.clearTimeout(moodTimer);
+    bot.classList.remove('is-listening', 'mood-happy', 'mood-sad');
+    if (mood && mood !== 'neutral') bot.classList.add(mood === 'listening' ? 'is-listening' : `mood-${mood}`);
+    if (duration) moodTimer = window.setTimeout(() => setMood(input.value.trim() ? 'listening' : 'neutral'), duration);
+  }
+  function questionMood(text) {
+    const value = String(text).toLocaleLowerCase('ru').replace(/ё/g, 'е');
+    if (/спасибо|благодар|отлично|здорово|супер|хорошие новости/.test(value)) return 'happy';
+    if (/нету? отч[её]т|не приш[её]л отч[её]т|пережива|беспокоюсь|тревож|плачет|груст|плохо/.test(value)) return 'sad';
+    return 'neutral';
+  }
 
   function offerEducatorChat() {
     const actions = element('div', 'choices');
@@ -418,8 +440,22 @@
     scrollToEnd();
   }
 
+  function offerClarification(kind) {
+    const actions = element('div', 'choices');
+    const options = kind === 'clarifyReportMedical'
+      ? [['Отчёт', '2600.svg', () => runScenario('reports')], ['Лечение', '1f4de.svg', () => runScenario('medical')]]
+      : kind === 'clarifyDoctorMeeting'
+        ? [['Встреча с ребёнком', '1f4ac.svg', () => runScenario('meetTime')], ['Связь с врачом', '1f4de.svg', () => runScenario('doctors')]]
+        : [['Что можно передать', '1f4e6.svg', () => runScenario('delivery')], ['Другой вопрос', '1f4ac.svg', () => runScenario('writeEducators')]];
+    options.forEach(([label, icon, action]) => actions.appendChild(actionButton(label, icon, action)));
+    conversation.appendChild(actions);
+    pendingChoice = kind;
+    scrollToEnd();
+  }
+
   function runScenario(intent, question) {
     const parsed = typeof intent === 'string' ? { key: intent } : intent;
+    contextUntil = Date.now() + 4 * 60 * 1000;
     if (parsed && parsed.key === 'groupTherapy') {
       requestTherapyReport(question || scenarios.groupTherapy.question);
       return;
@@ -453,12 +489,13 @@
     showTyping();
     window.setTimeout(() => {
       const answer = scenario.variants && scenario.variants[parsed.variant] || scenario.answer;
-      if (answer) message('bot', answer, scenario.mood || 'neutral', scenario.icon || '', scenario.iconPosition || 'before');
+      if (answer) message('bot', answer, questionMood(question || scenario.question) === 'sad' ? 'sad' : scenario.mood || questionMood(question || scenario.question), scenario.icon || '', scenario.iconPosition || 'before');
       const after = parsed.key === 'urgent' && parsed.variant === 'medical' ? '' : scenario.after;
       if (after === 'reportChoices') { offerReportChoices(); pendingChoice = 'reports'; }
       if (after === 'educatorChat') { offerEducatorChat(); pendingChoice = 'educatorChat'; }
       if (after === 'therapy') offerTherapy();
       if (after === 'therapyChoices') { offerTherapyChoices(); awaitingTherapyChoice = true; pendingChoice = 'therapy'; }
+      if (after === 'clarifyReportMedical' || after === 'clarifyDoctorMeeting' || after === 'clarifyDelivery') offerClarification(after);
       if (after === 'navigateChat') window.setTimeout(() => window.location.assign('https://медси-бот.рф/?openChat=1'), 180);
       if (scenario.after === 'greetingFollowup') window.setTimeout(() => message('bot', 'Как я могу вам помочь?'), 230);
       clearTyping();
@@ -485,6 +522,17 @@
 
   function classify(text) {
     const simple = String(text || '').toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[^а-я]+/g, ' ').trim();
+    const reportFollowupKey = lastIntentKey === 'reportDelay' ? 'reportDelay' : 'reportRequest';
+    if (/(?:не утренн[а-я]* а вечерн[а-я]*|вместо утренн[а-я]* вечерн[а-я]*)/.test(simple)) return { key: reportFollowupKey, kind: 'evening' };
+    if (/(?:не вечерн[а-я]* а утренн[а-я]*|вместо вечерн[а-я]* утренн[а-я]*)/.test(simple)) return { key: reportFollowupKey, kind: 'morning' };
+    if (['reports', 'reportRequest', 'reportDelay'].includes(lastIntentKey) && /^нет а? ?вечерн[а-я]*$/.test(simple)) return { key: reportFollowupKey, kind: 'evening' };
+    if (['reports', 'reportRequest', 'reportDelay'].includes(lastIntentKey) && /^нет а? ?утренн[а-я]*$/.test(simple)) return { key: reportFollowupKey, kind: 'morning' };
+    if (/(?:не надо|не нужен|не нужно|не хочу) (?:мне )?(?:отчет|отчета)/.test(simple)) return 'noThanks';
+    if (pendingChoice === 'clarifyReportMedical' && /^(?:первое|первый|отчет)$/.test(simple)) return 'reports';
+    if (pendingChoice === 'clarifyReportMedical' && /^(?:второе|второй|лечение)$/.test(simple)) return 'medical';
+    if (pendingChoice === 'clarifyDoctorMeeting' && /^(?:первое|первый|ребенком)$/.test(simple)) return 'meetTime';
+    if (pendingChoice === 'clarifyDoctorMeeting' && /^(?:второе|второй|врачом)$/.test(simple)) return 'doctors';
+    if (pendingChoice === 'clarifyDelivery' && /^(?:да|ага|угу|конечно)$/.test(simple)) return 'delivery';
     if (/^(?:да|ага|угу|конечно|давай|хочу|пожалуйста)$/.test(simple)) {
       if (pendingChoice === 'educatorChat') return 'openEducatorChat';
       if (pendingChoice === 'reports' || pendingChoice === 'reportDelay') return 'chooseReport';
@@ -495,15 +543,17 @@
       if (/^(?:утренн[а-я]*|утренн[а-я]* отчет)$/.test(simple)) return { key: 'reportDelay', kind: 'morning' };
       if (/^(?:вечерн[а-я]*|вечерн[а-я]* отчет)$/.test(simple)) return { key: 'reportDelay', kind: 'evening' };
     }
-    if (pendingChoice === 'reports' && /^(?:а )?(?:утренн[а-я]*|вечерн[а-я]*)(?: отчет)?$/.test(simple)) return { key: 'reportRequest', kind: simple.includes('утренн') ? 'morning' : 'evening' };
-    if (lastReportKind && /^(?:почему|а почему) (?:его |ее )?(?:нет|не пришел|не появился)$/.test(simple)) return { key: 'reportDelay', kind: lastReportKind };
-    if (lastReportKind && /^(?:покажи|отправь|скинь|пришли|дай)(?: его)?$/.test(simple)) return { key: 'reportRequest', kind: lastReportKind };
+    if ((pendingChoice === 'reports' || ['reports', 'reportRequest', 'reportDelay'].includes(lastIntentKey)) && /^(?:а )?(?:утренн[а-я]*|вечерн[а-я]*)(?: отчет)?$/.test(simple)) return { key: reportFollowupKey, kind: simple.includes('утренн') ? 'morning' : 'evening' };
+    if (lastReportKind && ['reports', 'reportRequest', 'reportDelay'].includes(lastIntentKey) && /^(?:почему|а почему) (?:его |ее )?(?:нет|нету|не пришел|не появился)$/.test(simple)) return { key: 'reportDelay', kind: lastReportKind };
+    if (lastReportKind && ['reports', 'reportRequest', 'reportDelay'].includes(lastIntentKey) && /^(?:покажи|отправь|скинь|пришли|дай)(?: его)?$/.test(simple)) return { key: 'reportRequest', kind: lastReportKind };
     if (['reports', 'reportRequest', 'reportDelay'].includes(lastIntentKey) && /^(?:а )?(?:когда|во сколько)$/.test(simple)) return 'reports';
     if (awaitingTherapyChoice) {
       if (/^(?:групп[а-я]*|групповая терапия|отчет по группе)$/.test(simple)) return 'groupTherapy';
       if (/^(?:индивидуал[а-я]*|занятия с психологом|психолог)$/.test(simple)) return 'individualTherapy';
     }
-    const known = window.MedsiSmartBot && window.MedsiSmartBot.classify(text);
+    const analyzed = window.MedsiSmartBot && window.MedsiSmartBot.analyze(text);
+    const known = analyzed && analyzed.confidence < .75 && analyzed.intent && analyzed.intent.key === 'delivery'
+      ? { key: 'clarifyDelivery' } : analyzed && analyzed.intent;
     if (known) return known;
     if (/^(?:привет|здравствуй|здравствуйте|добрый день|доброе утро|добрый вечер)(?: медси бот)?$/.test(simple)) return 'greeting';
     return null;
@@ -511,6 +561,9 @@
 
   function submitQuestion(text) {
     if (!text || busy) return;
+    if (Date.now() > contextUntil) { pendingChoice = ''; lastIntentKey = ''; lastReportKind = ''; awaitingTherapyChoice = false; awaitingReportDelayChoice = false; }
+    contextUntil = Date.now() + 4 * 60 * 1000;
+    setMood(questionMood(text), 4800);
     input.value = '';
     const scenario = classify(text);
     if (scenario) return runScenario(scenario, text);
@@ -521,7 +574,7 @@
     showTyping();
     busy = true;
     window.setTimeout(() => {
-      message('bot', 'Этот вопрос лучше задать в чате с воспитателями. Хотите открыть чат?', 'thinking');
+      message('bot', 'Этот вопрос лучше задать в чате с воспитателями. Хотите открыть чат?', questionMood(text) === 'sad' ? 'sad' : 'thinking');
       offerEducatorChat();
       pendingChoice = 'educatorChat';
       lastIntentKey = '';
@@ -534,6 +587,11 @@
   composer.addEventListener('submit', event => {
     event.preventDefault();
     submitQuestion(input.value.trim());
+  });
+  input.addEventListener('input', () => {
+    if (busy) return;
+    setMood(input.value.trim() ? 'listening' : 'neutral');
+    if (input.value.trim()) setGaze(bot.clientWidth * .10, bot.clientHeight * .05);
   });
 
   promptStrip.addEventListener('click', event => {

@@ -40,9 +40,9 @@
 
     if (report) {
       const kind = has('утренн') && !has('вечерн') ? 'morning' : has('вечерн') && !has('утренн') ? 'evening' : '';
-      const aboutContent = has('информац', 'напис', 'сказан', 'указан', 'данн', 'текст', 'содержан', 'описан', 'ошибк', 'неточн', 'неверн', 'неправд', 'исправ')
-        || (medicine || treatment) && has('почему', 'зачем', 'информац');
-      const missing = !aboutContent && (has('задерж', 'опозд', 'пропал', 'стар') || says(/ (?:нет|не было|не приш[а-я]*|не появ[а-я]*|не обнов[а-я]*|не виж[а-я]*|не получ[а-я]*|не готов[а-я]*|до сих пор) /)
+      const aboutContent = has('информац', 'напис', 'сказан', 'указан', 'данн', 'текст', 'содержан', 'описан', 'ошибк', 'неточн', 'неверн', 'неправил', 'неправд', 'исправ')
+        || (medicine || treatment) && (has('почему', 'зачем') || says(/ (?:нет|нету) [а-я ]*(?:лечен|лекарств|препарат)/));
+      const missing = !aboutContent && (has('задерж', 'опозд', 'пропал', 'стар') || says(/ (?:нет|нету|не было|не приш[а-я]*|не появ[а-я]*|не обнов[а-я]*|не виж[а-я]*|не получ[а-я]*|не готов[а-я]*|до сих пор) /)
         || has('где') && !has('посмотр', 'откры', 'найти'));
       const askingTime = has('когда', 'время', 'расписан', 'ждать') || says(/ во сколько/);
       const askingContent = aboutContent || has('почему', 'зачем', 'ошибк', 'неправд', 'неверн') && !missing;
@@ -85,5 +85,25 @@
     return null;
   }
 
-  window.MedsiSmartBot = Object.freeze({ normalize, classify });
+  function analyze(text) {
+    const query = normalize(text);
+    const words = query.trim().split(/\s+/);
+    const has = root => words.some(word => word.startsWith(root));
+    const intent = classify(text);
+    const medical = ['лекарств', 'препарат', 'лечен', 'лечи', 'дозиров'].some(has);
+    const report = has('отчет') || has('утренн') || has('вечерн');
+    const clearAction = ['покаж', 'отправ', 'пришл', 'скин', 'когда', 'почему', 'нет', 'нету', 'информац', 'напис', 'указан', 'посмотр'].some(has);
+    if (report && medical && !clearAction) {
+      return { intent: { key: 'clarifyReportMedical' }, confidence: 0.5 };
+    }
+    if (has('встреч') && has('врач') && !has('ребен') && !has('дет')) {
+      return { intent: { key: 'clarifyDoctorMeeting' }, confidence: 0.5 };
+    }
+    if (!intent) return { intent: null, confidence: 0 };
+    const key = typeof intent === 'string' ? intent : intent.key;
+    const confidence = key === 'delivery' && !['достав', 'переда', 'привез', 'заказ', 'курьер'].some(has) ? 0.7 : 0.95;
+    return { intent, confidence };
+  }
+
+  window.MedsiSmartBot = Object.freeze({ normalize, classify, analyze });
 })();
