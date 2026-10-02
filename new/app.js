@@ -520,8 +520,14 @@
     scrollToEnd();
   }
 
+  function isGreetingOnly(simple) {
+    const greeting = simple.replace(/^(?:медси бот|бот) /, '').replace(/ (?:медси бот|бот)$/, '');
+    return /^(?:привет(?!стви)[а-я]*|здравств[а-я]*|здраст[а-я]*|здрасьт[а-я]*|здаров[а-я]*|здорово|салют[а-я]*|хай|хеллоу|хелло|hello|hi|ку)(?: (?:вам|тебе|всем))?$/.test(greeting)
+      || /^(?:доброе|добрый|доброго|доброй) (?:утр[а-я]*|день|дня|ден[а-я]*|вечер[а-я]*|ноч[а-я]*|времен[а-я]* суток)$/.test(greeting);
+  }
+
   function classify(text) {
-    const simple = String(text || '').toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[^а-я]+/g, ' ').trim();
+    const simple = String(text || '').toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[^а-яa-z]+/g, ' ').trim();
     const reportFollowupKey = lastIntentKey === 'reportDelay' ? 'reportDelay' : 'reportRequest';
     if (/(?:не утренн[а-я]* а вечерн[а-я]*|вместо утренн[а-я]* вечерн[а-я]*)/.test(simple)) return { key: reportFollowupKey, kind: 'evening' };
     if (/(?:не вечерн[а-я]* а утренн[а-я]*|вместо вечерн[а-я]* утренн[а-я]*)/.test(simple)) return { key: reportFollowupKey, kind: 'morning' };
@@ -551,11 +557,11 @@
       if (/^(?:групп[а-я]*|групповая терапия|отчет по группе)$/.test(simple)) return 'groupTherapy';
       if (/^(?:индивидуал[а-я]*|занятия с психологом|психолог)$/.test(simple)) return 'individualTherapy';
     }
+    if (isGreetingOnly(simple)) return 'greeting';
     const analyzed = window.MedsiSmartBot && window.MedsiSmartBot.analyze(text);
     const known = analyzed && analyzed.confidence < .75 && analyzed.intent && analyzed.intent.key === 'delivery'
       ? { key: 'clarifyDelivery' } : analyzed && analyzed.intent;
     if (known) return known;
-    if (/^(?:привет|здравствуй|здравствуйте|добрый день|доброе утро|добрый вечер)(?: медси бот)?$/.test(simple)) return 'greeting';
     return null;
   }
 
