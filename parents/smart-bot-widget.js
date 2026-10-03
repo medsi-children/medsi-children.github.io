@@ -93,7 +93,7 @@
   }
   setGaze(238 * .10, 238 * -.08);
 
-  function finishClose(openEducators = false) {
+  function removeOverlay(openEducators = false) {
     if (!overlay) return;
     window.clearTimeout(closeTimer);
     chat?.destroy();
@@ -110,6 +110,26 @@
     } else {
       launcher.focus({ preventScroll: true });
     }
+  }
+
+  function finishClose(openEducators = false) {
+    if (!overlay || overlay.classList.contains('is-closing')) return;
+    window.clearTimeout(closeTimer);
+    closing = true;
+    overlay.classList.add('is-closing');
+    closeTimer = window.setTimeout(() => removeOverlay(openEducators),
+      matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180);
+  }
+
+  function installChatView() {
+    chatRoot.querySelector('.assistant-lab')?.remove();
+    const view = document.createElement('template');
+    view.innerHTML = window.MedsiBotChatView;
+    chatRoot.appendChild(view.content.cloneNode(true));
+    const footer = document.createElement('div');
+    footer.className = 'bot-chat-footer';
+    footer.append(chatRoot.getElementById('promptStrip'), chatRoot.getElementById('composer'));
+    chatRoot.querySelector('.help-panel').appendChild(footer);
   }
 
   async function requestClose() {
@@ -141,10 +161,7 @@
     backdrop.className = 'medsi-bot-backdrop';
     backdrop.setAttribute('aria-label', 'Закрыть чат с Медси Ботом');
     backdrop.addEventListener('click', requestClose);
-    chatRoot.querySelector('.assistant-lab')?.remove();
-    const view = document.createElement('template');
-    view.innerHTML = window.MedsiBotChatView;
-    chatRoot.appendChild(view.content.cloneNode(true));
+    installChatView();
     overlay.append(backdrop, frame);
     syncOverlayViewport();
     document.body.appendChild(overlay);
@@ -178,11 +195,18 @@
     overlay.style.right = 'auto';
     overlay.style.bottom = 'auto';
     overlay.style.width = `${viewport?.width || window.innerWidth}px`;
-    overlay.style.height = `${viewport?.height || window.innerHeight}px`;
+    const height = viewport?.height || window.innerHeight;
+    overlay.style.height = `${height}px`;
+    frame.toggleAttribute('data-keyboard', window.innerHeight - height > 100);
   }
-  window.visualViewport?.addEventListener('resize', syncOverlayViewport);
-  window.visualViewport?.addEventListener('scroll', syncOverlayViewport);
-  window.addEventListener('resize', syncOverlayViewport);
+  let viewportFrame = 0;
+  function scheduleViewportSync() {
+    if (!overlay || viewportFrame) return;
+    viewportFrame = requestAnimationFrame(() => { viewportFrame = 0; syncOverlayViewport(); });
+  }
+  window.visualViewport?.addEventListener('resize', scheduleViewportSync);
+  window.visualViewport?.addEventListener('scroll', scheduleViewportSync);
+  window.addEventListener('resize', scheduleViewportSync);
 
   new MutationObserver(syncLauncher).observe(document.body, { attributes: true, attributeFilter: ['data-screen'] });
   launcher.addEventListener('click', open);
@@ -218,11 +242,9 @@
       chatRoot.appendChild(link);
     }));
     const style = document.createElement('style');
-    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0}.composer{margin-bottom:calc(16px + env(safe-area-inset-bottom))}.composer input{font-size:16px}';
+    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0;min-width:0;overscroll-behavior:contain}.bot-chat-footer{display:grid;grid-template-rows:auto auto;gap:10px;min-width:0;padding:0 13px calc(16px + env(safe-area-inset-bottom));background:#fff}.bot-chat-footer .prompt-strip{margin:0;padding:3px 1px 4px;min-width:0}.bot-chat-footer .prompt-strip button{height:34px;min-height:34px}.bot-chat-footer .composer{margin:0;min-height:58px;flex-shrink:0;transition:border-color .18s ease,box-shadow .18s ease}.composer input{font-size:16px}:host([data-keyboard]) .bot-chat-footer{padding-bottom:12px}';
     chatRoot.appendChild(style);
-    const template = document.createElement('template');
-    template.innerHTML = window.MedsiBotChatView;
-    chatRoot.appendChild(template.content.cloneNode(true));
+    installChatView();
     document.body.appendChild(frame);
     await Promise.all(styleReady);
   }
