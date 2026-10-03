@@ -37,7 +37,7 @@
 .medsi-bot-overlay.is-open .medsi-bot-backdrop{animation:medsi-bot-fade .28s ease-out both}
 @media(prefers-reduced-motion:reduce){.medsi-bot-overlay.is-open .medsi-bot-frame,.medsi-bot-overlay.is-open .medsi-bot-backdrop{animation:none}}
 
-.medsi-bot-overlay.is-open{transition:height .16s ease-out,top .16s ease-out}
+.medsi-bot-overlay.is-open{transition:none}
 .medsi-bot-overlay.is-closing{pointer-events:none}
 .medsi-bot-overlay.is-closing .medsi-bot-frame,.medsi-bot-overlay.is-closing .medsi-bot-backdrop{animation:medsi-bot-fade-out .18s ease-in both}
 @keyframes medsi-bot-fade-out{from{opacity:1}to{opacity:0}}
