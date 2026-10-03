@@ -12,7 +12,7 @@
 .medsi-bot-frame{display:block;width:min(100%,570px);height:min(850px,calc(100dvh - 40px));min-height:0;border:1px solid rgba(255,255,255,.85);border-radius:28px;background:#fff;box-shadow:0 25px 80px rgba(17,72,79,.27);transform-origin:center;animation:medsi-bot-open .32s cubic-bezier(.2,.75,.3,1) both}
 @keyframes medsi-bot-open{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
 @keyframes medsi-bot-fade{from{opacity:0}to{opacity:1}}
-@media(max-width:600px){.medsi-bot-overlay{padding:12px}.medsi-bot-frame{width:100%;height:calc(100dvh - 24px);border:1px solid rgba(255,255,255,.85);border-radius:28px}}
+@media(max-width:600px){.medsi-bot-overlay{padding:22px 20px;padding-top:max(22px,env(safe-area-inset-top));padding-bottom:max(22px,env(safe-area-inset-bottom))}.medsi-bot-frame{width:100%;height:100%;max-height:850px;border:1px solid rgba(255,255,255,.85);border-radius:28px}}
 @media(prefers-reduced-motion:reduce){.medsi-bot-frame,.medsi-bot-backdrop{animation:none}.medsi-bot-hint{transition:none}}
 
 @keyframes medsi-bot-arrive{from{opacity:0;transform:translateY(16px) scale(.92)}to{opacity:1;transform:none}}
