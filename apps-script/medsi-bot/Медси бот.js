@@ -830,7 +830,7 @@ function registerParent(parentNameRaw, childNameRaw, phoneRaw, registrationAttem
   }
 
   try {
-    return withChatWriteLock_(function() {
+    const result = withChatWriteLock_(function() {
       const recovered = recoverParentRegistrationAttempt_(registrationAttemptId, phone, parentName, childName);
       if (recovered) return recovered;
       const sh = getDataSheet_();
@@ -844,7 +844,7 @@ function registerParent(parentNameRaw, childNameRaw, phoneRaw, registrationAttem
 
       createParentRegistrationAttempt_(registrationAttemptId, phone10, parentName, childName);
       try {
-        smartRegisterFromInboxCore(phone, parentName, childName);
+        smartRegisterFromInboxCore(phone, parentName, childName, true);
       } catch (registrationError) {
         if (!isPhoneActiveInReports_(phone10)) {
           throw registrationError;
@@ -855,18 +855,9 @@ function registerParent(parentNameRaw, childNameRaw, phoneRaw, registrationAttem
       if (!profile || !profile.phone) {
         throw new Error('Не удалось сохранить профиль родителя.');
       }
-      // Registration must return a chat-ready session together with the
-      // account.  The normal registration path already mirrors REPORTS to
-      // D1, but that mirror is deliberately best-effort inside the write
-      // helper.  Retry it once here so a parent cannot enter the chat during
-      // the short propagation window after a successful registration.
+      // Issue the local signed token without holding the global lock across a network call.
       let d1Session = null;
-      try {
-        syncD1ProfileForPhone_(phone10);
-        d1Session = createD1ChatSession_('parent', phone10);
-      } catch (d1Error) {
-        Logger.log('D1 registration bootstrap deferred: ' + String(d1Error && d1Error.message || d1Error));
-      }
+      try { d1Session = createD1ChatSession_('parent', phone10); } catch (_) {}
       completeParentRegistrationAttempt_(registrationAttemptId);
 
       return {
@@ -880,12 +871,19 @@ function registerParent(parentNameRaw, childNameRaw, phoneRaw, registrationAttem
         registrationAttemptId: registrationAttemptId
       };
     });
+    // Critical storage is complete. Other parents can register or request access
+    // while this best-effort mirror waits for the Worker.
+    if (result && result.ok && !result.duplicate) {
+      try { syncD1ProfileForPhone_(phone); }
+      catch (e) { Logger.log('D1 registration mirror deferred: ' + String(e && e.message || e)); }
+    }
+    return result;
   } catch (e) {
     return { ok: false, message: 'Ошибка регистрации: ' + (e.message || e) };
   }
 }
 
-function smartRegisterFromInboxCore(phoneRaw, parentNameRaw, childNameRaw) {
+function smartRegisterFromInboxCore(phoneRaw, parentNameRaw, childNameRaw, deferD1Sync) {
   const phone = normalizePhone_(phoneRaw);
   const p = splitNameSmart(parentNameRaw);
   const c = splitNameSmart(childNameRaw);
@@ -930,7 +928,7 @@ function smartRegisterFromInboxCore(phoneRaw, parentNameRaw, childNameRaw) {
   // D1 зеркалим всегда, даже когда production-чат временно работает через Sheets,
   // чтобы новая GitHub-версия сразу видела зарегистрированного родителя.
   try {
-    syncD1ProfileForPhone_(phone);
+    if (!deferD1Sync) syncD1ProfileForPhone_(phone);
   } catch (d1Err) {
     Logger.log(
       'D1 profile sync after registration failed for ' +

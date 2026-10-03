@@ -7,9 +7,9 @@
   function timeout(ms){return new Promise((_,reject)=>setTimeout(()=>reject(new Error('TIMEOUT')),ms))}
   async function callApi(method,args,ms){
     const readOnly=/^(get|list|verify|check)/i.test(String(method||''));
-    const attempts=readOnly?2:1;let lastError;
+    const attempts=1;let lastError; // The gateway retries reads; keep the browser request alive for both attempts.
     for(let attempt=0;attempt<attempts;attempt++){
-      const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),ms||15000);
+      const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),readOnly?35000:(ms||30000));
       try{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',signal:controller.signal});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Некорректный ответ сервера.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));clearTimeout(timer);return p.result}catch(e){clearTimeout(timer);lastError=e;if(attempt+1<attempts)await new Promise(resolve=>setTimeout(resolve,350))}
     }
     throw lastError||new Error('TIMEOUT');

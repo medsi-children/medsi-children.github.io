@@ -94,8 +94,14 @@ function completeParentRegistrationAttempt_(attemptIdRaw) {
 function parentRegistrationResult_(attempt) {
   const profile = getProfileByPhone_(attempt.phone10);
   if (!profile || !profile.phone) return null;
+  let d1Session = null;
+  try { d1Session = createD1ChatSession_('parent', profile.phone); } catch (_) {}
   return Object.assign(
-    buildParentBootstrap_(profile, issueParentSession_(profile.phone)),
+    {
+      ok: true, phone: profile.phone, parentName: profile.parentName || '',
+      childName: profile.childName || '', parentSession: issueParentSession_(profile.phone),
+      d1Session: d1Session
+    },
     { duplicate: false, registrationAttemptId: attempt.attemptId }
   );
 }

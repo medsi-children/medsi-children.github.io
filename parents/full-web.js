@@ -19,7 +19,7 @@
     let lastError;
     for(let attempt=0;attempt<attempts;attempt++){
       const controller=new AbortController();
-      const timer=setTimeout(()=>controller.abort(),readOnly?35000:(ms||15000));
+      const timer=setTimeout(()=>controller.abort(),method==='registerParent'?60000:readOnly?35000:(ms||15000));
       try{
         const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',keepalive:!!keepalive,signal:controller.signal});
         const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
@@ -84,7 +84,7 @@
     show('screenRegistrationPending');
     const pendingText=$('registrationPendingText');
     pendingText.textContent='Пожалуйста, подождите. Мы сохраняем данные и готовим Медси Бот.';
-    let phase='register',delay=1000,notFoundCount=0;
+    let phase='register',delay=1000,notFoundCount=0,processingCount=0;
     while(run===flowRun){
       try{
         let res=null;
@@ -109,7 +109,10 @@
           if(statusRes&&statusRes.ok&&statusRes.parentSession){finishRegistration(statusRes);return}
           if(statusRes&&statusRes.result&&statusRes.result.parentSession){finishRegistration(statusRes.result);return}
           const status=String(statusRes&&(statusRes.status||statusRes.code)||'').toUpperCase();
-          if(status==='NOT_FOUND'){
+          if(status==='PROCESSING'){
+            processingCount++;
+            if(processingCount>=3){phase='register';processingCount=0;pendingText.textContent='Завершаем сохранение данных…'}
+          }else if(status==='NOT_FOUND'){
             notFoundCount++;
             if(notFoundCount>=3){phase='register';notFoundCount=0;pendingText.textContent='Проверяем регистрацию ещё раз…'}
           }else{
