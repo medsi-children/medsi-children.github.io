@@ -152,18 +152,31 @@
     });
     overlay.append(backdrop, frame);
     document.body.appendChild(overlay);
+    syncOverlayViewport();
     window.clearTimeout(hintHideTimer);
     hint.classList.remove('is-visible');
     hint.hidden = true;
     previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     syncLauncher();
-    if (matchMedia('(min-width: 601px) and (hover: hover) and (pointer: fine)').matches) {
-      frame.addEventListener('animationend', () => {
-        if (overlay && !closing) chatRoot.getElementById('messageInput')?.focus({ preventScroll: true });
-      }, { once: true });
-    }
+
   }
+
+  // iOS keeps the layout viewport tall when the keyboard opens. Fit the
+  // dialog to the visible viewport so its composer stays above the keyboard.
+  function syncOverlayViewport() {
+    if (!overlay) return;
+    const viewport = window.visualViewport;
+    overlay.style.top = `${viewport?.offsetTop || 0}px`;
+    overlay.style.left = `${viewport?.offsetLeft || 0}px`;
+    overlay.style.right = 'auto';
+    overlay.style.bottom = 'auto';
+    overlay.style.width = `${viewport?.width || window.innerWidth}px`;
+    overlay.style.height = `${viewport?.height || window.innerHeight}px`;
+  }
+  window.visualViewport?.addEventListener('resize', syncOverlayViewport);
+  window.visualViewport?.addEventListener('scroll', syncOverlayViewport);
+  window.addEventListener('resize', syncOverlayViewport);
 
   launcher.addEventListener('click', open);
   document.addEventListener('keydown', event => {
