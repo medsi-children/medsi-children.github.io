@@ -94,16 +94,21 @@ function completeParentRegistrationAttempt_(attemptIdRaw) {
 function parentRegistrationResult_(attempt) {
   const profile = getProfileByPhone_(attempt.phone10);
   if (!profile || !profile.phone) return null;
+  return Object.assign(parentAuthorizedProfile_(profile), {
+    duplicate: false, registrationAttemptId: attempt.attemptId
+  });
+}
+
+// Complete entry without waiting for remote unread-message metadata.
+// The parent page refreshes that metadata in the background after entry.
+function parentAuthorizedProfile_(profile) {
   let d1Session = null;
   try { d1Session = createD1ChatSession_('parent', profile.phone); } catch (_) {}
-  return Object.assign(
-    {
-      ok: true, phone: profile.phone, parentName: profile.parentName || '',
-      childName: profile.childName || '', parentSession: issueParentSession_(profile.phone),
-      d1Session: d1Session
-    },
-    { duplicate: false, registrationAttemptId: attempt.attemptId }
-  );
+  return {
+    ok: true, phone: profile.phone, parentName: profile.parentName || '',
+    childName: profile.childName || '', parentSession: issueParentSession_(profile.phone),
+    d1Session: d1Session
+  };
 }
 
 function recoverParentRegistrationAttempt_(attemptIdRaw, phoneRaw, parentNameRaw, childNameRaw) {
@@ -251,7 +256,7 @@ function getParentReauthorizationStatus(phoneRaw, requestIdRaw) {
           request.sh.getRange(request.row, 6).setValue(new Date());
         }
         return Object.assign(
-          buildParentBootstrap_(profile, issueParentSession_(phone10)),
+          parentAuthorizedProfile_(profile),
           { status: 'APPROVED', requestId: request.requestId }
         );
       }
