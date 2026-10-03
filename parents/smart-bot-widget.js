@@ -18,7 +18,7 @@
   launcher.setAttribute('title', 'Задать вопрос Медси Боту');
   launcher.setAttribute('aria-haspopup', 'dialog');
   launcher.hidden = true;
-  launcher.innerHTML = '<span class="medsi-bot-scale"><span class="medsi-character" aria-hidden="true"><span class="medsi-character-glow"></span><img class="medsi-character-body" src="/new/blob.png" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span></span>';
+  launcher.innerHTML = '<span class="medsi-bot-scale"><span class="medsi-character" aria-hidden="true"><span class="medsi-character-glow"></span><img class="medsi-character-body" src="/new/blob.webp" fetchpriority="high" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span></span>';
   const character = launcher.querySelector('.medsi-character');
   const bodyImage = launcher.querySelector('img');
   let assetReady = false;
@@ -119,8 +119,18 @@
     try { await chat?.flush(); } finally { finishClose(); }
   }
 
-  function open() {
-    if (overlay || !assetReady || document.body.dataset.screen !== 'screenChoose') return;
+  let opening = false;
+  async function open() {
+    if (opening || overlay || !assetReady || document.body.dataset.screen !== 'screenChoose') return;
+    opening = true;
+    launcher.setAttribute('aria-busy', 'true');
+    try { await chatReady; } catch (_) {
+      chatReady = prepareChat();
+      try { await chatReady; } catch (_) { opening = false; launcher.removeAttribute('aria-busy'); return; }
+    }
+    opening = false;
+    launcher.removeAttribute('aria-busy');
+    if (overlay || document.body.dataset.screen !== 'screenChoose') return;
     overlay = document.createElement('div');
     overlay.className = 'medsi-bot-overlay';
     overlay.setAttribute('role', 'dialog');
@@ -148,7 +158,11 @@
     previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     syncLauncher();
-    chatRoot.getElementById('messageInput').focus({ preventScroll: true });
+    if (matchMedia('(min-width: 601px) and (hover: hover) and (pointer: fine)').matches) {
+      frame.addEventListener('animationend', () => {
+        if (overlay && !closing) chatRoot.getElementById('messageInput')?.focus({ preventScroll: true });
+      }, { once: true });
+    }
   }
 
   launcher.addEventListener('click', open);
@@ -184,7 +198,7 @@
       chatRoot.appendChild(link);
     }));
     const style = document.createElement('style');
-    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff}.conversation{min-height:0}.composer{margin-bottom:calc(16px + env(safe-area-inset-bottom))}';
+    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff}.conversation{min-height:0}.composer{margin-bottom:calc(16px + env(safe-area-inset-bottom))}.composer input{font-size:16px}';
     chatRoot.appendChild(style);
     const template = document.createElement('template');
     template.innerHTML = window.MedsiBotChatView;
@@ -192,10 +206,10 @@
     document.body.appendChild(frame);
     await Promise.all(styleReady);
   }
-  // Both the drawing and the inline chat are ready before the launcher appears.
-  Promise.all([bodyImage.decode(), prepareChat().catch(() => new Promise(resolve => window.setTimeout(resolve, 1500)).then(prepareChat)), new Promise(resolve => window.setTimeout(resolve, 4500))])
-    .then(() => { assetReady = true; syncLauncher(); })
-    .catch(() => {});
+  // Preload the chat independently; the menu logo only waits for image decoding.
+  let chatReady = prepareChat();
+  chatReady.catch(() => {});
+  bodyImage.decode().then(() => { assetReady = true; syncLauncher(); }).catch(() => {});
   syncLauncher();
   window.MedsiSmartBotWidget = Object.freeze({ open, close: requestClose });
 })();

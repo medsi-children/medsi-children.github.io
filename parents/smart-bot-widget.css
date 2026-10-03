@@ -9,7 +9,7 @@
 .medsi-bot-hint.is-visible{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .medsi-bot-overlay{position:fixed;z-index:20000;inset:0;display:grid;place-items:center;padding:clamp(10px,3vw,28px);padding-bottom:max(10px,env(safe-area-inset-bottom));isolation:isolate}
 .medsi-bot-backdrop{position:absolute;z-index:-1;inset:0;width:100%;height:100%;padding:0;border:0;background:rgba(22,67,73,.32);backdrop-filter:blur(9px);cursor:default;animation:medsi-bot-fade .24s ease-out}
-.medsi-bot-frame{display:block;width:min(100%,570px);height:min(850px,calc(100dvh - 40px));min-height:0;border:1px solid rgba(255,255,255,.85);border-radius:28px;background:#fff;box-shadow:0 25px 80px rgba(17,72,79,.27);animation:medsi-bot-open .24s ease-out}
+.medsi-bot-frame{display:block;width:min(100%,570px);height:min(850px,calc(100dvh - 40px));min-height:0;border:1px solid rgba(255,255,255,.85);border-radius:28px;background:#fff;box-shadow:0 25px 80px rgba(17,72,79,.27);transform-origin:center;animation:medsi-bot-open .32s cubic-bezier(.2,.75,.3,1) both}
 @keyframes medsi-bot-open{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
 @keyframes medsi-bot-fade{from{opacity:0}to{opacity:1}}
 @media(max-width:600px){.medsi-bot-overlay{padding:12px}.medsi-bot-frame{width:100%;height:calc(100dvh - 24px);border:1px solid rgba(255,255,255,.85);border-radius:28px}}
@@ -22,7 +22,7 @@
 
 /* The menu mascot keeps the same body and eye proportions at logo size. */
 .medsi-assistant-logo{position:relative;flex:none;width:112px;height:86px}
-.medsi-bot-dock--brand{position:absolute;z-index:2;inset:-9px 0 auto;width:112px}
+.medsi-bot-dock--brand{position:absolute;z-index:2;inset:-9px 0 auto;width:112px;animation:none}
 .medsi-bot-dock--brand .medsi-bot-launcher{width:112px;height:112px}
 .medsi-bot-dock--brand .medsi-bot-scale{transform:scale(.470588)}
 .medsi-bot-dock--brand .medsi-bot-hint{left:calc(100% - 4px);top:50%;bottom:auto;width:max-content;max-width:min(104px,calc(50vw - 72px));padding:9px 12px;border-radius:24px;font-size:12px;transform:translateY(calc(-50% + 5px));text-align:center}
