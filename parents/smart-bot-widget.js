@@ -97,27 +97,28 @@
 
   function lockBackground() {
     const body = document.body;
-    const properties = ['position', 'top', 'left', 'width', 'height', 'overflow'];
+    const menu = document.querySelector('body > .wrap');
     backgroundLock = {
       x: window.scrollX, y: window.scrollY,
-      styles: properties.map(name => [name, body.style.getPropertyValue(name), body.style.getPropertyPriority(name)])
+      minHeight: body.style.getPropertyValue('min-height'),
+      priority: body.style.getPropertyPriority('min-height'),
+      menu, visibility: menu?.style.visibility, inert: menu?.inert
     };
-    // Overflow alone does not prevent Safari from panning the page on focus.
-    // Keep the menu's position and background dimensions unchanged by the keyboard.
-    Object.assign(body.style, {
-      position: 'fixed', top: `${-backgroundLock.y}px`, left: `${-backgroundLock.x}px`,
-      width: `${body.getBoundingClientRect().width}px`, height: `${body.getBoundingClientRect().height}px`,
-      overflow: 'hidden'
-    });
+    // Keep a scrollable document like the educator chat. Safari alone pans it
+    // for the keyboard; the menu cannot be exposed during that movement.
+    body.style.minHeight = `${Math.max(body.scrollHeight, window.innerHeight)}px`;
+    if (menu) { menu.style.visibility = 'hidden'; menu.inert = true; }
   }
 
   function unlockBackground() {
     if (!backgroundLock) return;
     const saved = backgroundLock;
     backgroundLock = null;
-    for (const [name, value, priority] of saved.styles) {
-      if (value) document.body.style.setProperty(name, value, priority);
-      else document.body.style.removeProperty(name);
+    if (saved.minHeight) document.body.style.setProperty('min-height', saved.minHeight, saved.priority);
+    else document.body.style.removeProperty('min-height');
+    if (saved.menu) {
+      saved.menu.style.visibility = saved.visibility;
+      saved.menu.inert = saved.inert;
     }
     window.scrollTo({ left: saved.x, top: saved.y, behavior: 'instant' });
   }
@@ -134,8 +135,6 @@
     closing = false;
     dialogGeometry = null;
     frame.style.height = '';
-    frame.style.alignSelf = '';
-    frame.removeAttribute('data-keyboard');
     unlockBackground();
     document.documentElement.classList.remove('medsi-bot-active');
     syncLauncher();
@@ -201,7 +200,11 @@
     backdrop.addEventListener('click', requestClose);
     installChatView();
     overlay.append(backdrop, frame);
-    syncOverlayViewport();
+    const viewport = window.visualViewport;
+    overlay.style.top = `${window.scrollY + (viewport?.offsetTop || 0)}px`;
+    overlay.style.left = `${window.scrollX + (viewport?.offsetLeft || 0)}px`;
+    overlay.style.width = `${viewport?.width || window.innerWidth}px`;
+    overlay.style.height = `${viewport?.height || window.innerHeight}px`;
     document.body.appendChild(overlay);
     frame.hidden = false;
     chat = window.MedsiBotChat.mount(chatRoot, {
@@ -216,9 +219,9 @@
     syncLauncher();
     dialogGeometry = {
       height: frame.getBoundingClientRect().height,
-      viewportHeight: window.visualViewport?.height || window.innerHeight,
       viewportWidth: window.visualViewport?.width || window.innerWidth
     };
+    frame.style.height = `${dialogGeometry.height}px`;
     const openingOverlay = overlay;
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (overlay !== openingOverlay) return;
@@ -227,47 +230,19 @@
     }));
   }
 
-  // Preserve the full chat geometry while the keyboard is open. Move the
-  // entire card up to its composer instead of compressing its conversation.
-  function syncOverlayViewport() {
-    if (!overlay) return;
-    const viewport = window.visualViewport;
-    overlay.style.top = `${viewport?.offsetTop || 0}px`;
-    overlay.style.left = `${viewport?.offsetLeft || 0}px`;
-    overlay.style.right = 'auto';
-    overlay.style.bottom = 'auto';
-    overlay.style.width = `${viewport?.width || window.innerWidth}px`;
-    const height = viewport?.height || window.innerHeight;
-    overlay.style.height = `${height}px`;
-    const inputFocused = chatRoot?.activeElement?.matches('input, textarea, [contenteditable="true"]');
-    const keyboard = dialogGeometry &&
-      Math.abs(dialogGeometry.viewportWidth - (viewport?.width || window.innerWidth)) < 30 &&
-      (dialogGeometry.viewportHeight - height > 100 ||
-        (inputFocused && dialogGeometry.viewportHeight - height > 1));
-    frame.toggleAttribute('data-keyboard', Boolean(keyboard));
-    if (keyboard) {
-      frame.style.height = `${dialogGeometry.height}px`;
-      frame.style.alignSelf = 'end';
-    } else {
-      frame.style.height = '';
-      frame.style.alignSelf = '';
-      if (dialogGeometry) {
-        dialogGeometry = {
-          height: frame.getBoundingClientRect().height,
-          viewportHeight: height,
-          viewportWidth: viewport?.width || window.innerWidth
-        };
-      }
-    }
-  }
-  let viewportFrame = 0;
-  function scheduleViewportSync() {
-    if (!overlay || viewportFrame) return;
-    viewportFrame = requestAnimationFrame(() => { viewportFrame = 0; syncOverlayViewport(); });
-  }
-  window.visualViewport?.addEventListener('resize', scheduleViewportSync);
-  window.visualViewport?.addEventListener('scroll', scheduleViewportSync);
-  window.addEventListener('resize', scheduleViewportSync);
+  // Keyboard height/offset events deliberately do not reposition the dialog.
+  // Only a real width change (rotation / desktop resizing) changes its geometry.
+  window.addEventListener('resize', () => {
+    if (!overlay || !dialogGeometry) return;
+    const width = window.visualViewport?.width || window.innerWidth;
+    if (Math.abs(width - dialogGeometry.viewportWidth) < 30) return;
+    if (chatRoot?.activeElement?.matches('input, textarea, [contenteditable="true"]')) return;
+    overlay.style.width = `${width}px`;
+    overlay.style.height = `${window.visualViewport?.height || window.innerHeight}px`;
+    frame.style.height = '';
+    dialogGeometry = { height: frame.getBoundingClientRect().height, viewportWidth: width };
+    frame.style.height = `${dialogGeometry.height}px`;
+  });
 
   new MutationObserver(syncLauncher).observe(document.body, { attributes: true, attributeFilter: ['data-screen'] });
   launcher.addEventListener('click', open);
