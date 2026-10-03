@@ -569,11 +569,11 @@
       pendingChoice = '';
       lastIntentKey = parsed.key;
       message('user', question || (parsed.key === 'reportDelay' ? 'Почему ещё нет отчёта?' : 'Покажи отчёт'));
-      const kind = parsed.kind || (parsed.key === 'reportDelay' ? lastReportKind : '');
+      const kind = parsed.kind || '';
       if (parsed.key === 'reportDelay' && !kind) {
         awaitingReportDelayChoice = true;
         pendingChoice = 'reportDelay';
-        message('bot', 'Какой отчёт вы ожидаете — утренний или вечерний?');
+        message('bot', 'Вы про утренний отчёт или вечерний отчёт?');
         offerReportDelayChoices();
         busy = false;
       } else answerReport(kind, parsed.key === 'reportDelay');
