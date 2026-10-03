@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="/chat-overlay/chat-surface-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-2">
   <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261003-3">
+  <link rel="stylesheet" href="/parents/install-hint.css?v=20261003-1">
 </head>
 <body>
 <div class="wrap"><article id="appCard" class="card start-mode">
@@ -48,7 +49,7 @@
     <button id="btnChat" class="btn menu-card menu-card-primary start-cascade start-cascade-1"><span class="menu-card-title">💬 Чат с воспитателями</span><span class="menu-card-text">Задать вопрос, оставить пожелания и согласовать звонки.</span><span id="newMsgBanner" class="chat-newmsg hidden">✦ Новое сообщение</span></button>
     <div class="menu-report-grid"><button id="btnMorning" class="btn menu-card menu-card-morning start-cascade start-cascade-2"><span class="menu-card-title">☀️ Утренний отчёт</span><span class="menu-card-text">С <span class="menu-card-time">15:00 до 16:00</span></span><span id="morningReportBadge" class="chat-newmsg report-newmsg hidden">✦ Новый отчёт</span></button><button id="btnEvening" class="btn menu-card menu-card-evening start-cascade start-cascade-2"><span class="menu-card-title">🌙 Вечерний отчёт</span><span class="menu-card-text">с <span class="menu-card-time">21:00 до 22:00</span></span><span id="eveningReportBadge" class="chat-newmsg report-newmsg hidden">✦ Новый отчёт</span></button></div>
     <div class="menu-secondary-grid"><button id="btnPsychology" class="btn menu-card menu-card-therapy start-cascade start-cascade-3"><span class="menu-card-title">🧠 Психотерапия</span><span class="menu-card-text">с <span class="menu-card-time">21:00 до 22:00</span></span><span id="psychologyReportBadge" class="chat-newmsg report-newmsg hidden">✦ Новый отчёт</span></button><button id="btnSchedule" class="btn menu-card menu-card-schedule start-cascade start-cascade-3"><span class="menu-card-title">🕘 Режим дня</span><span class="menu-card-text">Расписание активностей и занятий детей</span></button></div>
-  </div></div><div class="ios-bookmark-note"><div class="ios-bookmark-title">📱 Медси Бот можно добавить на экран Домой!</div><div class="ios-bookmark-text">Добавьте приложение на экран «Домой» или сохраните его как закладку.</div></div></section>
+  </div></div></section>
 
   <section id="screenReport" class="hidden"><div class="soft-back-row top"><button id="reportBackBtn" class="btn soft-back-btn">← Назад в меню</button></div><div id="reportDisclaimer" class="report-disclaimer"><strong>Пожалуйста, не обсуждайте отчёты с ребёнком и не показывайте их ему.</strong><div class="chat-note-list"><span class="chat-note-item">В отчётах содержатся безоценочные наблюдения о состоянии и поведении ребёнка.</span><span class="chat-note-item">Даже нейтральные фразы могут повлиять на доверие и работу специалистов.</span></div></div><div class="report-content-wrap"><div id="reportContent" class="content"></div><button id="reportCopyBtn" class="report-copy-btn hidden" type="button" aria-label="Скопировать отчёт" title="Скопировать отчёт"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></button></div><p id="reportError" class="error hidden"></p><button id="reportHistoryBtn" class="btn report-history-open hidden" type="button">История отчётов</button></section>
 
@@ -109,6 +110,7 @@
     }).catch(function(){});
     series(['/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20260920-android-resubscribe-1'],true).then(function(){window.MedsiParentApp.helpersReady();}).catch(function(){});
     ["/parents/psychology-format.js?v=20260909-leading-dot-1", "/parents/chat-opening.js?v=20260907-1", "/parents/report-disclaimer.js?v=20260907-1", "/chat-overlay/gesture-navigation.js?v=20260907-hint-1"].forEach(function(src){load(src,1).catch(function(){});});
+    load('/parents/install-hint.js?v=20261003-1',1).catch(function(){});
     load('/parents/smart-bot-widget.js?v=20261003-5',1).catch(function(){});
   }).catch(function(){clearTimeout(notice);status.classList.remove('hidden');});
 })();
