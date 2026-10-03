@@ -18,6 +18,8 @@
   launcher.hidden = true;
   launcher.innerHTML = '<span class="medsi-bot-scale"><span class="medsi-character" aria-hidden="true"><span class="medsi-character-glow"></span><img class="medsi-character-body" src="/new/blob.png" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span></span>';
   const character = launcher.querySelector('.medsi-character');
+  const bodyImage = launcher.querySelector('img');
+  let assetReady = false;
   dock.appendChild(launcher);
   const hint = document.createElement('button');
   hint.type = 'button';
@@ -29,6 +31,8 @@
 
   let overlay = null;
   let frame = null;
+  let chat = null;
+  let chatRoot = null;
   let closing = false;
   let closeTimer = 0;
   let previousOverflow = '';
@@ -56,7 +60,7 @@
   }
 
   function syncLauncher() {
-    launcher.hidden = document.body.dataset.screen !== 'screenChoose' || Boolean(overlay);
+    launcher.hidden = !assetReady || document.body.dataset.screen !== 'screenChoose' || Boolean(overlay);
     dock.hidden = launcher.hidden;
     if (!launcher.hidden) scheduleHint();
     if (launcher.hidden) {
@@ -92,9 +96,12 @@
   function finishClose(openEducators = false) {
     if (!overlay) return;
     window.clearTimeout(closeTimer);
+    chat?.destroy();
+    chat = null;
+    frame.hidden = true;
+    document.body.appendChild(frame);
     overlay.remove();
     overlay = null;
-    frame = null;
     closing = false;
     document.body.style.overflow = previousOverflow;
     syncLauncher();
@@ -105,17 +112,15 @@
     }
   }
 
-  function requestClose() {
+  async function requestClose() {
     if (!overlay || closing) return;
     closing = true;
-    if (frame?.contentWindow) {
-      frame.contentWindow.postMessage({ type: 'medsi-bot:close-request' }, location.origin);
-    }
     closeTimer = window.setTimeout(() => finishClose(), 1800);
+    try { await chat?.flush(); } finally { finishClose(); }
   }
 
   function open() {
-    if (overlay || document.body.dataset.screen !== 'screenChoose') return;
+    if (overlay || !assetReady || document.body.dataset.screen !== 'screenChoose') return;
     overlay = document.createElement('div');
     overlay.className = 'medsi-bot-overlay';
     overlay.setAttribute('role', 'dialog');
@@ -126,11 +131,15 @@
     backdrop.className = 'medsi-bot-backdrop';
     backdrop.setAttribute('aria-label', 'Закрыть чат с Медси Ботом');
     backdrop.addEventListener('click', requestClose);
-    frame = document.createElement('iframe');
-    frame.className = 'medsi-bot-frame';
-    frame.title = 'Чат с Медси Ботом';
-    frame.src = '/new.html?embedded=1';
-    frame.addEventListener('load', () => frame?.focus());
+    chatRoot.querySelector('.assistant-lab')?.remove();
+    const view = document.createElement('template');
+    view.innerHTML = window.MedsiBotChatView;
+    chatRoot.appendChild(view.content.cloneNode(true));
+    frame.hidden = false;
+    chat = window.MedsiBotChat.mount(chatRoot, {
+      close: () => finishClose(),
+      openEducators: () => finishClose(true)
+    });
     overlay.append(backdrop, frame);
     document.body.appendChild(overlay);
     window.clearTimeout(hintHideTimer);
@@ -139,21 +148,54 @@
     previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     syncLauncher();
+    chatRoot.getElementById('messageInput').focus({ preventScroll: true });
   }
 
   launcher.addEventListener('click', open);
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && overlay) { event.preventDefault(); requestClose(); }
   });
-  window.addEventListener('message', event => {
-    if (!frame || event.source !== frame.contentWindow || event.origin !== location.origin) return;
-    if (event.data?.type === 'medsi-bot:closed') finishClose();
-    if (event.data?.type === 'medsi-bot:open-educators') finishClose(true);
-  });
   window.setInterval(() => {
     if (overlay && document.body.dataset.screen !== 'screenChoose') requestClose();
     syncLauncher();
   }, 300);
+  function script(src) {
+    return new Promise((resolve, reject) => {
+      const node = document.createElement('script');
+      node.src = src; node.onload = resolve; node.onerror = () => { node.remove(); reject(new Error('BOT_ASSET_UNAVAILABLE')); };
+      document.head.appendChild(node);
+    });
+  }
+  async function prepareChat() {
+    if (frame) frame.remove();
+    await Promise.all([
+      window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261002-15'),
+      window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20260909-leading-dot-1'),
+      script('/parents/bot-chat-view.js?v=20261003-3'),
+      script('/new/app.js?v=20261003-3')
+    ]);
+    frame = document.createElement('section');
+    frame.className = 'medsi-bot-frame';
+    frame.hidden = true;
+    chatRoot = frame.attachShadow({ mode: 'open' });
+    const styleReady = ['/new/style.css?v=20261002-16', '/parents/psychology-format.css?v=20260905-production', '/parents/bot-character.css?v=20261003-1'].map(href => new Promise((resolve, reject) => {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet'; link.href = href; link.onload = resolve; link.onerror = reject;
+      chatRoot.appendChild(link);
+    }));
+    const style = document.createElement('style');
+    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff}.conversation{min-height:0}.composer{margin-bottom:calc(16px + env(safe-area-inset-bottom))}';
+    chatRoot.appendChild(style);
+    const template = document.createElement('template');
+    template.innerHTML = window.MedsiBotChatView;
+    chatRoot.appendChild(template.content.cloneNode(true));
+    document.body.appendChild(frame);
+    await Promise.all(styleReady);
+  }
+  // Both the drawing and the inline chat are ready before the launcher appears.
+  Promise.all([bodyImage.decode(), prepareChat().catch(() => new Promise(resolve => window.setTimeout(resolve, 1500)).then(prepareChat)), new Promise(resolve => window.setTimeout(resolve, 4500))])
+    .then(() => { assetReady = true; syncLauncher(); })
+    .catch(() => {});
   syncLauncher();
   window.MedsiSmartBotWidget = Object.freeze({ open, close: requestClose });
 })();

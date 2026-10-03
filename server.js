@@ -437,7 +437,7 @@ function sendAppFile(res, fileName) {
 app.get(['/', '/index.html'], (_req, res) => sendAppFile(res, 'index.html'));
 app.get(['/tutors', '/tutors/'], (_req, res) => sendAppFile(res, 'tutors.html'));
 app.get(['/psychology', '/psychology/'], (_req, res) => sendAppFile(res, 'psychology.html'));
-app.get(['/new', '/new/'], (_req, res) => sendAppFile(res, 'new.html'));
+app.get(['/new', '/new/', '/new.html'], (_req, res) => sendAppFile(res, 'new.html'));
 app.get(['/tutors.html', '/psychology.html'], (req, res) => {
   sendAppFile(res, req.path === '/tutors.html' ? 'tutors.html' : 'psychology.html');
 });

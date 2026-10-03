@@ -16,8 +16,8 @@
   <link rel="stylesheet" href="/chat-overlay/media-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/chat-motion-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/chat-surface-ui.css?v=20260907-1">
-  <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-1">
-  <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261003-1">
+  <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-2">
+  <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261003-3">
 </head>
 <body>
 <div class="wrap"><article id="appCard" class="card start-mode">
@@ -101,7 +101,7 @@
   };
   var status=document.getElementById('parentBootStatus');
   var notice=setTimeout(function(){if(!window.MedsiParentApp||!window.MedsiParentApp.ready)status.classList.remove('hidden');},4000);
-  load('/parents/full-web.js?v=20261002-smart-bot-links').then(function(){
+  load('/parents/full-web.js?v=20261003-registration-recovery-1').then(function(){
     if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
     clearTimeout(notice);status.classList.add('hidden');
     window.MedsiLoadParentChat().then(function(){
@@ -109,7 +109,7 @@
     }).catch(function(){});
     series(['/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20260920-android-resubscribe-1'],true).then(function(){window.MedsiParentApp.helpersReady();}).catch(function(){});
     ["/parents/psychology-format.js?v=20260909-leading-dot-1", "/parents/chat-opening.js?v=20260907-1", "/parents/report-disclaimer.js?v=20260907-1", "/chat-overlay/gesture-navigation.js?v=20260907-hint-1"].forEach(function(src){load(src,1).catch(function(){});});
-    load('/parents/smart-bot-widget.js?v=20261003-1',1).catch(function(){});
+    load('/parents/smart-bot-widget.js?v=20261003-3',1).catch(function(){});
   }).catch(function(){clearTimeout(notice);status.classList.remove('hidden');});
 })();
 </script>

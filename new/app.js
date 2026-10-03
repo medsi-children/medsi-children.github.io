@@ -1,17 +1,29 @@
 (() => {
   'use strict';
 
+  function mount(root = document, callbacks = {}) {
+  let destroyed = false;
+  const lifecycle = new AbortController();
+  const timers = new Set();
+  const later = (fn, delay) => {
+    if (destroyed) return 0;
+    const id = window.setTimeout(() => { timers.delete(id); if (!destroyed) fn(); }, delay);
+    timers.add(id); return id;
+  };
+  const every = (fn, delay) => { const id = window.setInterval(fn, delay); timers.add(id); return id; };
+  const listen = (target, name, fn, options = {}) => target.addEventListener(name, fn, {...options, signal:lifecycle.signal});
+
   // Лаборатория не отправляет сообщения воспитателям. Отчёты читает только через
   // существующую защищённую родительскую сессию на основном домене.
-  const conversation = document.getElementById('conversation');
-  const composer = document.getElementById('composer');
-  const backButton = document.getElementById('botBack');
-  const promptStrip = document.getElementById('promptStrip');
-  const input = document.getElementById('messageInput');
-  const bot = document.getElementById('bot');
-  const botEyes = document.getElementById('botEyes');
+  const conversation = root.getElementById('conversation');
+  const composer = root.getElementById('composer');
+  const backButton = root.getElementById('botBack');
+  const promptStrip = root.getElementById('promptStrip');
+  const input = root.getElementById('messageInput');
+  const bot = root.getElementById('bot');
+  const botEyes = root.getElementById('botEyes');
   const EMOJI_BASE = '/chat-overlay/assets/twemoji/';
-  const logLink = document.getElementById('botLogLink');
+  const logLink = root.getElementById('botLogLink');
   const embedded = document.documentElement.dataset.embedded === '1' && window.parent !== window;
   if (logLink && new URLSearchParams(location.search).has('logs')) logLink.hidden = false;
   const IS_PRIMARY_HOST = location.origin === new URL('https://медси-бот.рф').origin;
@@ -54,7 +66,7 @@
     });
   }
   syncBlinks();
-  document.addEventListener('visibilitychange', () => {
+  listen(document, 'visibilitychange', () => {
     if (!document.hidden) syncBlinks();
   });
 
@@ -64,7 +76,7 @@
     const safeY = Math.max(-bot.clientHeight * .065, Math.min(bot.clientHeight * .055, y + bot.clientHeight * .025));
     botEyes.style.setProperty('--gaze-x', `${safeX}px`);
     botEyes.style.setProperty('--gaze-y', `${safeY}px`);
-    document.querySelectorAll('.mini-eyes').forEach(eyes => {
+    root.querySelectorAll('.mini-eyes').forEach(eyes => {
       // Мини-аватар намного меньше основного персонажа: глаза всегда остаются в блобе.
       const miniX = Math.max(-2, Math.min(2, x * .035));
       const miniY = Math.max(-1.5, Math.min(1.5, y * .035));
@@ -149,13 +161,13 @@
     if (side === 'user') hasUserLog = true;
     if (!hasUserLog) return;
     window.clearTimeout(logTimer);
-    logTimer = window.setTimeout(() => { void flushBotLog(); }, 800);
+    logTimer = later(() => { void flushBotLog(); }, 800);
   }
 
   async function flushBotLog() {
     window.clearTimeout(logTimer);
     if (!IS_PRIMARY_HOST || !hasUserLog || !pendingLogEntries.length) return;
-    if (logBusy) { logTimer = window.setTimeout(() => { void flushBotLog(); }, 1000); return; }
+    if (logBusy) { logTimer = later(() => { void flushBotLog(); }, 1000); return; }
     logBusy = true;
     const entries = [];
     const encoder = new TextEncoder();
@@ -190,11 +202,11 @@
     } catch (_) {
       if (++logFailures < 3) {
         pendingLogEntries.unshift(...entries);
-        logTimer = window.setTimeout(() => { void flushBotLog(); }, 5000);
+        logTimer = later(() => { void flushBotLog(); }, 5000);
       }
     } finally {
       logBusy = false;
-      if (pendingLogEntries.length && logFailures === 0) logTimer = window.setTimeout(() => { void flushBotLog(); }, 800);
+      if (pendingLogEntries.length && logFailures === 0) logTimer = later(() => { void flushBotLog(); }, 800);
     }
   }
 
@@ -462,7 +474,7 @@
     window.clearTimeout(moodTimer);
     bot.classList.remove('is-listening', 'mood-happy', 'mood-sad');
     if (mood && mood !== 'neutral') bot.classList.add(mood === 'listening' ? 'is-listening' : `mood-${mood}`);
-    if (duration) moodTimer = window.setTimeout(() => setMood(input.value.trim() ? 'listening' : 'neutral'), duration);
+    if (duration) moodTimer = later(() => setMood(input.value.trim() ? 'listening' : 'neutral'), duration);
   }
   function questionMood(text) {
     const value = String(text).toLocaleLowerCase('ru').replace(/ё/g, 'е');
@@ -576,7 +588,7 @@
     message('user', question || scenario.question);
     setThinking(true);
     showTyping();
-    window.setTimeout(() => {
+    later(() => {
       const answer = scenario.variants && scenario.variants[parsed.variant] || scenario.answer;
       if (answer) message('bot', answer, questionMood(question || scenario.question) === 'sad' ? 'sad' : scenario.mood || questionMood(question || scenario.question), scenario.icon || '', scenario.iconPosition || 'before');
       const after = parsed.key === 'urgent' && parsed.variant === 'medical' ? '' : scenario.after;
@@ -585,8 +597,8 @@
       if (after === 'therapy') offerTherapy();
       if (after === 'therapyChoices') { offerTherapyChoices(); awaitingTherapyChoice = true; pendingChoice = 'therapy'; }
       if (after === 'clarifyReportMedical' || after === 'clarifyDoctorMeeting' || after === 'clarifyDelivery') offerClarification(after);
-      if (after === 'navigateChat') window.setTimeout(openEducatorChat, 180);
-      if (scenario.after === 'greetingFollowup') window.setTimeout(() => message('bot', 'Как я могу вам помочь?'), 230);
+      if (after === 'navigateChat') later(openEducatorChat, 180);
+      if (scenario.after === 'greetingFollowup') later(() => message('bot', 'Как я могу вам помочь?'), 230);
       clearTyping();
       setThinking(false);
       busy = false;
@@ -662,7 +674,7 @@
     setThinking(true);
     showTyping();
     busy = true;
-    window.setTimeout(() => {
+    later(() => {
       message('bot', 'Этот вопрос лучше задать в чате с воспитателями. Хотите открыть чат?', questionMood(text) === 'sad' ? 'sad' : 'thinking');
       offerEducatorChat();
       pendingChoice = 'educatorChat';
@@ -691,6 +703,7 @@
 
   async function openEducatorChat() {
     await flushBotLog();
+    if (callbacks.openEducators) return callbacks.openEducators();
     if (embedded) return tellParent('medsi-bot:open-educators');
     if (typeof window.openMedsiEducatorChat === 'function') return window.openMedsiEducatorChat();
     window.location.assign('https://медси-бот.рф/?openChat=1');
@@ -698,15 +711,16 @@
 
   backButton.addEventListener('click', async () => {
     await flushBotLog();
+    if (callbacks.close) return callbacks.close();
     if (embedded) return tellParent('medsi-bot:closed');
     window.location.assign('https://медси-бот.рф/');
   });
-  if (embedded) window.addEventListener('message', async event => {
+  if (embedded) listen(window, 'message', async event => {
     if (event.source !== window.parent || event.origin !== location.origin || event.data?.type !== 'medsi-bot:close-request') return;
     await flushBotLog();
     tellParent('medsi-bot:closed');
   });
-  window.addEventListener('pagehide', () => { void flushBotLog(); });
+  listen(window, 'pagehide', () => { void flushBotLog(); });
 
   function follow(point) {
     const rect = bot.getBoundingClientRect();
@@ -718,15 +732,23 @@
     pointerActiveUntil = Date.now() + 1500;
   }
 
-  window.addEventListener('pointermove', event => {
+  listen(window, 'pointermove', event => {
     if (event.pointerType === 'mouse') follow(event);
   }, { passive: true });
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    window.setInterval(() => {
+    every(() => {
       if (Date.now() < pointerActiveUntil) return;
       setGaze(bot.clientWidth * (.025 + (Math.random() - .5) * .09), bot.clientHeight * (-.04 + (Math.random() - .5) * .07));
     }, 2100);
   }
   setGaze(bot.clientWidth * .10, bot.clientHeight * -.08);
   message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1f499.svg', 'after');
+  return { flush: flushBotLog, destroy() {
+    destroyed = true; lifecycle.abort();
+    timers.forEach(id => { window.clearTimeout(id); window.clearInterval(id); });
+    timers.clear();
+  } };
+  }
+  window.MedsiBotChat = Object.freeze({ mount });
+  if (document.getElementById('conversation')) mount();
 })();

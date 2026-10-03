@@ -1,4 +1,4 @@
-.medsi-bot-dock{position:fixed;z-index:1100;left:max(8px,env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));width:164px;display:grid;justify-items:center;pointer-events:none}
+.medsi-bot-dock{position:fixed;z-index:1100;left:max(8px,env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));width:164px;display:grid;justify-items:center;pointer-events:none;animation:medsi-bot-arrive .55s cubic-bezier(.2,.75,.3,1) both}
 .medsi-bot-dock[hidden],.medsi-bot-launcher[hidden],.medsi-bot-hint[hidden]{display:none!important}
 .medsi-bot-launcher{position:relative;display:grid;place-items:center;width:144px;height:144px;padding:0;border:0;border-radius:50%;background:transparent;cursor:pointer;pointer-events:auto}
 .medsi-bot-scale{position:absolute;width:238px;height:238px;transform:scale(.605042);pointer-events:none}
@@ -14,3 +14,8 @@
 @keyframes medsi-bot-fade{from{opacity:0}to{opacity:1}}
 @media(max-width:600px){.medsi-bot-overlay{padding:12px}.medsi-bot-frame{width:100%;height:calc(100dvh - 24px);border:1px solid rgba(255,255,255,.85);border-radius:28px}}
 @media(prefers-reduced-motion:reduce){.medsi-bot-frame,.medsi-bot-backdrop{animation:none}.medsi-bot-hint{transition:none}}
+
+@keyframes medsi-bot-arrive{from{opacity:0;transform:translateY(16px) scale(.92)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.medsi-bot-dock{animation:none}}
+
+.medsi-bot-frame[hidden]{display:none!important}
