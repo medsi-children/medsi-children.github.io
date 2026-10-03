@@ -6,7 +6,7 @@
   if(seen)return;
   const card=document.createElement('aside');
   card.className='medsi-install-hint';card.hidden=true;card.setAttribute('role','status');
-  card.innerHTML='<button type="button" class="medsi-install-hint-close" aria-label="Закрыть подсказку об установке">×</button><strong>Медси под рукой</strong><p>Добавьте сайт на экран «Домой», чтобы открывать его как приложение.</p>';
+  card.innerHTML='<button type="button" class="medsi-install-hint-close" aria-label="Закрыть подсказку об установке">×</button><strong><img class="medsi-install-emoji" src="/chat-overlay/assets/twemoji/1f4f1.svg" alt="📱"> Медси Бот под рукой</strong><p>Добавьте сайт на экран «Домой», чтобы открывать его как приложение.</p>';
   document.body.appendChild(card);
   let timer=null,hideTimer=null;
   function hide(){clearTimeout(timer);clearTimeout(hideTimer);timer=null;card.hidden=true}
