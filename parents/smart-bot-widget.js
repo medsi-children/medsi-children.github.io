@@ -38,7 +38,7 @@
   let chatRoot = null;
   let closing = false;
   let closeTimer = 0;
-  let previousOverflow = '';
+  let backgroundLock = null;
   let pointerActiveUntil = 0;
   let hintTimer = 0;
   let hintHideTimer = 0;
@@ -94,6 +94,33 @@
   }
   setGaze(238 * .10, 238 * -.08);
 
+  function lockBackground() {
+    const body = document.body;
+    const properties = ['position', 'top', 'left', 'width', 'height', 'overflow'];
+    backgroundLock = {
+      x: window.scrollX, y: window.scrollY,
+      styles: properties.map(name => [name, body.style.getPropertyValue(name), body.style.getPropertyPriority(name)])
+    };
+    // Overflow alone does not prevent Safari from panning the page on focus.
+    // Keep the menu's position and background dimensions unchanged by the keyboard.
+    Object.assign(body.style, {
+      position: 'fixed', top: `${-backgroundLock.y}px`, left: `${-backgroundLock.x}px`,
+      width: `${body.getBoundingClientRect().width}px`, height: `${body.getBoundingClientRect().height}px`,
+      overflow: 'hidden'
+    });
+  }
+
+  function unlockBackground() {
+    if (!backgroundLock) return;
+    const saved = backgroundLock;
+    backgroundLock = null;
+    for (const [name, value, priority] of saved.styles) {
+      if (value) document.body.style.setProperty(name, value, priority);
+      else document.body.style.removeProperty(name);
+    }
+    window.scrollTo({ left: saved.x, top: saved.y, behavior: 'instant' });
+  }
+
   function removeOverlay(openEducators = false) {
     if (!overlay) return;
     window.clearTimeout(closeTimer);
@@ -104,7 +131,7 @@
     overlay.remove();
     overlay = null;
     closing = false;
-    document.body.style.overflow = previousOverflow;
+    unlockBackground();
     syncLauncher();
     if (openEducators && document.body.dataset.screen === 'screenChoose') {
       document.getElementById('btnChat')?.click();
@@ -117,6 +144,7 @@
     if (!overlay || overlay.classList.contains('is-closing')) return;
     window.clearTimeout(closeTimer);
     closing = true;
+    chatRoot?.activeElement?.blur();
     overlay.classList.add('is-closing');
     closeTimer = window.setTimeout(() => removeOverlay(openEducators),
       matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180);
@@ -177,8 +205,7 @@
     window.clearTimeout(hintHideTimer);
     hint.classList.remove('is-visible');
     hint.hidden = true;
-    previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    lockBackground();
     syncLauncher();
     frame.getBoundingClientRect();
     const openingOverlay = overlay;
@@ -246,7 +273,7 @@
       chatRoot.appendChild(link);
     }));
     const style = document.createElement('style');
-    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0;min-width:0;overscroll-behavior:contain}.bot-chat-footer{display:block;min-width:0;padding:0 13px calc(16px + env(safe-area-inset-bottom));background:#fff}.bot-chat-prompt-row{display:block;height:42px;overflow:hidden;contain:paint}.bot-chat-footer .prompt-strip{height:42px;box-sizing:border-box;margin:0;padding:4px 1px;min-width:0;align-items:center}.bot-chat-footer .prompt-strip button{height:34px;min-height:34px}.bot-chat-footer .composer{position:relative;margin:10px 0 0!important;height:58px;min-height:58px;box-sizing:border-box;flex-shrink:0;transition:border-color .18s ease,box-shadow .18s ease}.composer input{font-size:16px}:host([data-keyboard]) .bot-chat-footer{padding-bottom:12px}';
+    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0;min-width:0;overscroll-behavior:contain}.bot-chat-footer{display:block;min-width:0;padding:0 13px calc(16px + env(safe-area-inset-bottom));background:#fff}.bot-chat-prompt-row{display:block;height:48px;overflow:hidden;contain:paint}.bot-chat-footer .prompt-strip{height:48px;box-sizing:border-box;margin:0;padding:4px 1px;min-width:0;align-items:center}.bot-chat-footer .prompt-strip button{height:40px;min-height:40px;font-size:12px;line-height:1.2}.bot-chat-footer .composer{position:relative;margin:10px 0 0!important;height:58px;min-height:58px;box-sizing:border-box;flex-shrink:0;transition:border-color .18s ease,box-shadow .18s ease}.composer input{font-size:16px}:host([data-keyboard]) .bot-chat-footer{padding-bottom:12px}';
     chatRoot.appendChild(style);
     installChatView();
     document.body.appendChild(frame);
