@@ -132,7 +132,7 @@
     launcher.removeAttribute('aria-busy');
     if (overlay || document.body.dataset.screen !== 'screenChoose') return;
     overlay = document.createElement('div');
-    overlay.className = 'medsi-bot-overlay';
+    overlay.className = 'medsi-bot-overlay is-preparing';
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
     overlay.setAttribute('aria-label', 'Чат с Медси Ботом');
@@ -145,21 +145,27 @@
     const view = document.createElement('template');
     view.innerHTML = window.MedsiBotChatView;
     chatRoot.appendChild(view.content.cloneNode(true));
+    overlay.append(backdrop, frame);
+    syncOverlayViewport();
+    document.body.appendChild(overlay);
     frame.hidden = false;
     chat = window.MedsiBotChat.mount(chatRoot, {
       close: () => finishClose(),
       openEducators: () => finishClose(true)
     });
-    overlay.append(backdrop, frame);
-    document.body.appendChild(overlay);
-    syncOverlayViewport();
     window.clearTimeout(hintHideTimer);
     hint.classList.remove('is-visible');
     hint.hidden = true;
     previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     syncLauncher();
-
+    frame.getBoundingClientRect();
+    const openingOverlay = overlay;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (overlay !== openingOverlay) return;
+      overlay.classList.remove('is-preparing');
+      overlay.classList.add('is-open');
+    }));
   }
 
   // iOS keeps the layout viewport tall when the keyboard opens. Fit the
@@ -178,6 +184,7 @@
   window.visualViewport?.addEventListener('scroll', syncOverlayViewport);
   window.addEventListener('resize', syncOverlayViewport);
 
+  new MutationObserver(syncLauncher).observe(document.body, { attributes: true, attributeFilter: ['data-screen'] });
   launcher.addEventListener('click', open);
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && overlay) { event.preventDefault(); requestClose(); }
@@ -211,7 +218,7 @@
       chatRoot.appendChild(link);
     }));
     const style = document.createElement('style');
-    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff}.conversation{min-height:0}.composer{margin-bottom:calc(16px + env(safe-area-inset-bottom))}.composer input{font-size:16px}';
+    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0}.composer{margin-bottom:calc(16px + env(safe-area-inset-bottom))}.composer input{font-size:16px}';
     chatRoot.appendChild(style);
     const template = document.createElement('template');
     template.innerHTML = window.MedsiBotChatView;
@@ -222,7 +229,7 @@
   // Preload the chat independently; the menu logo only waits for image decoding.
   let chatReady = prepareChat();
   chatReady.catch(() => {});
-  bodyImage.decode().then(() => { assetReady = true; syncLauncher(); }).catch(() => {});
+  const visualReady = bodyImage.decode().then(() => { assetReady = true; syncLauncher(); }).catch(() => {});
   syncLauncher();
-  window.MedsiSmartBotWidget = Object.freeze({ open, close: requestClose });
+  window.MedsiSmartBotWidget = Object.freeze({ open, close: requestClose, ready: visualReady });
 })();
