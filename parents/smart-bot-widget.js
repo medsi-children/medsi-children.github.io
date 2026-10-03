@@ -60,10 +60,11 @@
   }
 
   function syncLauncher() {
-    launcher.hidden = !assetReady || document.body.dataset.screen !== 'screenChoose' || Boolean(overlay);
+    launcher.hidden = !assetReady || document.body.dataset.screen !== 'screenChoose';
     dock.hidden = launcher.hidden;
-    if (!launcher.hidden) scheduleHint();
-    if (launcher.hidden) {
+    dock.inert = Boolean(overlay);
+    if (!launcher.hidden && !overlay) scheduleHint();
+    if (launcher.hidden || overlay) {
       window.clearTimeout(hintTimer);
       hintTimer = 0;
       window.clearTimeout(hintHideTimer);
