@@ -1,8 +1,8 @@
-.medsi-install-hint{position:fixed;z-index:1090;right:max(14px,env(safe-area-inset-right));bottom:calc(32px + env(safe-area-inset-bottom));width:min(220px,calc(100vw - 192px));box-sizing:border-box;padding:14px 16px;border:1px solid #e4eeeb;border-radius:16px;background:#fff;color:#426568;box-shadow:0 6px 22px #2d746f14;font:500 13px/1.4 system-ui,-apple-system,sans-serif;animation:medsi-install-in .3s ease-out both}
+.medsi-install-hint{position:fixed;z-index:1090;left:50%;transform:translateX(-50%);bottom:calc(32px + env(safe-area-inset-bottom));width:min(310px,calc(100vw - 32px));box-sizing:border-box;padding:17px 30px;border:1px solid #e4eeeb;border-radius:26px;background:#fff;color:#426568;box-shadow:0 6px 22px #2d746f14;text-align:center;font:500 13px/1.4 system-ui,-apple-system,sans-serif;animation:medsi-install-in .3s ease-out both}
 .medsi-install-hint[hidden]{display:none!important}
 .medsi-install-hint strong{display:block;margin-right:12px;font-size:13px;font-weight:650}
 .medsi-install-hint p{margin:6px 0 0;font-size:12px;line-height:1.4}
 .medsi-install-hint-close{position:absolute;top:4px;right:4px;display:grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:50%;background:transparent;color:#789899;font:400 21px/1 system-ui;cursor:pointer}
 .medsi-install-hint-close:focus-visible{outline:2px solid #20bec9;outline-offset:1px}
-@keyframes medsi-install-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes medsi-install-in{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translateX(-50%)}}
 @media(prefers-reduced-motion:reduce){.medsi-install-hint{animation:none}}

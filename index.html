@@ -17,8 +17,8 @@
   <link rel="stylesheet" href="/chat-overlay/chat-motion-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/chat-surface-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-2">
-  <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261003-3">
-  <link rel="stylesheet" href="/parents/install-hint.css?v=20261003-1">
+  <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261003-6">
+  <link rel="stylesheet" href="/parents/install-hint.css?v=20261003-2">
 </head>
 <body>
 <div class="wrap"><article id="appCard" class="card start-mode">
@@ -45,7 +45,7 @@
 
   <section id="screenAuthPending" class="hidden access-wait-screen"><div id="authPendingSpinner" class="access-spinner" aria-hidden="true"></div><div id="authApprovedIcon" class="registration-success-icon hidden" aria-hidden="true">✓</div><h2 id="authPendingTitle" class="form-title">Авторизация начата</h2><p id="authPendingText" class="form-subtitle">Пожалуйста, подождите, пока воспитатель подтвердит вход.</p><div id="authRequestCodeWrap" class="access-code-card"><span>Код подтверждения</span><strong id="authRequestCode">••••</strong></div><p class="registration-note">Можно закрыть страницу — при следующем открытии проверка продолжится.</p><button id="authPendingBackBtn" class="btn hidden" type="button">Вернуться</button></section>
 
-  <section id="screenChoose" class="hidden"><div id="waitNote" class="info hidden">Отлично! Мы добавили вас в систему ☺️</div><div class="menu-dashboard"><div class="start-brand menu-brand"><div class="medsi-logo" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div><h1 class="start-title">Медси Бот</h1><p class="start-subtitle">Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.</p></div><div class="menu-actions">
+  <section id="screenChoose" class="hidden"><div id="waitNote" class="info hidden">Отлично! Мы добавили вас в систему ☺️</div><div class="menu-dashboard"><div class="start-brand menu-brand"><div id="medsiAssistantLogo" class="medsi-assistant-logo"></div><h1 class="start-title">Медси Бот</h1><p class="start-subtitle">Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.</p></div><div class="menu-actions">
     <button id="btnChat" class="btn menu-card menu-card-primary start-cascade start-cascade-1"><span class="menu-card-title">💬 Чат с воспитателями</span><span class="menu-card-text">Задать вопрос, оставить пожелания и согласовать звонки.</span><span id="newMsgBanner" class="chat-newmsg hidden">✦ Новое сообщение</span></button>
     <div class="menu-report-grid"><button id="btnMorning" class="btn menu-card menu-card-morning start-cascade start-cascade-2"><span class="menu-card-title">☀️ Утренний отчёт</span><span class="menu-card-text">С <span class="menu-card-time">15:00 до 16:00</span></span><span id="morningReportBadge" class="chat-newmsg report-newmsg hidden">✦ Новый отчёт</span></button><button id="btnEvening" class="btn menu-card menu-card-evening start-cascade start-cascade-2"><span class="menu-card-title">🌙 Вечерний отчёт</span><span class="menu-card-text">с <span class="menu-card-time">21:00 до 22:00</span></span><span id="eveningReportBadge" class="chat-newmsg report-newmsg hidden">✦ Новый отчёт</span></button></div>
     <div class="menu-secondary-grid"><button id="btnPsychology" class="btn menu-card menu-card-therapy start-cascade start-cascade-3"><span class="menu-card-title">🧠 Психотерапия</span><span class="menu-card-text">с <span class="menu-card-time">21:00 до 22:00</span></span><span id="psychologyReportBadge" class="chat-newmsg report-newmsg hidden">✦ Новый отчёт</span></button><button id="btnSchedule" class="btn menu-card menu-card-schedule start-cascade start-cascade-3"><span class="menu-card-title">🕘 Режим дня</span><span class="menu-card-text">Расписание активностей и занятий детей</span></button></div>
@@ -111,7 +111,7 @@
     series(['/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20260920-android-resubscribe-1'],true).then(function(){window.MedsiParentApp.helpersReady();}).catch(function(){});
     ["/parents/psychology-format.js?v=20260909-leading-dot-1", "/parents/chat-opening.js?v=20260907-1", "/parents/report-disclaimer.js?v=20260907-1", "/chat-overlay/gesture-navigation.js?v=20260907-hint-1"].forEach(function(src){load(src,1).catch(function(){});});
     load('/parents/install-hint.js?v=20261003-1',1).catch(function(){});
-    load('/parents/smart-bot-widget.js?v=20261003-5',1).catch(function(){});
+    load('/parents/smart-bot-widget.js?v=20261003-6',1).catch(function(){});
   }).catch(function(){clearTimeout(notice);status.classList.remove('hidden');});
 })();
 </script>

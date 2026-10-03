@@ -19,3 +19,12 @@
 @media(prefers-reduced-motion:reduce){.medsi-bot-dock{animation:none}}
 
 .medsi-bot-frame[hidden]{display:none!important}
+
+/* The menu mascot keeps the same body and eye proportions at logo size. */
+.medsi-assistant-logo{position:relative;flex:none;width:104px;height:86px}
+.medsi-bot-dock--brand{position:absolute;z-index:2;inset:-9px 0 auto;width:104px}
+.medsi-bot-dock--brand .medsi-bot-launcher{width:104px;height:104px}
+.medsi-bot-dock--brand .medsi-bot-scale{transform:scale(.436975)}
+.medsi-bot-dock--brand .medsi-bot-hint{left:calc(100% - 4px);top:50%;bottom:auto;width:max-content;max-width:min(142px,calc(50vw - 65px));padding:8px 10px;border-radius:14px;font-size:12px;transform:translateY(calc(-50% + 5px));text-align:center}
+.medsi-bot-dock--brand .medsi-bot-hint.is-visible{transform:translateY(-50%)}
+.medsi-bot-dock--brand .medsi-bot-hint:before{content:'';position:absolute;left:-5px;top:calc(50% - 5px);width:8px;height:8px;background:#fff;border-left:1px solid #dfedeb;border-bottom:1px solid #dfedeb;transform:rotate(45deg)}

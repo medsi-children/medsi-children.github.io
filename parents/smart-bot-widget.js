@@ -8,7 +8,9 @@
   const dock = document.createElement('div');
   dock.className = 'medsi-bot-dock';
   dock.hidden = true;
-  document.body.appendChild(dock);
+  const logoSlot = document.getElementById('medsiAssistantLogo');
+  if (logoSlot) dock.classList.add('medsi-bot-dock--brand');
+  (logoSlot || document.body).appendChild(dock);
   const launcher = document.createElement('button');
   launcher.type = 'button';
   launcher.className = 'medsi-bot-launcher';
