@@ -2,9 +2,13 @@
   'use strict';
 
   // Change this one switch to hide the assistant without changing the parent panel.
-  const ENABLED = false;
+  const ENABLED = true;
   if (!ENABLED || window.MedsiSmartBotWidget) return;
 
+  const dock = document.createElement('div');
+  dock.className = 'medsi-bot-dock';
+  dock.hidden = true;
+  document.body.appendChild(dock);
   const launcher = document.createElement('button');
   launcher.type = 'button';
   launcher.className = 'medsi-bot-launcher';
@@ -12,15 +16,16 @@
   launcher.setAttribute('title', 'Задать вопрос Медси Боту');
   launcher.setAttribute('aria-haspopup', 'dialog');
   launcher.hidden = true;
-  launcher.innerHTML = '<img src="/new/blob.png" alt=""><span class="medsi-bot-launcher-eyes" aria-hidden="true"><i></i><i></i></span>';
-  document.body.appendChild(launcher);
+  launcher.innerHTML = '<span class="medsi-bot-scale"><span class="medsi-character" aria-hidden="true"><span class="medsi-character-glow"></span><img class="medsi-character-body" src="/new/blob.png" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span></span>';
+  const character = launcher.querySelector('.medsi-character');
+  dock.appendChild(launcher);
   const hint = document.createElement('button');
   hint.type = 'button';
   hint.className = 'medsi-bot-hint';
   hint.textContent = 'Чем могу помочь?';
   hint.addEventListener('click', open);
-  document.body.appendChild(hint);
-  launcher.dataset.phase = 'created';
+  hint.hidden = true;
+  dock.appendChild(hint);
 
   let overlay = null;
   let frame = null;
@@ -52,6 +57,7 @@
 
   function syncLauncher() {
     launcher.hidden = document.body.dataset.screen !== 'screenChoose' || Boolean(overlay);
+    dock.hidden = launcher.hidden;
     if (!launcher.hidden) scheduleHint();
     if (launcher.hidden) {
       window.clearTimeout(hintTimer);
@@ -62,25 +68,26 @@
     }
   }
 
+  // Same gaze bounds and proportions as the large character in /new.
   function setGaze(x, y) {
-    launcher.style.setProperty('--bot-look-x', `${Math.max(-5, Math.min(5, x))}px`);
-    launcher.style.setProperty('--bot-look-y', `${Math.max(-3, Math.min(3, y))}px`);
+    const size = 238;
+    character.style.setProperty('--gaze-x', `${Math.max(-size * .055, Math.min(size * .055, x - size * .055))}px`);
+    character.style.setProperty('--gaze-y', `${Math.max(-size * .065, Math.min(size * .055, y + size * .025))}px`);
   }
-
   launcher.addEventListener('pointermove', event => {
     if (event.pointerType !== 'mouse') return;
     const bounds = launcher.getBoundingClientRect();
-    setGaze((event.clientX - bounds.left - bounds.width / 2) * .18,
-      (event.clientY - bounds.top - bounds.height / 2) * .13);
+    setGaze(Math.max(-23.8, Math.min(23.8, (event.clientX - bounds.left - bounds.width / 2) / bounds.width * 59.5)),
+      Math.max(-19.04, Math.min(19.04, (event.clientY - bounds.top - bounds.height / 2) / bounds.height * 59.5)));
     pointerActiveUntil = Date.now() + 1600;
   }, { passive: true });
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
     window.setInterval(() => {
       if (launcher.hidden || Date.now() < pointerActiveUntil) return;
-      setGaze((Math.random() - .5) * 5, (Math.random() - .5) * 3);
+      setGaze(238 * (.025 + (Math.random() - .5) * .09), 238 * (-.04 + (Math.random() - .5) * .07));
     }, 2200);
   }
-  launcher.dataset.phase = 'gaze';
+  setGaze(238 * .10, 238 * -.08);
 
   function finishClose(openEducators = false) {
     if (!overlay) return;
@@ -108,9 +115,7 @@
   }
 
   function open() {
-    launcher.dataset.phase = 'clicked';
     if (overlay || document.body.dataset.screen !== 'screenChoose') return;
-    launcher.dataset.phase = 'opening';
     overlay = document.createElement('div');
     overlay.className = 'medsi-bot-overlay';
     overlay.setAttribute('role', 'dialog');
@@ -128,7 +133,6 @@
     frame.addEventListener('load', () => frame?.focus());
     overlay.append(backdrop, frame);
     document.body.appendChild(overlay);
-    launcher.dataset.phase = 'open';
     window.clearTimeout(hintHideTimer);
     hint.classList.remove('is-visible');
     hint.hidden = true;
@@ -138,7 +142,6 @@
   }
 
   launcher.addEventListener('click', open);
-  launcher.dataset.phase = 'click';
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && overlay) { event.preventDefault(); requestClose(); }
   });
@@ -152,6 +155,5 @@
     syncLauncher();
   }, 300);
   syncLauncher();
-  launcher.dataset.phase = 'ready';
   window.MedsiSmartBotWidget = Object.freeze({ open, close: requestClose });
 })();
