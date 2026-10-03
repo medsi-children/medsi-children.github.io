@@ -128,7 +128,10 @@
     chatRoot.appendChild(view.content.cloneNode(true));
     const footer = document.createElement('div');
     footer.className = 'bot-chat-footer';
-    footer.append(chatRoot.getElementById('promptStrip'), chatRoot.getElementById('composer'));
+    const promptRow = document.createElement('div');
+    promptRow.className = 'bot-chat-prompt-row';
+    promptRow.appendChild(chatRoot.getElementById('promptStrip'));
+    footer.append(promptRow, chatRoot.getElementById('composer'));
     chatRoot.querySelector('.help-panel').appendChild(footer);
   }
 
@@ -242,7 +245,7 @@
       chatRoot.appendChild(link);
     }));
     const style = document.createElement('style');
-    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0;min-width:0;overscroll-behavior:contain}.bot-chat-footer{display:grid;grid-template-rows:auto auto;gap:10px;min-width:0;padding:0 13px calc(16px + env(safe-area-inset-bottom));background:#fff}.bot-chat-footer .prompt-strip{margin:0;padding:3px 1px 4px;min-width:0}.bot-chat-footer .prompt-strip button{height:34px;min-height:34px}.bot-chat-footer .composer{margin:0;min-height:58px;flex-shrink:0;transition:border-color .18s ease,box-shadow .18s ease}.composer input{font-size:16px}:host([data-keyboard]) .bot-chat-footer{padding-bottom:12px}';
+    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0;min-width:0;overscroll-behavior:contain}.bot-chat-footer{display:block;min-width:0;padding:0 13px calc(16px + env(safe-area-inset-bottom));background:#fff}.bot-chat-prompt-row{display:block;height:42px;overflow:hidden;contain:paint}.bot-chat-footer .prompt-strip{height:42px;box-sizing:border-box;margin:0;padding:4px 1px;min-width:0;align-items:center}.bot-chat-footer .prompt-strip button{height:34px;min-height:34px}.bot-chat-footer .composer{position:relative;margin:10px 0 0!important;height:58px;min-height:58px;box-sizing:border-box;flex-shrink:0;transition:border-color .18s ease,box-shadow .18s ease}.composer input{font-size:16px}:host([data-keyboard]) .bot-chat-footer{padding-bottom:12px}';
     chatRoot.appendChild(style);
     installChatView();
     document.body.appendChild(frame);
