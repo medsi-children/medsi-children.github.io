@@ -120,7 +120,7 @@
     groupTherapyTime: { question: 'Когда групповая психотерапия?', answer: 'В режиме дня групповая психотерапия указана на 10:00. Отчёт по занятию могу показать здесь.', after: 'therapy' },
     individualTherapy: { question: 'Индивидуальные занятия с психологом', answer: 'По вопросам индивидуальной психотерапии, пожалуйста, связывайтесь напрямую с вашим психологом.' },
     greeting: { question: 'Добрый день', answer: 'Добрый день', icon: '1f499.svg', iconPosition: 'after', after: 'greetingFollowup' },
-    routine: { question: 'Какой режим дня?', answer: 'Утро\n8:00 — Подъём\n8:30 — Зарядка\n9:00 — Завтрак\n9:30 — Игры и творчество\n10:00 — Групповая психотерапия\n11:00 — Прогулка\n12:00 — Игры и творчество\n13:00 — Обед\n14:00 — Сон-час\n\nВечер\n16:00 — Йога / Танцы\n16:30 — Полдник\n17:00 — Игры и творчество\n18:00 — Ужин\n18:15 — Киносеанс\n21:00 — Подготовка ко сну / медицинские процедуры\n22:00 — Отбой\n\nВстречи с детьми: 17:00–20:00.' },
+    routine: { question: 'Какой режим дня?', answer: '☀️ Утро\n8:00 — Подъём\n8:30 — Зарядка\n9:00 — Завтрак\n9:30 — Игры и творчество\n10:00 — Групповая психотерапия\n11:00 — Прогулка\n12:00 — Игры и творчество\n13:00 — Обед\n14:00 — Сон-час\n\n🌙 Вечер\n16:00 — Йога / Танцы\n16:30 — Полдник\n17:00 — Игры и творчество\n18:00 — Ужин\n18:15 — Киносеанс\n21:00 — Подготовка ко сну / медицинские процедуры\n22:00 — Отбой\n\nВстречи с детьми: 17:00–20:00.' },
     home: { question: 'Как добавить систему на экран «Домой»?', answer: 'На главном экране есть подсказка по добавлению Медси Бота на экран «Домой». После этого система будет открываться как обычное приложение.' },
     thanks: { question: 'Спасибо!', answer: 'Пожалуйста! Я рядом, если понадобится подсказка.', mood: 'happy' }
   };
@@ -141,9 +141,10 @@
     return image;
   };
   const appendMessageText = (bubble, text) => {
-    // Значки в тексте доставок используют те же локальные Twemoji, что и кнопки.
-    const parts = String(text).split(/(🚫|✅)/);
-    parts.forEach(part => bubble.append(part === '🚫' ? emoji('1f6ab.svg', '') : part === '✅' ? emoji('2705.svg', '') : document.createTextNode(part)));
+    // В сообщениях используем те же локальные Twemoji, что и в меню.
+    const icons = { '🚫': '1f6ab.svg', '✅': '2705.svg', '☀️': '2600.svg', '🌙': '1f319.svg' };
+    const parts = String(text).split(/(🚫|✅|☀️|🌙)/);
+    parts.forEach(part => bubble.append(icons[part] ? emoji(icons[part], part) : document.createTextNode(part)));
   };
   const scrollToEnd = () => { conversation.scrollTop = conversation.scrollHeight; };
   const moscowParts = date => Object.fromEntries(new Intl.DateTimeFormat('en-US', {
