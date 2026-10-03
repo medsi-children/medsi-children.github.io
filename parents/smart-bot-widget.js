@@ -137,6 +137,7 @@
     frame.style.alignSelf = '';
     frame.removeAttribute('data-keyboard');
     unlockBackground();
+    document.documentElement.classList.remove('medsi-bot-active');
     syncLauncher();
     if (openEducators && document.body.dataset.screen === 'screenChoose') {
       document.getElementById('btnChat')?.click();
@@ -211,6 +212,7 @@
     hint.classList.remove('is-visible');
     hint.hidden = true;
     lockBackground();
+    document.documentElement.classList.add('medsi-bot-active');
     syncLauncher();
     dialogGeometry = {
       height: frame.getBoundingClientRect().height,
