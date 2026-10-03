@@ -39,6 +39,7 @@
   let closing = false;
   let closeTimer = 0;
   let backgroundLock = null;
+  let dialogGeometry = null;
   let pointerActiveUntil = 0;
   let hintTimer = 0;
   let hintHideTimer = 0;
@@ -131,6 +132,10 @@
     overlay.remove();
     overlay = null;
     closing = false;
+    dialogGeometry = null;
+    frame.style.height = '';
+    frame.style.alignSelf = '';
+    frame.removeAttribute('data-keyboard');
     unlockBackground();
     syncLauncher();
     if (openEducators && document.body.dataset.screen === 'screenChoose') {
@@ -207,7 +212,11 @@
     hint.hidden = true;
     lockBackground();
     syncLauncher();
-    frame.getBoundingClientRect();
+    dialogGeometry = {
+      height: frame.getBoundingClientRect().height,
+      viewportHeight: window.visualViewport?.height || window.innerHeight,
+      viewportWidth: window.visualViewport?.width || window.innerWidth
+    };
     const openingOverlay = overlay;
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (overlay !== openingOverlay) return;
@@ -216,8 +225,8 @@
     }));
   }
 
-  // iOS keeps the layout viewport tall when the keyboard opens. Fit the
-  // dialog to the visible viewport so its composer stays above the keyboard.
+  // Preserve the full chat geometry while the keyboard is open. Move the
+  // entire card up to its composer instead of compressing its conversation.
   function syncOverlayViewport() {
     if (!overlay) return;
     const viewport = window.visualViewport;
@@ -228,7 +237,26 @@
     overlay.style.width = `${viewport?.width || window.innerWidth}px`;
     const height = viewport?.height || window.innerHeight;
     overlay.style.height = `${height}px`;
-    frame.toggleAttribute('data-keyboard', window.innerHeight - height > 100);
+    const inputFocused = chatRoot?.activeElement?.matches('input, textarea, [contenteditable="true"]');
+    const keyboard = dialogGeometry &&
+      Math.abs(dialogGeometry.viewportWidth - (viewport?.width || window.innerWidth)) < 30 &&
+      (dialogGeometry.viewportHeight - height > 100 ||
+        (inputFocused && dialogGeometry.viewportHeight - height > 1));
+    frame.toggleAttribute('data-keyboard', Boolean(keyboard));
+    if (keyboard) {
+      frame.style.height = `${dialogGeometry.height}px`;
+      frame.style.alignSelf = 'end';
+    } else {
+      frame.style.height = '';
+      frame.style.alignSelf = '';
+      if (dialogGeometry) {
+        dialogGeometry = {
+          height: frame.getBoundingClientRect().height,
+          viewportHeight: height,
+          viewportWidth: viewport?.width || window.innerWidth
+        };
+      }
+    }
   }
   let viewportFrame = 0;
   function scheduleViewportSync() {
@@ -273,7 +301,7 @@
       chatRoot.appendChild(link);
     }));
     const style = document.createElement('style');
-    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0;min-width:0;overscroll-behavior:contain}.bot-chat-footer{display:block;min-width:0;padding:0 13px calc(16px + env(safe-area-inset-bottom));background:#fff}.bot-chat-prompt-row{display:block;height:48px;overflow:hidden;contain:paint}.bot-chat-footer .prompt-strip{height:48px;box-sizing:border-box;margin:0;padding:4px 1px;min-width:0;align-items:center}.bot-chat-footer .prompt-strip button{height:40px;min-height:40px;font-size:12px;line-height:1.2}.bot-chat-footer .composer{position:relative;margin:10px 0 0!important;height:58px;min-height:58px;box-sizing:border-box;flex-shrink:0;transition:border-color .18s ease,box-shadow .18s ease}.composer input{font-size:16px}:host([data-keyboard]) .bot-chat-footer{padding-bottom:12px}';
+    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0;min-width:0;overscroll-behavior:contain}.bot-chat-footer{display:block;min-width:0;padding:0 13px calc(16px + env(safe-area-inset-bottom));background:#fff}.bot-chat-prompt-row{display:block;height:48px;overflow:hidden;contain:paint}.bot-chat-footer .prompt-strip{height:48px;box-sizing:border-box;margin:0;padding:4px 1px;min-width:0;align-items:center}.bot-chat-footer .prompt-strip button{height:40px;min-height:40px;font-size:12px;line-height:1.2}.bot-chat-footer .composer{position:relative;margin:10px 0 0!important;height:58px;min-height:58px;box-sizing:border-box;flex-shrink:0;transition:border-color .18s ease,box-shadow .18s ease}.composer input{font-size:16px}';
     chatRoot.appendChild(style);
     installChatView();
     document.body.appendChild(frame);
