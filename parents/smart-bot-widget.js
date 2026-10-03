@@ -26,7 +26,8 @@
   const hint = document.createElement('button');
   hint.type = 'button';
   hint.className = 'medsi-bot-hint';
-  hint.textContent = 'Чем могу помочь?';
+  const hintTexts = ['Чем могу помочь?', 'Ваш ИИ помощник', 'Нажмите на меня'];
+  hint.textContent = hintTexts[Math.floor(Math.random() * hintTexts.length)];
   hint.addEventListener('click', open);
   hint.hidden = true;
   dock.appendChild(hint);
@@ -44,14 +45,11 @@
   let hintShown = false;
 
   function scheduleHint() {
-    let alreadyShown = false;
-    try { alreadyShown = sessionStorage.getItem('medsi-bot-hint-shown') === '1'; } catch (_) {}
-    if (hintShown || alreadyShown || launcher.hidden || hintTimer) return;
+    if (hintShown || launcher.hidden || hintTimer) return;
     hintTimer = window.setTimeout(() => {
       hintTimer = 0;
       if (launcher.hidden || overlay) return;
       hintShown = true;
-      try { sessionStorage.setItem('medsi-bot-hint-shown', '1'); } catch (_) {}
       hint.hidden = false;
       hint.classList.add('is-visible');
       hintHideTimer = window.setTimeout(() => {
