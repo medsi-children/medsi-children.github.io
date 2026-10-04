@@ -272,7 +272,7 @@
     frame.className = 'medsi-bot-frame';
     frame.hidden = true;
     chatRoot = frame.attachShadow({ mode: 'open' });
-    const styleReady = ['/new/style.css?v=20261002-16', '/parents/psychology-format.css?v=20260905-production', '/parents/bot-character.css?v=20261003-1'].map(href => new Promise((resolve, reject) => {
+    const styleReady = ['/new/style.css?v=20261004-1', '/parents/psychology-format.css?v=20260905-production', '/parents/bot-character.css?v=20261003-1'].map(href => new Promise((resolve, reject) => {
       const link = document.createElement('link');
       link.rel = 'stylesheet'; link.href = href; link.onload = resolve; link.onerror = reject;
       chatRoot.appendChild(link);

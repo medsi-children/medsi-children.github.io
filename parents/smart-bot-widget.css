@@ -47,3 +47,10 @@
 html.medsi-bot-active,html.medsi-bot-active body{background:#bfd5d6}
 
 html.medsi-bot-active{overflow-anchor:none}
+
+@media(min-width:821px){
+  .medsi-assistant-logo{width:152px;height:114px}
+  .medsi-bot-dock--brand{width:152px}
+  .medsi-bot-dock--brand .medsi-bot-launcher{width:152px;height:152px}
+  .medsi-bot-dock--brand .medsi-bot-scale{transform:scale(.638655)}
+}

@@ -54,3 +54,10 @@ html[data-embedded="1"] .bot-stage{display:none}
 html[data-embedded="1"] .help-panel{width:100%;height:100dvh;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff}
 html[data-embedded="1"] .conversation{min-height:0}
 html[data-embedded="1"] .composer{margin-bottom:calc(16px + env(safe-area-inset-bottom))}
+
+/* Desktop chat avatars grow as one piece, keeping the body/eye proportions. */
+@media(min-width:821px){
+  .message.bot{grid-template-columns:84px minmax(0,1fr);justify-items:start}
+  .message.bot .message-avatar{justify-self:center;transform:scale(1.5);transform-origin:center}
+  .message.bot .message-content{justify-self:start}
+}
