@@ -412,7 +412,7 @@
   }
 
   function avatarMarkup() {
-    return '<img class="mini-body" src="/new/blob.png" alt=""><span class="mini-eyes"><i></i><i></i></span>';
+    return '<img class="mini-body" src="/new/blob.webp" alt=""><span class="mini-eyes"><i></i><i></i></span>';
   }
 
   function syncMiniBlink(avatar) {

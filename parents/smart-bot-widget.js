@@ -39,6 +39,10 @@
   let closing = false;
   let closeTimer = 0;
   let backgroundLock = null;
+  let avatarImage = new Image();
+  avatarImage.src = "/new/blob.webp";
+  const avatarReady = avatarImage.decode();
+  avatarReady.catch(() => {});
   let dialogGeometry = null;
   let pointerActiveUntil = 0;
   let hintTimer = 0;
@@ -135,6 +139,9 @@
     closing = false;
     dialogGeometry = null;
     frame.style.height = '';
+    frame.style.width = '';
+    opening = false;
+    launcher.removeAttribute('aria-busy');
     unlockBackground();
     document.documentElement.classList.remove('medsi-bot-active');
     syncLauncher();
@@ -185,9 +192,7 @@
       chatReady = prepareChat();
       try { await chatReady; } catch (_) { opening = false; launcher.removeAttribute('aria-busy'); return; }
     }
-    opening = false;
-    launcher.removeAttribute('aria-busy');
-    if (overlay || document.body.dataset.screen !== 'screenChoose') return;
+    if (overlay || document.body.dataset.screen !== 'screenChoose') { opening = false; launcher.removeAttribute('aria-busy'); return; }
     overlay = document.createElement('div');
     overlay.className = 'medsi-bot-overlay is-preparing';
     overlay.setAttribute('role', 'dialog');
@@ -201,6 +206,8 @@
     installChatView();
     overlay.append(backdrop, frame);
     const viewport = window.visualViewport;
+    const viewportWidth = viewport?.width || window.innerWidth;
+    frame.style.width = `${Math.min(viewportWidth - (viewportWidth <= 600 ? 40 : 2 * Math.min(28, Math.max(10, viewportWidth * .03))), 570)}px`;
     overlay.style.top = `${window.scrollY + (viewport?.offsetTop || 0)}px`;
     overlay.style.left = `${window.scrollX + (viewport?.offsetLeft || 0)}px`;
     overlay.style.width = `${viewport?.width || window.innerWidth}px`;
@@ -223,11 +230,22 @@
     };
     frame.style.height = `${dialogGeometry.height}px`;
     const openingOverlay = overlay;
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (overlay !== openingOverlay) return;
+    try {
+      // Decode the actual greeting images, not just a detached preload, before paint.
+      await Promise.all([...chatRoot.querySelectorAll('.message-avatar img')].map(image => image.decode()));
+    } catch (_) { /* A missing image must not prevent opening the chat. */ }
+    if (overlay !== openingOverlay || closing) { opening = false; launcher.removeAttribute('aria-busy'); return; }
+    requestAnimationFrame(() => {
+      if (overlay !== openingOverlay || closing) return;
       overlay.classList.remove('is-preparing');
-      overlay.classList.add('is-open');
-    }));
+      frame.getBoundingClientRect();
+      requestAnimationFrame(() => {
+        if (overlay !== openingOverlay || closing) return;
+        overlay.classList.add('is-open');
+        opening = false;
+        launcher.removeAttribute('aria-busy');
+      });
+    });
   }
 
   // Keyboard height/offset events deliberately do not reposition the dialog.
@@ -238,6 +256,7 @@
     if (Math.abs(width - dialogGeometry.viewportWidth) < 30) return;
     if (chatRoot?.activeElement?.matches('input, textarea, [contenteditable="true"]')) return;
     overlay.style.width = `${width}px`;
+    frame.style.width = `${Math.min(width - (width <= 600 ? 40 : 2 * Math.min(28, Math.max(10, width * .03))), 570)}px`;
     overlay.style.height = `${window.visualViewport?.height || window.innerHeight}px`;
     frame.style.height = '';
     dialogGeometry = { height: frame.getBoundingClientRect().height, viewportWidth: width };
@@ -266,7 +285,8 @@
       window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261002-15'),
       window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20260909-leading-dot-1'),
       script('/parents/bot-chat-view.js?v=20261003-3'),
-      script('/new/app.js?v=20261003-6')
+      script('/new/app.js?v=20261004-1'),
+      avatarReady
     ]);
     frame = document.createElement('section');
     frame.className = 'medsi-bot-frame';

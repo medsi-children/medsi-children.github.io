@@ -17,10 +17,10 @@
   <link rel="stylesheet" href="/chat-overlay/chat-motion-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/chat-surface-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-2">
-  <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261004-1">
+  <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261004-2">
   <link rel="stylesheet" href="/parents/install-hint.css?v=20261003-3">
   <link rel="preload" as="image" href="/new/blob.webp" fetchpriority="high">
-  <link rel="preload" as="script" href="/parents/smart-bot-widget.js?v=20261004-1">
+  <link rel="preload" as="script" href="/parents/smart-bot-widget.js?v=20261004-2">
   <script defer src="/chat-overlay/message-emoji.js?v=20261003-delivery-1"></script>
 </head>
 <body>
@@ -105,7 +105,7 @@
   };
   var status=document.getElementById('parentBootStatus');
   var notice=setTimeout(function(){if(!window.MedsiParentApp||!window.MedsiParentApp.ready)status.classList.remove('hidden');},4000);
-  load('/parents/smart-bot-widget.js?v=20261004-1',1).then(function(){
+  load('/parents/smart-bot-widget.js?v=20261004-2',1).then(function(){
     return window.MedsiSmartBotWidget && window.MedsiSmartBotWidget.ready;
   }).catch(function(){}).then(function(){
     return load('/parents/full-web.js?v=20261003-auth-exit-2');

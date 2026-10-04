@@ -8,10 +8,8 @@
 .medsi-bot-hint{position:absolute;z-index:1;left:50%;bottom:calc(100% + 2px);width:max-content;max-width:164px;display:block;padding:9px 12px;border:1px solid #dfedeb;border-radius:15px;background:#fff;color:#356d70;font:500 13px/1.3 system-ui,-apple-system,sans-serif;box-shadow:0 6px 20px #115c6014;opacity:0;transform:translate(-50%,7px);pointer-events:none;transition:opacity .25s ease,transform .25s ease}
 .medsi-bot-hint.is-visible{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .medsi-bot-overlay{position:absolute;z-index:20000;top:0;left:0;display:grid;grid-template-rows:minmax(0,1fr);place-items:center;padding:clamp(10px,3vw,28px);padding-bottom:max(10px,env(safe-area-inset-bottom));isolation:isolate;overflow:visible}
-.medsi-bot-backdrop{position:fixed;z-index:-1;inset:-100lvh -32px;width:auto;height:auto;padding:0;border:0;background:#bfd5d6;cursor:default}
-.medsi-bot-frame{display:block;width:min(100%,570px);height:min(850px,calc(100dvh - 40px));min-height:0;border:1px solid rgba(255,255,255,.85);border-radius:28px;background:#fff;box-shadow:0 25px 80px rgba(17,72,79,.27);}
-@keyframes medsi-bot-open{from{opacity:0}to{opacity:1}}
-@keyframes medsi-bot-fade{from{opacity:0}to{opacity:1}}
+.medsi-bot-backdrop{position:fixed;z-index:-1;inset:0;width:auto;height:auto;padding:0;border:0;background:#bfd5d6;cursor:default}
+.medsi-bot-frame{opacity:0;transition:opacity .28s ease-out;contain:layout paint;display:block;width:min(100%,570px);height:min(850px,calc(100dvh - 40px));min-height:0;border:1px solid rgba(255,255,255,.85);border-radius:28px;background:#fff;box-shadow:0 25px 80px rgba(17,72,79,.27);}
 @media(max-width:600px){.medsi-bot-overlay{padding:22px 20px;padding-top:max(22px,env(safe-area-inset-top));padding-bottom:max(22px,env(safe-area-inset-bottom))}.medsi-bot-frame{width:100%;height:100%;max-height:850px;border:1px solid rgba(255,255,255,.85);border-radius:28px}}
 @media(prefers-reduced-motion:reduce){.medsi-bot-frame,.medsi-bot-backdrop{animation:none}.medsi-bot-hint{transition:none}}
 
@@ -33,14 +31,13 @@
 .medsi-bot-dock--brand .medsi-character-glow{display:none}
 
 .medsi-bot-overlay.is-preparing{visibility:hidden;pointer-events:none}
-.medsi-bot-overlay.is-open .medsi-bot-frame{animation:medsi-bot-open .28s ease-out both}
-.medsi-bot-overlay.is-open .medsi-bot-backdrop{animation:medsi-bot-fade .28s ease-out both}
+.medsi-bot-overlay.is-open .medsi-bot-frame{opacity:1}
+
 @media(prefers-reduced-motion:reduce){.medsi-bot-overlay.is-open .medsi-bot-frame,.medsi-bot-overlay.is-open .medsi-bot-backdrop{animation:none}}
 
 .medsi-bot-overlay.is-open{transition:none}
 .medsi-bot-overlay.is-closing{pointer-events:none}
-.medsi-bot-overlay.is-closing .medsi-bot-frame,.medsi-bot-overlay.is-closing .medsi-bot-backdrop{animation:medsi-bot-fade-out .18s ease-in both}
-@keyframes medsi-bot-fade-out{from{opacity:1}to{opacity:0}}
+.medsi-bot-overlay.is-closing .medsi-bot-frame{opacity:0;transition-duration:.18s}
 @media(prefers-reduced-motion:reduce){.medsi-bot-overlay.is-open{transition:none}.medsi-bot-overlay.is-closing .medsi-bot-frame,.medsi-bot-overlay.is-closing .medsi-bot-backdrop{animation:none}}
 
 /* Also cover Safari's exposed page canvas while it pans for the keyboard. */
@@ -54,3 +51,5 @@ html.medsi-bot-active{overflow-anchor:none}
   .medsi-bot-dock--brand .medsi-bot-launcher{width:152px;height:152px}
   .medsi-bot-dock--brand .medsi-bot-scale{transform:scale(.638655)}
 }
+
+@media(prefers-reduced-motion:reduce){.medsi-bot-frame{transition:none}}
