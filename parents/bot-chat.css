@@ -61,3 +61,5 @@ html[data-embedded="1"] .composer{margin-bottom:calc(16px + env(safe-area-inset-
   .message.bot .message-avatar{justify-self:center;transform:scale(1.5);transform-origin:center}
   .message.bot .message-content{justify-self:start}
 }
+/* Keep QR images compact inside chat bubbles; the full-screen viewer has separate rules. */
+.message-bubble img.message-qr{display:block!important;width:min(100%,280px)!important;max-width:100%!important;height:auto!important;max-height:none!important;object-fit:contain!important;margin:12px auto 2px;border-radius:18px;background:#fff;cursor:pointer;box-shadow:0 8px 20px rgba(70,98,112,.08)}

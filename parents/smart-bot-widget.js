@@ -46,8 +46,9 @@
   let backgroundLock = null;
   let avatarImage = new Image();
   avatarImage.src = "/parents/blob.webp";
-  const avatarReady = avatarImage.decode();
-  avatarReady.catch(() => {});
+  // Safari can reject decode() even when the image is already usable.
+  // The avatar is decorative, so it must never block chat creation.
+  const avatarReady = avatarImage.decode().catch(() => {});
   let dialogGeometry = null;
   let pointerActiveUntil = 0;
   let hintTimer = 0;
@@ -297,9 +298,9 @@
     frame.className = 'medsi-bot-frame';
     frame.hidden = true;
     chatRoot = frame.attachShadow({ mode: 'open' });
-    const styleReady = ['/parents/bot-chat.css?v=20261005-1', '/parents/psychology-format.css?v=20260905-production', '/parents/bot-character.css?v=20261003-1'].map(href => new Promise((resolve, reject) => {
+    const styleReady = ['/parents/bot-chat.css?v=20261005-2', '/parents/psychology-format.css?v=20260905-production', '/parents/bot-character.css?v=20261003-1'].map(href => new Promise(resolve => {
       const link = document.createElement('link');
-      link.rel = 'stylesheet'; link.href = href; link.onload = resolve; link.onerror = reject;
+      link.rel = 'stylesheet'; link.href = href; link.onload = resolve; link.onerror = resolve;
       chatRoot.appendChild(link);
     }));
     const style = document.createElement('style');
