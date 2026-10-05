@@ -21,7 +21,7 @@
      two-column cards. This also restores the original vertical rhythm. */
   #screenChoose .menu-card-chat{min-height:102px!important}
   #screenChoose .educator-report-grid .menu-card,#screenChoose .educator-secondary-grid .menu-card{min-height:112px!important;height:112px!important}
-  #screenChoose .educator-report-grid .menu-card-title,#screenChoose .educator-secondary-grid .menu-card-title{font-size:.82rem!important;line-height:1.14!important;white-space:nowrap!important;gap:6px!important}
+  #screenChoose .educator-report-grid .menu-card-title,#screenChoose .educator-secondary-grid .menu-card-title{font-size:.82rem!important;line-height:1.14!important;white-space:normal!important;min-width:0!important;max-width:100%!important;overflow-wrap:anywhere;word-break:normal;gap:6px!important}
   #screenChoose .menu-card-chat .menu-card-title{font-size:1rem!important}
   #screenChoose .menu-card-text{font-size:.76rem!important;line-height:1.34!important}
 }
