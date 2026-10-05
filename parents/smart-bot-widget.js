@@ -33,6 +33,7 @@
   dock.appendChild(hint);
 
   let overlay = null;
+  let shell = null;
   let frame = null;
   let chat = null;
   let chatRoot = null;
@@ -133,8 +134,8 @@
     chat?.destroy();
     chat = null;
     frame.hidden = true;
-    document.body.appendChild(frame);
-    overlay.remove();
+    overlay.hidden = true;
+    overlay.className = 'medsi-bot-overlay is-preparing';
     overlay = null;
     closing = false;
     dialogGeometry = null;
@@ -193,18 +194,9 @@
       try { await chatReady; } catch (_) { opening = false; launcher.removeAttribute('aria-busy'); return; }
     }
     if (overlay || document.body.dataset.screen !== 'screenChoose') { opening = false; launcher.removeAttribute('aria-busy'); return; }
-    overlay = document.createElement('div');
+    overlay = shell;
     overlay.className = 'medsi-bot-overlay is-preparing';
-    overlay.setAttribute('role', 'dialog');
-    overlay.setAttribute('aria-modal', 'true');
-    overlay.setAttribute('aria-label', 'Чат с Медси Ботом');
-    const backdrop = document.createElement('button');
-    backdrop.type = 'button';
-    backdrop.className = 'medsi-bot-backdrop';
-    backdrop.setAttribute('aria-label', 'Закрыть чат с Медси Ботом');
-    backdrop.addEventListener('click', requestClose);
     installChatView();
-    overlay.append(backdrop, frame);
     const viewport = window.visualViewport;
     const viewportWidth = viewport?.width || window.innerWidth;
     frame.style.width = `${Math.min(viewportWidth - (viewportWidth <= 600 ? 40 : 2 * Math.min(28, Math.max(10, viewportWidth * .03))), 570)}px`;
@@ -212,7 +204,7 @@
     overlay.style.left = `${window.scrollX + (viewport?.offsetLeft || 0)}px`;
     overlay.style.width = `${viewport?.width || window.innerWidth}px`;
     overlay.style.height = `${viewport?.height || window.innerHeight}px`;
-    document.body.appendChild(overlay);
+    overlay.hidden = false;
     frame.hidden = false;
     chat = window.MedsiBotChat.mount(chatRoot, {
       close: () => finishClose(),
@@ -280,7 +272,7 @@
     });
   }
   async function prepareChat() {
-    if (frame) frame.remove();
+    if (shell) shell.remove();
     await Promise.all([
       window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261002-15'),
       window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20260909-leading-dot-1'),
@@ -301,7 +293,22 @@
     style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0;min-width:0;overscroll-behavior:contain}.bot-chat-footer{display:block;min-width:0;padding:0 13px calc(16px + env(safe-area-inset-bottom));background:#fff}.bot-chat-prompt-row{display:block;height:52px;overflow:hidden;contain:paint}.bot-chat-footer .prompt-strip{height:52px;box-sizing:border-box;margin:0;padding:4px 1px;min-width:0;align-items:center}.bot-chat-footer .prompt-strip button{flex-basis:calc((100% - 14px)/3);height:44px;min-height:44px;font-size:13px;line-height:1.2}.bot-chat-footer .composer{position:relative;margin:10px 0 0!important;height:58px;min-height:58px;box-sizing:border-box;flex-shrink:0;transition:border-color .18s ease,box-shadow .18s ease}.composer input{font-size:16px}';
     chatRoot.appendChild(style);
     installChatView();
-    document.body.appendChild(frame);
+    shell = document.createElement('div');
+    shell.className = 'medsi-bot-overlay is-preparing';
+    shell.hidden = true;
+    shell.setAttribute('role', 'dialog');
+    shell.setAttribute('aria-modal', 'true');
+    shell.setAttribute('aria-label', 'Чат с Медси Ботом');
+    const backdrop = document.createElement('button');
+    backdrop.type = 'button';
+    backdrop.className = 'medsi-bot-backdrop';
+    backdrop.setAttribute('aria-label', 'Закрыть чат с Медси Ботом');
+    backdrop.addEventListener('click', requestClose);
+    const curtain = document.createElement('div');
+    curtain.className = 'medsi-bot-curtain';
+    curtain.setAttribute('aria-hidden', 'true');
+    shell.append(backdrop, frame, curtain);
+    document.body.appendChild(shell);
     await Promise.all(styleReady);
   }
   // Preload the chat independently; the menu logo only waits for image decoding.
