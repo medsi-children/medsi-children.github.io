@@ -18,7 +18,7 @@
   launcher.setAttribute('title', 'Задать вопрос Медси Боту');
   launcher.setAttribute('aria-haspopup', 'dialog');
   launcher.hidden = true;
-  launcher.innerHTML = '<span class="medsi-bot-scale"><span class="medsi-character" aria-hidden="true"><span class="medsi-character-glow"></span><img class="medsi-character-body" src="/new/blob.webp" fetchpriority="high" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span></span>';
+  launcher.innerHTML = '<span class="medsi-bot-scale"><span class="medsi-character" aria-hidden="true"><span class="medsi-character-glow"></span><img class="medsi-character-body" src="/parents/blob.webp" fetchpriority="high" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span></span>';
   const character = launcher.querySelector('.medsi-character');
   const bodyImage = launcher.querySelector('img');
   let assetReady = false;
@@ -41,7 +41,7 @@
   let closeTimer = 0;
   let backgroundLock = null;
   let avatarImage = new Image();
-  avatarImage.src = "/new/blob.webp";
+  avatarImage.src = "/parents/blob.webp";
   const avatarReady = avatarImage.decode();
   avatarReady.catch(() => {});
   let dialogGeometry = null;
@@ -79,7 +79,7 @@
     }
   }
 
-  // Same gaze bounds and proportions as the large character in /new.
+  // Same gaze bounds and proportions as the original large character.
   function setGaze(x, y) {
     const size = 238;
     character.style.setProperty('--gaze-x', `${Math.max(-size * .055, Math.min(size * .055, x - size * .055))}px`);
@@ -276,15 +276,15 @@
     await Promise.all([
       window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261002-15'),
       window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20260909-leading-dot-1'),
-      script('/parents/bot-chat-view.js?v=20261003-3'),
-      script('/new/app.js?v=20261004-1'),
+      script('/parents/bot-chat-view.js?v=20261005-1'),
+      script('/parents/bot-chat-runtime.js?v=20261005-1'),
       avatarReady
     ]);
     frame = document.createElement('section');
     frame.className = 'medsi-bot-frame';
     frame.hidden = true;
     chatRoot = frame.attachShadow({ mode: 'open' });
-    const styleReady = ['/new/style.css?v=20261004-1', '/parents/psychology-format.css?v=20260905-production', '/parents/bot-character.css?v=20261003-1'].map(href => new Promise((resolve, reject) => {
+    const styleReady = ['/parents/bot-chat.css?v=20261005-1', '/parents/psychology-format.css?v=20260905-production', '/parents/bot-character.css?v=20261003-1'].map(href => new Promise((resolve, reject) => {
       const link = document.createElement('link');
       link.rel = 'stylesheet'; link.href = href; link.onload = resolve; link.onerror = reject;
       chatRoot.appendChild(link);

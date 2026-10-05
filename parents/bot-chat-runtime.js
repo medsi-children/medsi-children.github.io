@@ -13,8 +13,7 @@
   const every = (fn, delay) => { const id = window.setInterval(fn, delay); timers.add(id); return id; };
   const listen = (target, name, fn, options = {}) => target.addEventListener(name, fn, {...options, signal:lifecycle.signal});
 
-  // Лаборатория не отправляет сообщения воспитателям. Отчёты читает только через
-  // существующую защищённую родительскую сессию на основном домене.
+  // Помощник читает отчёты через существующую защищённую родительскую сессию.
   const conversation = root.getElementById('conversation');
   const composer = root.getElementById('composer');
   const backButton = root.getElementById('botBack');
@@ -412,7 +411,7 @@
   }
 
   function avatarMarkup() {
-    return '<img class="mini-body" src="/new/blob.webp" alt=""><span class="mini-eyes"><i></i><i></i></span>';
+    return '<img class="mini-body" src="/parents/blob.webp" alt=""><span class="mini-eyes"><i></i><i></i></span>';
   }
 
   function syncMiniBlink(avatar) {
@@ -751,5 +750,4 @@
   } };
   }
   window.MedsiBotChat = Object.freeze({ mount });
-  if (document.getElementById('conversation')) mount();
 })();

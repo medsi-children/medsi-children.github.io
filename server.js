@@ -437,7 +437,6 @@ function sendAppFile(res, fileName) {
 app.get(['/', '/index.html'], (_req, res) => sendAppFile(res, 'index.html'));
 app.get(['/tutors', '/tutors/'], (_req, res) => sendAppFile(res, 'tutors.html'));
 app.get(['/psychology', '/psychology/'], (_req, res) => sendAppFile(res, 'psychology.html'));
-app.get(['/new', '/new/', '/new.html'], (_req, res) => sendAppFile(res, 'new.html'));
 app.get(['/tutors.html', '/psychology.html'], (req, res) => {
   sendAppFile(res, req.path === '/tutors.html' ? 'tutors.html' : 'psychology.html');
 });
@@ -460,7 +459,6 @@ app.use('/parents', express.static(path.join(ROOT, 'parents'), publicStaticOptio
 app.use('/chat-overlay', express.static(path.join(ROOT, 'chat-overlay'), publicStaticOptions));
 app.use('/tutors', express.static(path.join(ROOT, 'tutors'), publicStaticOptions));
 app.use('/psychology', express.static(path.join(ROOT, 'psychology'), publicStaticOptions));
-app.use('/new', express.static(path.join(ROOT, 'new'), publicStaticOptions));
 app.get([
   '/favicon.ico',
   '/apple-touch-icon.png',
