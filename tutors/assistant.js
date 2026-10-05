@@ -56,7 +56,7 @@
     let alive = true, version = 0, waiting = null, draft = null, writing = false, messageTarget = null;
     const result = (text, actions = [], mood = 'neutral') => ({text, actions, mood});
     const nav = (label, kind) => ({label, run: async () => { if (alive) api.navigate(kind); return null; }});
-    const navigation = [nav('Чаты с родителями', 'chats'), nav('Телефоны родителей', 'phones')];
+    const navigation = [];
     const check = (ticket, expires) => alive && ticket === version && Date.now() < expires;
     const expired = () => result('Этот выбор уже неактуален. Напишите запрос ещё раз.');
     function page(rows, title, format, offset = 0) {
@@ -179,6 +179,15 @@
       version++;
       if (/^(?:отмена|отмени|не надо|нет|стоп)$/.test(value) || /(?:^| )не (?:надо |нужно |хочу )?(?:удал|убира|отправ)/.test(value)) { waiting = null; draft = null; messageTarget = null; return result('Хорошо, отменено.'); }
       if (/^(?:да|да удалить|подтверждаю)$/.test(value)) return result('Для действия нажмите кнопку под подтверждением. Одного сообщения «да» недостаточно.');
+      if (/^(?:как дела|как ты|как поживаешь|как настроение|какое настроение|что нового|все хорошо|всё хорошо|как дети|как там дети|как дети в отделении|дети спокойные|в отделении спокойно|спокойно ли в отделении|все спокойные|всё спокойно)$/.test(value)) {
+        const smallTalk = [
+          'Всё хорошо, спасибо! Дети под присмотром, обстановка спокойная — можно заняться вашими задачами.',
+          'Настроение рабочее и отличное. В отделении спокойно, а я готов помочь с делами.',
+          'У меня всё в порядке: системы работают, дети под присмотром. Что нужно сделать?',
+          'Похоже, сегодня спокойный день. Я на связи и готов помочь.'
+        ];
+        return result(smallTalk[Math.floor(Math.random() * smallTalk.length)], [], 'happy');
+      }
       if (/^(?:привет[а-я]*|здравств[а-я]*|доброе утро|добрый день|добрый вечер|здрасьте|здрасте|хай|салют)$/.test(value)) return result('Добрый день! С какой задачей помочь?', [], 'happy');
       if (/^(?:спасибо[а-я]*|благодарю|супер|отлично)$/.test(value)) return result('Всегда рад помочь.', [], 'happy');
       if (waiting?.intent === 'sendMessageTarget' && Date.now() < waiting.expires && value) return resolveMessageTarget(text);
