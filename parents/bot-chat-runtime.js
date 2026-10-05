@@ -369,7 +369,7 @@
     scrollToEnd();
   }
 
-  function message(side, text, mood = 'neutral', iconFile = '', iconPosition = 'before') {
+  function message(side, text, mood = 'neutral', iconFile = '', iconPosition = 'before', imageFile = '') {
     if (side === 'bot') clearTyping();
     const item = element('article', `message ${side}`);
     if (side === 'bot') {
@@ -388,6 +388,14 @@
       else bubble.prepend(image);
       bubble.classList.add('message-bubble-with-icon');
       bubble.classList.add(`message-bubble-icon-${iconPosition}`);
+    }
+    if (imageFile) {
+      const image = element('img', 'message-qr');
+      image.src = imageFile;
+      image.alt = 'QR-код для подключения Медси Бота';
+      image.loading = 'eager';
+      image.decoding = 'async';
+      bubble.appendChild(image);
     }
     content.append(bubble, element('time', 'message-time', clock()));
     item.appendChild(content);
@@ -594,7 +602,7 @@
     try {
       const reply = await work();
       if (destroyed || !reply) return;
-      if (reply.text) message('bot', reply.text, reply.mood || 'neutral');
+      if (reply.text) message('bot', reply.text, reply.mood || 'neutral', '', 'before', reply.image || '');
       if (reply.actions?.length) {
         const actions = element('div', 'choices');
         reply.actions.forEach(action => {

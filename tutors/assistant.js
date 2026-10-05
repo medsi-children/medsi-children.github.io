@@ -54,7 +54,7 @@
 
   function create(api) {
     let alive = true, version = 0, waiting = null, draft = null, writing = false, messageTarget = null;
-    const result = (text, actions = [], mood = 'neutral') => ({text, actions, mood});
+    const result = (text, actions = [], mood = 'neutral', image = '') => ({text, actions, mood, image});
     const nav = (label, kind) => ({label, run: async () => { if (alive) api.navigate(kind); return null; }});
     const navigation = [];
     const check = (ticket, expires) => alive && ticket === version && Date.now() < expires;
@@ -191,6 +191,9 @@
         ];
         return result(smallTalk[Math.floor(Math.random() * smallTalk.length)], [], 'happy');
       }
+      if (/(?:qr|кьюар|qr код|qr-код|код для подключ|подключ.*код)/i.test(String(text))) {
+        return result('Вот QR-код для подключения Медси Бота родителями.', [], 'happy', '/tutors/medsi-bot-qr.jpg');
+      }
       if (/^(?:привет[а-я]*|здравств[а-я]*|доброе утро|добрый день|добрый вечер|здрасьте|здрасте|хай|салют)$/.test(value)) return result('Добрый день! С какой задачей помочь?', [], 'happy');
       if (/^(?:спасибо[а-я]*|благодарю|супер|отлично)$/.test(value)) return result('Всегда рад помочь.', [], 'happy');
       if (/^(?:написать|напиши|сообщить|сообщи)\s+родител(?:ю|ям)$/iu.test(String(text).trim())) {
@@ -260,7 +263,7 @@
     available: () => Boolean(window.MedsiTutorAdmin && document.getElementById('tutorAuthGate')?.classList.contains('hidden')),
     multiline:true,
     chatStyle:'.choices{grid-template-columns:1fr}.choices button{font-size:13px;line-height:1.4;min-height:44px;height:auto;white-space:normal;overflow-wrap:anywhere}',
-    prompts:['Написать родителю', 'Телефон родителя', 'Удалить ребёнка', 'Утренний отчёт', 'Вечерний отчёт', 'Отчёт по групповой терапии', 'Список детей', 'Телефоны родителей'],
+    prompts:['QR-код', 'Написать родителю', 'Телефон родителя', 'Удалить ребёнка', 'Утренний отчёт', 'Вечерний отчёт', 'Отчёт по групповой терапии', 'Список детей', 'Телефоны родителей'],
     conversation: () => ({...create(window.MedsiTutorAdmin), role:'educator', greeting:'Добрый день, я Медси Бот, помогу с любыми задачами.'})
   };
 })();

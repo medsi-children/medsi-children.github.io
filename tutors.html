@@ -33,7 +33,9 @@
   <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-2">
   <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261005-1">
   <link rel="stylesheet" href="/tutors/assistant.css?v=20261005-1">
+  <link rel="stylesheet" href="/tutors/qr-code.css?v=20261005-1">
   <link rel="preload" as="image" href="/parents/blob.webp" fetchpriority="high">
+  <link rel="preload" as="image" href="/tutors/medsi-bot-qr.jpg" fetchpriority="high">
   <style>
     .educator-logo{width:96px!important;height:45px!important;margin-bottom:2px!important}
     .educator-logo span:nth-child(1){width:28px!important;height:28px!important;left:0!important;bottom:0!important;top:auto!important}
@@ -141,6 +143,12 @@
               </div>
             </div>
           </div>
+          <section id="tutorQrCard" class="tutor-qr-card" aria-label="QR-код для подключения родителей">
+            <button id="tutorQrTrigger" class="tutor-qr-trigger" type="button">
+              <img src="/tutors/medsi-bot-qr.jpg" alt="QR-код для подключения Медси Бота родителями" loading="eager">
+              <span class="tutor-qr-copy"><strong>QR-код для родителей</strong><small>Нажмите, чтобы открыть QR-код для подключения Медси Бота родителям</small></span>
+            </button>
+          </section>
         </section>
 
         <section id="screenForm" class="hidden">
@@ -176,10 +184,15 @@
   <div id="accessRequestConfirm" class="access-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="accessConfirmTitle">
     <div class="access-confirm-card"><div id="accessConfirmIcon" class="access-confirm-icon">?</div><h2 id="accessConfirmTitle"></h2><p id="accessConfirmText"></p><div class="access-confirm-actions"><button id="accessConfirmBack" class="btn" type="button">Вернуться</button><button id="accessConfirmApply" class="btn" type="button"></button></div><p id="accessConfirmError" class="status error hidden"></p></div>
   </div>
+  <div id="tutorQrModal" class="tutor-qr-modal hidden" role="dialog" aria-modal="true" aria-label="QR-код для родителей">
+    <button id="tutorQrClose" class="tutor-qr-close" type="button" aria-label="Закрыть QR-код">×</button>
+    <img src="/tutors/medsi-bot-qr.jpg" alt="QR-код для подключения Медси Бота родителями">
+  </div>
 
   <script defer src="/tutors/access-requests.js?v=20261003-resilient-1"></script>
-  <script defer src="/tutors/assistant.js?v=20261005-13"></script>
-  <script defer src="/parents/smart-bot-widget.js?v=20261005-5"></script>
+  <script defer src="/tutors/assistant.js?v=20261005-14"></script>
+  <script defer src="/tutors/qr-code.js?v=20261005-1"></script>
+  <script defer src="/parents/smart-bot-widget.js?v=20261005-6"></script>
   <script defer src="/tutors/full-web.js?v=20261005-assistant-2"></script>
   <script defer src="/tutors/page-scroll.js?v=20260907-1"></script>
   <script defer src="/tutors/report-ui.js?v=20260907-1"></script>
