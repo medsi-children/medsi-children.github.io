@@ -176,7 +176,12 @@
       if (/^(?:да|да удалить|подтверждаю)$/.test(value)) return result('Для действия нажмите кнопку под подтверждением. Одного сообщения «да» недостаточно.');
       if (/^(?:привет[а-я]*|здравств[а-я]*|доброе утро|добрый день|добрый вечер|здрасьте|здрасте|хай|салют)$/.test(value)) return result('Добрый день! С какой задачей помочь?', navigation, 'happy');
       if (/^(?:спасибо[а-я]*|благодарю|супер|отлично)$/.test(value)) return result('Всегда рад помочь.', [], 'happy');
+      if (waiting?.intent === 'sendMessageTarget' && Date.now() < waiting.expires && value) return resolveMessageTarget(text);
       if (waiting?.intent === 'sendMessageText' && Date.now() < waiting.expires && value) return composeParentMessage(messageTarget, text);
+      if (/^(?:написать|напиши|сообщить|сообщи)\s+родител(?:ю|ям)$/iu.test(String(text).trim())) {
+        waiting = {intent:'sendMessageTarget', expires:Date.now() + 240000};
+        return result('Кому написать? Укажите имя ребёнка, например «Артём Д.»');
+      }
       const sendMatch = String(text).trim().match(/^(?:напиши|сообщи|передай|скажи)\s+(?:(?:маме|папе|бабушке|дедушке|родителю|родителям)\s+)?(.+?)(?:\s+(?:что|такое|текст)\s+)(.+)$/iu);
       if (sendMatch) return resolveMessageTarget(sendMatch[1], sendMatch[2]);
       const sendWithoutText = String(text).trim().match(/^(?:напиши|сообщи|передай|скажи)\s+(?:(?:маме|папе|бабушке|дедушке|родителю|родителям)\s+)?(.+)$/iu);
@@ -240,7 +245,7 @@
     available: () => Boolean(window.MedsiTutorAdmin && document.getElementById('tutorAuthGate')?.classList.contains('hidden')),
     multiline:true,
     chatStyle:'.choices{grid-template-columns:1fr}.choices button{font-size:13px;line-height:1.4;min-height:44px;height:auto;white-space:normal;overflow-wrap:anywhere}',
-    prompts:['Телефон родителя', 'Удалить ребёнка', 'Утренний отчёт', 'Вечерний отчёт', 'Отчёт по психотерапии', 'Список детей', 'Телефоны родителей'],
+    prompts:['Написать родителю', 'Телефон родителя', 'Удалить ребёнка', 'Утренний отчёт', 'Вечерний отчёт', 'Отчёт по психотерапии', 'Список детей', 'Телефоны родителей'],
     conversation: () => ({...create(window.MedsiTutorAdmin), role:'educator', greeting:'Добрый день, я Медси Бот, помогу с любыми задачами.'})
   };
 })();
