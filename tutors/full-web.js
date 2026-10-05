@@ -337,6 +337,14 @@
     async unread() { const session = await ensureD1Fresh(); const result = await MedsiOverlayTransport.chats(session, 'unread', {fresh:true}); return (result.chats || []).filter(row => row.hasUnread); },
     newSubmissionId: reportSubmissionId,
     submitReport: submitReportPayload,
+    async sendParentMessage(target, text) {
+      if (!tutorToken) throw new Error('AUTH_REQUIRED');
+      const session = await ensureD1Fresh();
+      return MedsiOverlayTransport.sendMessage(session, 'educator', target.phone, {
+        type: 'text',
+        text: String(text || '').trim()
+      });
+    },
     async deleteRecord(target) {
       if (!tutorToken) throw new Error('AUTH_REQUIRED');
       const rows = await refreshPhones();

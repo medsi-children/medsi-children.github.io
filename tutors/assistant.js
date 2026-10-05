@@ -42,9 +42,13 @@
   }
   const rowLabel = row => `${row.childName || 'Без имени'} · ${row.parentName || 'Родитель'} · ${displayPhone(row.phone)}`;
   const helpText = 'Помогу найти ребёнка и телефоны родителей, покажу непрочитанные чаты, открою нужный раздел или удалю выбранную запись после подтверждения.\n\nНапример: «дай телефон мамы Маши Д.», «есть новые сообщения?», «удали Машу Д.». Отчёты отправляю только после вашей проверки и подтверждения.';
+  const sentenceCase = value => {
+    const text = String(value || '').trim();
+    return text ? text.charAt(0).toLocaleUpperCase('ru') + text.slice(1) : '';
+  };
 
   function create(api) {
-    let alive = true, version = 0, waiting = null, draft = null, writing = false;
+    let alive = true, version = 0, waiting = null, draft = null, writing = false, messageTarget = null;
     const result = (text, actions = [], mood = 'neutral') => ({text, actions, mood});
     const nav = (label, kind) => ({label, run: async () => { if (alive) api.navigate(kind); return null; }});
     const navigation = [nav('Чаты с родителями', 'chats'), nav('Телефоны родителей', 'phones')];
@@ -88,6 +92,37 @@
       const roleRequested = /мам|пап|бабуш|дедуш/.test(normalize(text));
       return page(found, roleRequested ? 'Вот сохранённые контакты. Родство в списке не указано, поэтому не могу точно выбрать маму, папу, бабушку или дедушку.' : 'Контакты:', rowLabel);
     }
+    async function resolveMessageTarget(targetText, messageText = '') {
+      const rows = await api.parents();
+      const tokens = queryTokens(targetText);
+      const found = rows.filter(row => matches(row, tokens) || matches(row, tokens, 'parentName'));
+      if (!found.length) return result('Не нашёл ребёнка или контакт. Напишите имя ребёнка, например «Артём Д.»');
+      if (found.length > 1) {
+        return result('Нашёл несколько подходящих записей. Выберите нужного ребёнка:', found.slice(0, 10).map(row => ({
+          label: rowLabel(row),
+          run: async () => messageText ? composeParentMessage(row, messageText) : (messageTarget = row, waiting = {intent:'sendMessageText', expires:Date.now() + 240000}, result(`Что написать родителю ребёнка ${row.childName}?`))
+        })));
+      }
+      return messageText ? composeParentMessage(found[0], messageText) : (messageTarget = found[0], waiting = {intent:'sendMessageText', expires:Date.now() + 240000}, result(`Что написать родителю ребёнка ${found[0].childName}?`));
+    }
+    function composeParentMessage(row, text) {
+      const cleanText = sentenceCase(text);
+      const ticket = version;
+      messageTarget = row;
+      waiting = {intent:'sendMessageConfirm', expires:Date.now() + 120000};
+      return result(`Сообщение родителю ${row.childName}:\n\n${cleanText}\n\nОтправить его в чат?`, [
+        {label:'Отправить сообщение', run:async () => {
+          if (!alive || ticket !== version || Date.now() >= waiting.expires || messageTarget !== row) return expired();
+          version++;
+          writing = true;
+          try { await api.sendParentMessage(row, cleanText); messageTarget = null; waiting = null; return result('Сообщение отправлено в чат.', [], 'happy'); }
+          catch (_) { return result('Не удалось отправить сообщение. Откройте чат с родителями и попробуйте ещё раз.', [], 'sad'); }
+          finally { writing = false; }
+        }},
+        {label:'Изменить текст', run:async () => { if (ticket !== version) return expired(); waiting = {intent:'sendMessageText', expires:Date.now() + 240000}; return result('Напишите новый текст сообщения.'); }},
+        {label:'Отмена', run:async () => { version++; messageTarget = null; waiting = null; return result('Отправка отменена.'); }}
+      ]);
+    }
     const reportLabel = kind => ({morning:'Утренний отчёт',evening:'Вечерний отчёт',psychology:'Отчёт по психотерапии'})[kind];
     const reportKind = value => /утрен|утро/.test(value) ? 'morning' : /вечер/.test(value) ? 'evening' : /психотерап|терапи|группов/.test(value) ? 'psychology' : '';
     function requestReport(kind) {
@@ -126,10 +161,15 @@
       const value = normalize(text);
       if (/^(?:да|да удалить|подтверждаю)$/.test(value)) return result('Для действия нажмите кнопку под подтверждением. Одного сообщения «да» недостаточно.');
       version++;
-      if (/^(?:отмена|отмени|не надо|нет|стоп)$/.test(value) || /(?:^| )не (?:надо |нужно |хочу )?(?:удал|убира|отправ)/.test(value)) { waiting = null; draft = null; return result('Хорошо, отменено.'); }
+      if (/^(?:отмена|отмени|не надо|нет|стоп)$/.test(value) || /(?:^| )не (?:надо |нужно |хочу )?(?:удал|убира|отправ)/.test(value)) { waiting = null; draft = null; messageTarget = null; return result('Хорошо, отменено.'); }
       if (/^(?:да|да удалить|подтверждаю)$/.test(value)) return result('Для действия нажмите кнопку под подтверждением. Одного сообщения «да» недостаточно.');
       if (/^(?:привет[а-я]*|здравств[а-я]*|доброе утро|добрый день|добрый вечер|здрасьте|здрасте|хай|салют)$/.test(value)) return result('Добрый день! С какой задачей помочь?', navigation, 'happy');
       if (/^(?:спасибо[а-я]*|благодарю|супер|отлично)$/.test(value)) return result('Всегда рад помочь.', [], 'happy');
+      if (waiting?.intent === 'sendMessageText' && Date.now() < waiting.expires && value) return composeParentMessage(messageTarget, text);
+      const sendMatch = String(text).trim().match(/^(?:напиши|сообщи|передай|скажи)\s+(?:(?:маме|папе|бабушке|дедушке|родителю|родителям)\s+)?(.+?)(?:\s+(?:что|такое|текст)\s+)(.+)$/iu);
+      if (sendMatch) return resolveMessageTarget(sendMatch[1], sendMatch[2]);
+      const sendWithoutText = String(text).trim().match(/^(?:напиши|сообщи|передай|скажи)\s+(?:(?:маме|папе|бабушке|дедушке|родителю|родителям)\s+)?(.+)$/iu);
+      if (sendWithoutText && !/^(?:что|текст|такое)\b/i.test(sendWithoutText[1])) return resolveMessageTarget(sendWithoutText[1]);
       const kind = reportKind(value);
       const standaloneType = /^(?:нет |а |лучше |не утренний а |не вечерний а )?(?:утренний|вечерний|утро|вечер|психотерапия|терапия|групповая терапия)(?: отчет)?$/.test(value);
       if (waiting && Date.now() >= waiting.expires) waiting = null;
