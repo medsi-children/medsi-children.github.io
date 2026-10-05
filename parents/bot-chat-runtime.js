@@ -423,7 +423,7 @@
   function actionButton(label, iconFile, click) {
     const button = element('button', 'smart-action', label);
     button.type = 'button';
-    button.prepend(emoji(iconFile, ''));
+    if (iconFile) button.prepend(emoji(iconFile, ''));
     button.addEventListener('click', click);
     return button;
   }
@@ -585,8 +585,45 @@
     return null;
   }
 
+  async function customReply(work) {
+    if (busy || destroyed) return;
+    busy = true;
+    setThinking(true);
+    showTyping();
+    try {
+      const reply = await work();
+      if (destroyed || !reply) return;
+      if (reply.text) message('bot', reply.text, reply.mood || 'neutral');
+      if (reply.actions?.length) {
+        const actions = element('div', 'choices');
+        reply.actions.forEach(action => {
+          const button = actionButton(action.label, '', () => {
+            if (busy || destroyed) return;
+            actions.querySelectorAll('button').forEach(item => { item.disabled = true; });
+            message('user', action.label);
+            void customReply(action.run);
+          });
+          actions.appendChild(button);
+        });
+        conversation.appendChild(actions);
+        scrollToEnd();
+      }
+    } catch (_) {
+      if (!destroyed) message('bot', 'Не удалось выполнить запрос. Попробуйте ещё раз.', 'sad');
+    } finally {
+      if (!destroyed) { clearTyping(); setThinking(false); busy = false; }
+    }
+  }
+
   function submitQuestion(text) {
     if (!text || busy) return;
+    if (callbacks.respond) {
+      input.value = '';
+      setMood(questionMood(text), 4800);
+      message('user', text);
+      void customReply(() => callbacks.respond(text));
+      return;
+    }
     if (Date.now() > contextUntil) { pendingChoice = ''; lastIntentKey = ''; lastReportKind = ''; awaitingTherapyChoice = false; awaitingReportDelayChoice = false; }
     contextUntil = Date.now() + 4 * 60 * 1000;
     setMood(questionMood(text), 4800);
@@ -613,6 +650,9 @@
   composer.addEventListener('submit', event => {
     event.preventDefault();
     submitQuestion(input.value.trim());
+  });
+  if (input.tagName === 'TEXTAREA') listen(input, 'keydown', event => {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); submitQuestion(input.value.trim()); }
   });
   input.addEventListener('input', () => {
     if (busy) return;
@@ -663,9 +703,9 @@
     }, 2100);
   }
   setGaze(bot.clientWidth * .10, bot.clientHeight * -.08);
-  message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1f499.svg', 'after');
-  return { destroy() {
-    destroyed = true; lifecycle.abort();
+  message('bot', callbacks.greeting || 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1f499.svg', 'after');
+  return { canClose:()=>callbacks.canClose ? callbacks.canClose() : true, destroy() {
+    destroyed = true; lifecycle.abort(); callbacks.dispose?.();
     timers.forEach(id => { window.clearTimeout(id); window.clearInterval(id); });
     timers.clear();
   } };

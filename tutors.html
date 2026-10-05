@@ -30,6 +30,10 @@
   <link rel="stylesheet" href="/chat-overlay/chat-list-ui.css?v=20260911-delete-1">
   <link rel="stylesheet" href="/tutors/phone-cards-ui.css?v=20260907-3">
   <link rel="stylesheet" href="/tutors/access-requests.css?v=20261003-resilient-1">
+  <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-2">
+  <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261005-1">
+  <link rel="stylesheet" href="/tutors/assistant.css?v=20261005-1">
+  <link rel="preload" as="image" href="/parents/blob.webp" fetchpriority="high">
   <style>
     .educator-logo{width:96px!important;height:45px!important;margin-bottom:2px!important}
     .educator-logo span:nth-child(1){width:28px!important;height:28px!important;left:0!important;bottom:0!important;top:auto!important}
@@ -104,7 +108,7 @@
 
         <section id="screenChoose">
           <div class="educator-start-brand">
-            <div class="educator-logo" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+            <div id="medsiAssistantLogo" class="medsi-assistant-logo" aria-label="Медси Бот"></div>
             <h1 class="educator-start-title">Медси Бот</h1>
             <p class="educator-start-subtitle">Панель воспитателей для отчётов, телефонов родителей и чатов</p>
           </div>
@@ -174,7 +178,9 @@
   </div>
 
   <script defer src="/tutors/access-requests.js?v=20261003-resilient-1"></script>
-  <script defer src="/tutors/full-web.js?v=20260914-auth-retry-1"></script>
+  <script defer src="/tutors/assistant.js?v=20261005-1"></script>
+  <script defer src="/parents/smart-bot-widget.js?v=20261005-4"></script>
+  <script defer src="/tutors/full-web.js?v=20261005-assistant-1"></script>
   <script defer src="/tutors/page-scroll.js?v=20260907-1"></script>
   <script defer src="/tutors/report-ui.js?v=20260907-1"></script>
   <script defer src="/tutors/chat-opening.js?v=20260907-1"></script>

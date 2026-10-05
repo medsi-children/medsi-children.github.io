@@ -2,6 +2,7 @@
   'use strict';
 
   // Change this one switch to hide the assistant without changing the parent panel.
+  const options = window.MedsiAssistantOptions || {};
   const ENABLED = true;
   if (!ENABLED || window.MedsiSmartBotWidget) return;
 
@@ -66,7 +67,7 @@
   }
 
   function syncLauncher() {
-    launcher.hidden = !assetReady || document.body.dataset.screen !== 'screenChoose';
+    launcher.hidden = !assetReady || document.body.dataset.screen !== 'screenChoose' || (options.available && !options.available());
     dock.hidden = launcher.hidden;
     dock.inert = Boolean(overlay);
     if (!launcher.hidden && !overlay) scheduleHint();
@@ -154,7 +155,7 @@
   }
 
   function finishClose(openEducators = false) {
-    if (!overlay || overlay.classList.contains('is-closing')) return;
+    if (!overlay || overlay.classList.contains('is-closing') || (chat?.canClose && !chat.canClose())) return;
     window.clearTimeout(closeTimer);
     closing = true;
     chatRoot?.activeElement?.blur();
@@ -168,6 +169,17 @@
     const view = document.createElement('template');
     view.innerHTML = window.MedsiBotChatView;
     chatRoot.appendChild(view.content.cloneNode(true));
+    if (options.prompts) {
+      const strip = chatRoot.getElementById('promptStrip');
+      strip.replaceChildren(...options.prompts.map(label => { const button = document.createElement('button'); button.type = 'button'; button.dataset.prompt = label; button.textContent = label; return button; }));
+    }
+    if (options.multiline) {
+      const oldInput = chatRoot.getElementById('messageInput');
+      const textarea = document.createElement('textarea');
+      textarea.id = 'messageInput'; textarea.rows = 2; textarea.maxLength = 60000;
+      textarea.setAttribute('aria-label', 'Ваш вопрос или текст отчёта');
+      oldInput.replaceWith(textarea);
+    }
     const footer = document.createElement('div');
     footer.className = 'bot-chat-footer';
     const promptRow = document.createElement('div');
@@ -204,6 +216,7 @@
     overlay.hidden = false;
     frame.hidden = false;
     chat = window.MedsiBotChat.mount(chatRoot, {
+      ...(options.conversation ? options.conversation() : {}),
       close: () => finishClose(),
       openEducators: () => finishClose(true)
     });
@@ -274,7 +287,7 @@
       window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261002-15'),
       window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20260909-leading-dot-1'),
       script('/parents/bot-chat-view.js?v=20261005-2'),
-      script('/parents/bot-chat-runtime.js?v=20261005-2'),
+      script('/parents/bot-chat-runtime.js?v=20261005-3'),
       avatarReady
     ]);
     frame = document.createElement('section');
@@ -287,7 +300,8 @@
       chatRoot.appendChild(link);
     }));
     const style = document.createElement('style');
-    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0;min-width:0;overscroll-behavior:contain}.bot-chat-footer{display:block;min-width:0;padding:0 13px calc(16px + env(safe-area-inset-bottom));background:#fff}.bot-chat-prompt-row{display:block;height:52px;overflow:hidden;contain:paint}.bot-chat-footer .prompt-strip{height:52px;box-sizing:border-box;margin:0;padding:4px 1px;min-width:0;align-items:center}.bot-chat-footer .prompt-strip button{flex-basis:calc((100% - 14px)/3);height:44px;min-height:44px;font-size:13px;line-height:1.2}.bot-chat-footer .composer{position:relative;margin:10px 0 0!important;height:58px;min-height:58px;box-sizing:border-box;flex-shrink:0;transition:border-color .18s ease,box-shadow .18s ease}.composer input{font-size:16px}';
+    style.textContent = ':host{display:block;font:16px Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;color:#264d51;overflow:hidden} .assistant-lab{display:block;width:100%;height:100%;min-height:0;margin:0;padding:0}.bot-stage{display:none}.help-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:100%;height:100%;min-height:0;max-height:none;border:0;border-radius:0;box-shadow:none;background:#fff;backdrop-filter:none}.conversation{min-height:0;min-width:0;overscroll-behavior:contain}.bot-chat-footer{display:block;min-width:0;padding:0 13px calc(16px + env(safe-area-inset-bottom));background:#fff}.bot-chat-prompt-row{display:block;height:52px;overflow:hidden;contain:paint}.bot-chat-footer .prompt-strip{height:52px;box-sizing:border-box;margin:0;padding:4px 1px;min-width:0;align-items:center}.bot-chat-footer .prompt-strip button{flex-basis:calc((100% - 14px)/3);height:44px;min-height:44px;font-size:13px;line-height:1.2}.bot-chat-footer .composer{position:relative;margin:10px 0 0!important;height:58px;min-height:58px;box-sizing:border-box;flex-shrink:0;transition:border-color .18s ease,box-shadow .18s ease}.composer input{font-size:16px}.composer textarea{flex:1;width:100%;min-width:0;height:42px;max-height:42px;box-sizing:border-box;resize:none;border:0;outline:none;background:transparent;color:#264d51;padding:3px 0;font:16px/1.3 Manrope,system-ui,sans-serif}';
+    if (options.chatStyle) style.textContent += options.chatStyle;
     chatRoot.appendChild(style);
     installChatView();
     shell = document.createElement('div');
@@ -313,5 +327,7 @@
   chatReady.catch(() => {});
   const visualReady = bodyImage.decode().then(() => { assetReady = true; syncLauncher(); }).catch(() => {});
   syncLauncher();
-  window.MedsiSmartBotWidget = Object.freeze({ open, close: requestClose, ready: visualReady });
+  const gate = document.getElementById('tutorAuthGate');
+  if (gate) new MutationObserver(syncLauncher).observe(gate, {attributes:true,attributeFilter:['class']});
+  window.MedsiSmartBotWidget = Object.freeze({ open, close: requestClose, ready: visualReady, navigate(fn) { finishClose(); window.setTimeout(fn, 200); } });
 })();

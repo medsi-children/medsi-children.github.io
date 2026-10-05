@@ -160,18 +160,15 @@
   }
   function showMenu(){setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge();scheduleD1Warm();if(window.MedsiAccessRequests)MedsiAccessRequests.refresh()}
   function openReport(type){$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Психотерапия','Вставьте отчёт по психотерапии.'];setScreen('screenForm',spec[0],spec[1])}
-  async function sendReport(){
-    const type=$('btnSend').dataset.type,text=$('text').value,btn=$('btnSend');$('reportError').classList.add('hidden');if(!text.trim()){showReportError('Пустой текст отчёта.');return}
-    const submissionId=reportSubmissionId();
-    btn.disabled=true;btn.textContent='Отправляем…';
-    try{
+  async function submitReportPayload(type,text,submissionId,onProgress=()=>{}) {
+    if (!tutorToken || !['morning','evening','psychology'].includes(type) || !String(text).trim()) throw new Error('Некорректный отчёт.');
       // Cloudflare outbox accepts the report immediately and drains it to
       // Apps Script in the background. If unavailable, retain the proven
       // direct path below as a safe rollback.
       if(d1Session&&window.MedsiOverlayTransport&&MedsiOverlayTransport.reportSubmit){
         try{
           const queued=await MedsiOverlayTransport.reportSubmit(d1Session,{reportType:type,text,submissionId});
-          if(queued&&queued.accepted){showReportSent();return}
+          if(queued&&queued.accepted){return {accepted:true}}
         }catch(_){ /* fallback to the existing idempotent Apps Script route */ }
       }
       let acceptanceStopped=false;
@@ -180,7 +177,7 @@
       const acceptance=waitForReportAcceptance(submissionId,()=>acceptanceStopped)
         .then(value=>({source:'acceptance',value}),error=>({source:'acceptance',error}));
       const first=await Promise.race([request,acceptance]);
-      if(first.source==='acceptance'&&first.value){showReportSent();return}
+      if(first.source==='acceptance'&&first.value){return {accepted:true}}
       let res=null;
       if(first.source==='request'){
         acceptanceStopped=true;
@@ -191,13 +188,18 @@
         if(completedRequest.error&&String(completedRequest.error&&completedRequest.error.message||completedRequest.error)!=='TIMEOUT')throw completedRequest.error;
         res=completedRequest.value||null;
       }
-      if(res&&res.ok&&!res.processing){showReportSent();return}
+      if(res&&res.ok&&!res.processing){return {accepted:true}}
       if(res&&!res.ok)throw new Error(res.message||'Не удалось отправить отчёт.');
-      btn.textContent='Проверяем результат…';
+      onProgress('Проверяем результат…');
       res=await recoverReportSubmission(type,text,submissionId);
       if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось подтвердить отправку отчёта.');
-      showReportSent();
-    }
+      return {accepted:true};
+  }
+  async function sendReport(){
+    const type=$('btnSend').dataset.type,text=$('text').value,btn=$('btnSend');
+    $('reportError').classList.add('hidden');if(!text.trim()){showReportError('Пустой текст отчёта.');return}
+    btn.disabled=true;btn.textContent='Отправляем…';
+    try { await submitReportPayload(type,text,reportSubmissionId(),message=>{btn.textContent=message}); showReportSent(); }
     catch(e){const message=String(e&&e.message||e);showReportError(message==='TIMEOUT'?'Сервер отвечает дольше обычного. Отчёт не нужно отправлять повторно — откройте эту форму через минуту и проверьте результат.':message)}
     finally{btn.disabled=false;btn.textContent='Отправить'}
   }
@@ -329,5 +331,29 @@
   }
 
   $('btnParentChats').addEventListener('click',openChat);$('btnMorning').addEventListener('click',()=>openReport('morning'));$('btnEvening').addEventListener('click',()=>openReport('evening'));$('btnPsychology').addEventListener('click',()=>openReport('psychology'));$('btnParentPhones').addEventListener('click',openPhones);$('btnBack').addEventListener('click',showMenu);$('btnPhonesBack').addEventListener('click',showMenu);$('btnAgain').addEventListener('click',showMenu);$('btnSend').addEventListener('click',sendReport);$('tutorLoginBtn').addEventListener('click',submitLogin);$('tutorPassword').addEventListener('keydown',e=>{if(e.key==='Enter')submitLogin()});
+  // The assistant uses the same authenticated operations as the existing panel.
+  window.MedsiTutorAdmin = Object.freeze({
+    async parents() { if (!tutorToken) throw new Error('AUTH_REQUIRED'); await ensureD1Fresh(); return refreshPhones(); },
+    async unread() { const session = await ensureD1Fresh(); const result = await MedsiOverlayTransport.chats(session, 'unread'); return (result.chats || []).filter(row => row.hasUnread); },
+    newSubmissionId: reportSubmissionId,
+    submitReport: submitReportPayload,
+    async deleteRecord(target) {
+      if (!tutorToken) throw new Error('AUTH_REQUIRED');
+      const rows = await refreshPhones();
+      const current = rows.find(row => phone10(row.phone) === phone10(target.phone) && row.childName === target.childName && row.parentName === target.parentName);
+      if (!current) throw new Error('RECORD_CHANGED');
+      const result = await callApi('deleteReportChildByPhone', [current.phone, tutorToken], 30000);
+      if (!result || !result.ok) throw new Error('DELETE_FAILED');
+      parentsCache = parentsCache.filter(row => phone10(row.phone) !== phone10(current.phone));
+      parentsSignature = parentSig(parentsCache);
+      refreshUnreadBadge();
+      return result;
+    },
+    navigate(kind) {
+      const actions = { chats: openChat, phones: openPhones, morning: () => openReport('morning'), evening: () => openReport('evening'), psychology: () => openReport('psychology') };
+      if (!tutorToken || !actions[kind]) return;
+      MedsiSmartBotWidget.navigate(actions[kind]);
+    }
+  });
   window.medsiForgetCachedChatToken=()=>{safeRemove(D1_KEY);d1Session=null;return true};window.medsiLogoutTutor=()=>{clearAuth();location.reload()};window.medsiTutorBootReady=true;verifySaved();
 })();

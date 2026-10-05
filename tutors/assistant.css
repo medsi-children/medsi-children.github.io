@@ -1,0 +1,8 @@
+/* Use the same mascot dimensions and animation as the parent menu. */
+#screenChoose .medsi-assistant-logo{margin:0 auto;flex-shrink:0}
+#screenChoose .educator-start-brand{gap:8px!important}
+@media(max-width:560px){
+  body[data-screen="screenChoose"] .scene{position:relative;inset:auto;overflow:visible}
+  body[data-screen="screenChoose"] .frame.choose-mode{max-height:none!important;aspect-ratio:auto!important}
+}
+html.medsi-bot-active .medsi-push-panel{visibility:hidden;pointer-events:none}
