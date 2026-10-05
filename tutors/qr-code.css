@@ -5,10 +5,10 @@
 .tutor-qr-trigger img{display:block;width:78px;height:78px;flex:0 0 78px;object-fit:cover;object-position:center;border-radius:16px;background:#fff}
 .tutor-qr-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
 .tutor-qr-copy strong{font-size:1rem;color:#0aa8b0}
-.tutor-qr-copy small{font-size:.82rem;line-height:1.35;color:#5f7f86}
+.tutor-qr-copy small{font-size:.88rem;line-height:1.35;color:#5f7f86}
 .tutor-qr-modal{position:fixed;z-index:20200;inset:0;display:grid;place-items:center;padding:24px;background:rgba(17,66,74,.74);backdrop-filter:blur(12px)}
-.tutor-qr-modal img{display:block;width:min(90vw,620px);height:min(90vh,760px);object-fit:contain;border-radius:24px;background:#fff;box-shadow:0 24px 80px rgba(0,0,0,.28)}
+.tutor-qr-modal img{display:block;width:min(88vw,620px,88vh);height:min(88vw,620px,88vh);aspect-ratio:1;object-fit:contain;border-radius:28px;background:#fff;box-shadow:0 24px 80px rgba(0,0,0,.28)}
 .tutor-qr-close{position:absolute;top:max(16px,env(safe-area-inset-top));right:max(16px,env(safe-area-inset-right));width:46px;height:46px;border:0;border-radius:50%;background:#fff;color:#11424a;font-size:32px;line-height:1;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.18)}
 .message-qr{display:block;width:min(100%,280px);height:auto;margin:12px auto 2px;border-radius:18px;background:#fff;cursor:pointer;box-shadow:0 8px 20px rgba(70,98,112,.08)}
-@media(max-width:560px){.tutor-qr-card{margin-top:10px}.tutor-qr-trigger{gap:12px;padding:12px;border-radius:18px}.tutor-qr-trigger img{width:68px;height:68px;flex-basis:68px;border-radius:14px}.tutor-qr-copy strong{font-size:.92rem}.tutor-qr-copy small{font-size:.76rem}.tutor-qr-modal{padding:16px}.tutor-qr-modal img{width:94vw;height:82vh;border-radius:18px}}
+@media(max-width:560px){.tutor-qr-card{margin-top:10px}.tutor-qr-trigger{gap:12px;padding:12px;border-radius:18px}.tutor-qr-trigger img{width:68px;height:68px;flex-basis:68px;border-radius:14px}.tutor-qr-copy strong{font-size:.92rem}.tutor-qr-copy small{font-size:.8rem}.tutor-qr-modal{padding:16px}.tutor-qr-modal img{width:min(88vw,88vh);height:min(88vw,88vh);border-radius:22px}}
 @media(prefers-reduced-motion:reduce){.tutor-qr-trigger{transition:none}}
