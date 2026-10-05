@@ -22,25 +22,8 @@
   const bot = root.getElementById('bot');
   const botEyes = root.getElementById('botEyes');
   const EMOJI_BASE = '/chat-overlay/assets/twemoji/';
-  const logLink = root.getElementById('botLogLink');
   const embedded = document.documentElement.dataset.embedded === '1' && window.parent !== window;
-  if (logLink && new URLSearchParams(location.search).has('logs')) logLink.hidden = false;
-  const IS_PRIMARY_HOST = location.origin === new URL('https://медси-бот.рф').origin;
   const tellParent = type => { if (embedded) window.parent.postMessage({ type }, location.origin); };
-  const createLogId = () => {
-    if (crypto.randomUUID) return crypto.randomUUID();
-    const bytes = crypto.getRandomValues(new Uint8Array(16));
-    bytes[6] = (bytes[6] & 15) | 64;
-    bytes[8] = (bytes[8] & 63) | 128;
-    const hex = [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
-    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-  };
-  const logSessionId = createLogId();
-  const pendingLogEntries = [];
-  let logTimer = null;
-  let logBusy = false;
-  let logFailures = 0;
-  let hasUserLog = false;
   let busy = false;
   let awaitingTherapyChoice = false;
   let awaitingReportDelayChoice = false;
@@ -155,61 +138,6 @@
   };
   const safeGet = key => { try { return localStorage.getItem(key) || ''; } catch (_) { return ''; } };
 
-  function queueBotLog(side, text) {
-    if (!IS_PRIMARY_HOST || !text) return;
-    pendingLogEntries.push({ side, text: String(text) });
-    if (side === 'user') hasUserLog = true;
-    if (!hasUserLog) return;
-    window.clearTimeout(logTimer);
-    logTimer = later(() => { void flushBotLog(); }, 800);
-  }
-
-  async function flushBotLog() {
-    window.clearTimeout(logTimer);
-    if (!IS_PRIMARY_HOST || !hasUserLog || !pendingLogEntries.length) return;
-    if (logBusy) { logTimer = later(() => { void flushBotLog(); }, 1000); return; }
-    logBusy = true;
-    const entries = [];
-    const encoder = new TextEncoder();
-    let bytes = 0;
-    let characters = 0;
-    while (pendingLogEntries.length && entries.length < 12
-      && bytes + encoder.encode(pendingLogEntries[0].text).byteLength <= 80000
-      && characters + pendingLogEntries[0].text.length <= 70000) {
-      const entry = pendingLogEntries.shift();
-      entries.push(entry);
-      bytes += encoder.encode(entry.text).byteLength;
-      characters += entry.text.length;
-    }
-    if (!entries.length) { pendingLogEntries.shift(); logBusy = false; return; }
-    const payload = JSON.stringify({ sessionId: logSessionId, eventId: createLogId(), entries });
-    try {
-      let session = await parentSession();
-      if (!session) return;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const response = await fetch('/lab/bot-log', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'X-Medsi-Chat-Session': session.token },
-          body: payload,
-          cache: 'no-store',
-          keepalive: encoder.encode(payload).byteLength < 60000
-        });
-        if (response.status === 401 && attempt === 0) { session = await parentSession(true); continue; }
-        if (!response.ok) throw new Error('BOT_LOG_UNAVAILABLE');
-        logFailures = 0;
-        return;
-      }
-    } catch (_) {
-      if (++logFailures < 3) {
-        pendingLogEntries.unshift(...entries);
-        logTimer = later(() => { void flushBotLog(); }, 5000);
-      }
-    } finally {
-      logBusy = false;
-      if (pendingLogEntries.length && logFailures === 0) logTimer = later(() => { void flushBotLog(); }, 800);
-    }
-  }
-
   async function parentSession(force = false) {
     // На GitHub Pages нет родительской авторизации и защищённого шлюза.
     if (location.origin !== new URL('https://медси-бот.рф').origin) return null;
@@ -299,7 +227,6 @@
     content.append(card, element('time', 'message-time', clock()));
     item.append(avatar, content);
     conversation.appendChild(item);
-    queueBotLog('bot', text);
     scrollToEnd();
   }
 
@@ -321,7 +248,6 @@
     content.append(card, element('time', 'message-time', clock()));
     item.append(avatar, content);
     conversation.appendChild(item);
-    queueBotLog('bot', text);
     scrollToEnd();
   }
 
@@ -465,7 +391,6 @@
     content.append(bubble, element('time', 'message-time', clock()));
     item.appendChild(content);
     conversation.appendChild(item);
-    queueBotLog(side, text);
     scrollToEnd();
   }
 
@@ -702,7 +627,6 @@
   });
 
   async function openEducatorChat() {
-    await flushBotLog();
     if (callbacks.openEducators) return callbacks.openEducators();
     if (embedded) return tellParent('medsi-bot:open-educators');
     if (typeof window.openMedsiEducatorChat === 'function') return window.openMedsiEducatorChat();
@@ -710,17 +634,14 @@
   }
 
   backButton.addEventListener('click', async () => {
-    await flushBotLog();
     if (callbacks.close) return callbacks.close();
     if (embedded) return tellParent('medsi-bot:closed');
     window.location.assign('https://медси-бот.рф/');
   });
   if (embedded) listen(window, 'message', async event => {
     if (event.source !== window.parent || event.origin !== location.origin || event.data?.type !== 'medsi-bot:close-request') return;
-    await flushBotLog();
     tellParent('medsi-bot:closed');
   });
-  listen(window, 'pagehide', () => { void flushBotLog(); });
 
   function follow(point) {
     const rect = bot.getBoundingClientRect();
@@ -743,7 +664,7 @@
   }
   setGaze(bot.clientWidth * .10, bot.clientHeight * -.08);
   message('bot', 'Добрый день, я Медси Бот, отвечу на любые ваши вопросы.', 'neutral', '1f499.svg', 'after');
-  return { flush: flushBotLog, destroy() {
+  return { destroy() {
     destroyed = true; lifecycle.abort();
     timers.forEach(id => { window.clearTimeout(id); window.clearInterval(id); });
     timers.clear();

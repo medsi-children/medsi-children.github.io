@@ -177,11 +177,8 @@
     chatRoot.querySelector('.help-panel').appendChild(footer);
   }
 
-  async function requestClose() {
-    if (!overlay || closing) return;
-    closing = true;
-    closeTimer = window.setTimeout(() => finishClose(), 1800);
-    try { await chat?.flush(); } finally { finishClose(); }
+  function requestClose() {
+    finishClose();
   }
 
   let opening = false;
@@ -276,8 +273,8 @@
     await Promise.all([
       window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261002-15'),
       window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20260909-leading-dot-1'),
-      script('/parents/bot-chat-view.js?v=20261005-1'),
-      script('/parents/bot-chat-runtime.js?v=20261005-1'),
+      script('/parents/bot-chat-view.js?v=20261005-2'),
+      script('/parents/bot-chat-runtime.js?v=20261005-2'),
       avatarReady
     ]);
     frame = document.createElement('section');

@@ -194,14 +194,14 @@ async function validateSessionForPhone(req, phone) {
   }
 }
 
-app.all(/^\/lab(?:\/.*)?$/, (req, res) => {
-  proxy(req, res, CHAT_UPSTREAM + req.originalUrl);
+// Stop old open tabs from sending assistant conversations to storage.
+app.all(['/lab/bot-log', '/__bot-log-view'], (_req, res) => {
+  res.setHeader('cache-control', 'no-store');
+  res.status(410).json({ ok: false });
 });
 
-// The viewer credential is checked by the Worker; the gateway only keeps the
-// browser on the same origin. Parent chat sessions cannot read this route.
-app.get('/__bot-log-view', (req, res) => {
-  proxy(req, res, CHAT_UPSTREAM + '/admin/bot-logs' + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''));
+app.all(/^\/lab(?:\/.*)?$/, (req, res) => {
+  proxy(req, res, CHAT_UPSTREAM + req.originalUrl);
 });
 
 app.all(/^\/push(?:\/.*)?$/, (req, res) => {
