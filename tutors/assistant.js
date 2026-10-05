@@ -105,6 +105,17 @@
       }
       return messageText ? composeParentMessage(found[0], messageText) : (messageTarget = found[0], waiting = {intent:'sendMessageText', expires:Date.now() + 240000}, result(`Что написать родителю ребёнка ${found[0].childName}?`));
     }
+    async function resolveMessageWithoutSeparator(body) {
+      const words = String(body || '').trim().split(/\s+/).filter(Boolean);
+      if (words.length < 2) return resolveMessageTarget(words.join(' '));
+      const rows = await api.parents();
+      for (let length = 1; length <= Math.min(3, words.length - 1); length++) {
+        const target = words.slice(0, length).join(' ');
+        const found = rows.filter(row => matches(row, queryTokens(target)) || matches(row, queryTokens(target), 'parentName'));
+        if (found.length === 1) return composeParentMessage(found[0], words.slice(length).join(' '));
+      }
+      return result('Не понял, где заканчивается имя ребёнка. Напишите, например: «напиши маме Артёма: Артём хочет доставку».');
+    }
     function composeParentMessage(row, text) {
       const cleanText = sentenceCase(text);
       const ticket = version;
@@ -169,7 +180,7 @@
       const sendMatch = String(text).trim().match(/^(?:напиши|сообщи|передай|скажи)\s+(?:(?:маме|папе|бабушке|дедушке|родителю|родителям)\s+)?(.+?)(?:\s+(?:что|такое|текст)\s+)(.+)$/iu);
       if (sendMatch) return resolveMessageTarget(sendMatch[1], sendMatch[2]);
       const sendWithoutText = String(text).trim().match(/^(?:напиши|сообщи|передай|скажи)\s+(?:(?:маме|папе|бабушке|дедушке|родителю|родителям)\s+)?(.+)$/iu);
-      if (sendWithoutText && !/^(?:что|текст|такое)\b/i.test(sendWithoutText[1])) return resolveMessageTarget(sendWithoutText[1]);
+      if (sendWithoutText && !/^(?:что|текст|такое)\b/i.test(sendWithoutText[1])) return resolveMessageWithoutSeparator(sendWithoutText[1]);
       const kind = reportKind(value);
       const standaloneType = /^(?:нет |а |лучше |не утренний а |не вечерний а )?(?:утренний|вечерний|утро|вечер|психотерапия|терапия|групповая терапия)(?: отчет)?$/.test(value);
       if (waiting && Date.now() >= waiting.expires) waiting = null;
