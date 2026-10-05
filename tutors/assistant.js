@@ -192,7 +192,7 @@
         return result(smallTalk[Math.floor(Math.random() * smallTalk.length)], [], 'happy');
       }
       if (/(?:qr|кьюар|qr код|qr-код|код для подключ|подключ.*код)/i.test(String(text))) {
-        return result('Вот QR-код для подключения Медси Бота родителями.', [], 'happy', '/tutors/medsi-bot-qr.jpg');
+        return result('Вот QR-код для подключения Медси Бота родителями.', [], 'happy', '/tutors/medsi-bot-qr.svg');
       }
       if (/^(?:привет[а-я]*|здравств[а-я]*|доброе утро|добрый день|добрый вечер|здрасьте|здрасте|хай|салют)$/.test(value)) return result('Добрый день! С какой задачей помочь?', [], 'happy');
       if (/^(?:спасибо[а-я]*|благодарю|супер|отлично)$/.test(value)) return result('Всегда рад помочь.', [], 'happy');
