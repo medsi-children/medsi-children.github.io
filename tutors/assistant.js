@@ -139,7 +139,7 @@
         {label:'Отмена', run:async () => { version++; messageTarget = null; waiting = null; return result('Отправка отменена.'); }}
       ]);
     }
-    const reportLabel = kind => ({morning:'Утренний отчёт',evening:'Вечерний отчёт',psychology:'Отчёт по психотерапии'})[kind];
+    const reportLabel = kind => ({morning:'Утренний отчёт',evening:'Вечерний отчёт',psychology:'Отчёт по групповой терапии'})[kind];
     const reportKind = value => /утрен|утро/.test(value) ? 'morning' : /вечер/.test(value) ? 'evening' : /психотерап|терапи|группов/.test(value) ? 'psychology' : '';
     function requestReport(kind) {
       waiting = {intent:'reportText',kind,expires:Date.now()+20*60000};
@@ -202,7 +202,7 @@
       const sendWithoutText = String(text).trim().match(/^(?:напиши|сообщи|передай|скажи)\s+(?:(?:маме|папе|бабушке|дедушке|родителю|родителям)\s+)?(.+)$/iu);
       if (sendWithoutText && !/^(?:что|текст|такое)\b/i.test(sendWithoutText[1])) return resolveMessageWithoutSeparator(sendWithoutText[1]);
       const kind = reportKind(value);
-      const standaloneType = /^(?:нет |а |лучше |не утренний а |не вечерний а )?(?:утренний|вечерний|утро|вечер|психотерапия|терапия|групповая терапия)(?: отчет)?$/.test(value);
+      const standaloneType = /^(?:нет |а |лучше |не утренний а |не вечерний а )?(?:утренн\w*|вечерн\w*|утро|вечер|психотерап\w*|группов\w* терап\w*|терап\w*)(?: отчет)?$/.test(value);
       if (waiting && Date.now() >= waiting.expires) waiting = null;
       if (standaloneType && (waiting?.intent?.startsWith('report') || draft)) {
         if (draft) { draft = {...draft,kind,id:api.newSubmissionId()}; return reviewReport(draft); }
@@ -215,11 +215,11 @@
       }
       if (waiting?.intent === 'reportType' && kind) return requestReport(kind);
       if (kind && standaloneType) return requestReport(kind);
-      if (/отчет|отчёт|психотерапия/.test(value) && !/^(?:открой|открыть)/.test(value)) {
+      if (/отчет|отчёт|психотерап|терапи|группов/.test(value) && !/^(?:открой|открыть)/.test(value)) {
         draft = null;
         if (!kind) return chooseReport();
         const separator = String(text).match(/(?:\n|:)/);
-        if (separator && /^(?:(?:отправь|отправить|отправляем|отправьте) )?(?:утренний отчет|вечерний отчет|отчет по психотерапии|психотерапия)$/.test(normalize(String(text).slice(0,separator.index)))) {
+        if (separator && /^(?:(?:отправь|отправить|отправляем|отправьте) )?(?:утренний отчет|вечерний отчет|отчет по (?:психотерапии|групповой терапии|терапии)|психотерап\w*|группов\w* терап\w*|терап\w*)$/.test(normalize(String(text).slice(0,separator.index)))) {
           const body = String(text).slice(separator.index + separator[0].length).trim();
           if (body) return reviewReport({kind,text:body,id:api.newSubmissionId()});
         }
@@ -260,7 +260,7 @@
     available: () => Boolean(window.MedsiTutorAdmin && document.getElementById('tutorAuthGate')?.classList.contains('hidden')),
     multiline:true,
     chatStyle:'.choices{grid-template-columns:1fr}.choices button{font-size:13px;line-height:1.4;min-height:44px;height:auto;white-space:normal;overflow-wrap:anywhere}',
-    prompts:['Написать родителю', 'Телефон родителя', 'Удалить ребёнка', 'Утренний отчёт', 'Вечерний отчёт', 'Отчёт по психотерапии', 'Список детей', 'Телефоны родителей'],
+    prompts:['Написать родителю', 'Телефон родителя', 'Удалить ребёнка', 'Утренний отчёт', 'Вечерний отчёт', 'Отчёт по групповой терапии', 'Список детей', 'Телефоны родителей'],
     conversation: () => ({...create(window.MedsiTutorAdmin), role:'educator', greeting:'Добрый день, я Медси Бот, помогу с любыми задачами.'})
   };
 })();
