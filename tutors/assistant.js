@@ -174,7 +174,7 @@
       version++;
       if (/^(?:отмена|отмени|не надо|нет|стоп)$/.test(value) || /(?:^| )не (?:надо |нужно |хочу )?(?:удал|убира|отправ)/.test(value)) { waiting = null; draft = null; messageTarget = null; return result('Хорошо, отменено.'); }
       if (/^(?:да|да удалить|подтверждаю)$/.test(value)) return result('Для действия нажмите кнопку под подтверждением. Одного сообщения «да» недостаточно.');
-      if (/^(?:привет[а-я]*|здравств[а-я]*|доброе утро|добрый день|добрый вечер|здрасьте|здрасте|хай|салют)$/.test(value)) return result('Добрый день! С какой задачей помочь?', navigation, 'happy');
+      if (/^(?:привет[а-я]*|здравств[а-я]*|доброе утро|добрый день|добрый вечер|здрасьте|здрасте|хай|салют)$/.test(value)) return result('Добрый день! С какой задачей помочь?', [], 'happy');
       if (/^(?:спасибо[а-я]*|благодарю|супер|отлично)$/.test(value)) return result('Всегда рад помочь.', [], 'happy');
       if (waiting?.intent === 'sendMessageTarget' && Date.now() < waiting.expires && value) return resolveMessageTarget(text);
       if (waiting?.intent === 'sendMessageText' && Date.now() < waiting.expires && value) return composeParentMessage(messageTarget, text);
