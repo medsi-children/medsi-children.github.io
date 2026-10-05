@@ -2,7 +2,10 @@
   'use strict';
 
   // Change this one switch to hide the assistant without changing the parent panel.
-  const options = window.MedsiAssistantOptions || {};
+  const educator = document.documentElement.dataset.assistantRole === 'educator';
+  const options = educator ? window.MedsiAssistantOptions : {};
+  // Never fall back to the parent's command set in the educator panel.
+  if (educator && (options?.role !== 'educator' || typeof options.conversation !== 'function')) return;
   const ENABLED = true;
   if (!ENABLED || window.MedsiSmartBotWidget) return;
 
@@ -284,10 +287,10 @@
   async function prepareChat() {
     if (shell) shell.remove();
     await Promise.all([
-      window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261002-15'),
+      educator || window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261002-15'),
       window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20260909-leading-dot-1'),
       script('/parents/bot-chat-view.js?v=20261005-2'),
-      script('/parents/bot-chat-runtime.js?v=20261005-3'),
+      script('/parents/bot-chat-runtime.js?v=20261005-4'),
       avatarReady
     ]);
     frame = document.createElement('section');

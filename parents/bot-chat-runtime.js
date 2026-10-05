@@ -2,6 +2,7 @@
   'use strict';
 
   function mount(root = document, callbacks = {}) {
+  if (callbacks.role === 'educator' && typeof callbacks.respond !== 'function') throw new Error('ADMIN_ASSISTANT_UNAVAILABLE');
   let destroyed = false;
   const lifecycle = new AbortController();
   const timers = new Set();

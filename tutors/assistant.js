@@ -185,10 +185,11 @@
   }
   window.MedsiTutorAssistant = Object.freeze({create});
   window.MedsiAssistantOptions = {
-    available: () => document.getElementById('tutorAuthGate')?.classList.contains('hidden'),
+    role:'educator',
+    available: () => Boolean(window.MedsiTutorAdmin && document.getElementById('tutorAuthGate')?.classList.contains('hidden')),
     multiline:true,
     chatStyle:'.choices{grid-template-columns:1fr}.choices button{font-size:13px;line-height:1.4;min-height:44px;height:auto;white-space:normal;overflow-wrap:anywhere}',
     prompts:['Новые сообщения', 'Телефон родителя', 'Найти ребёнка', 'Утренний отчёт', 'Вечерний отчёт', 'Отчёт по психотерапии', 'Список детей', 'Удалить ребёнка', 'Чаты с родителями', 'Телефоны родителей', 'Что ты умеешь?'],
-    conversation: () => ({...create(window.MedsiTutorAdmin), greeting:'Добрый день, я Медси Бот, помогу с любыми задачами.'})
+    conversation: () => ({...create(window.MedsiTutorAdmin), role:'educator', greeting:'Добрый день, я Медси Бот, помогу с любыми задачами.'})
   };
 })();
