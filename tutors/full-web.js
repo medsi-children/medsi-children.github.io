@@ -334,7 +334,7 @@
   // The assistant uses the same authenticated operations as the existing panel.
   window.MedsiTutorAdmin = Object.freeze({
     async parents() { if (!tutorToken) throw new Error('AUTH_REQUIRED'); await ensureD1Fresh(); return refreshPhones(); },
-    async unread() { const session = await ensureD1Fresh(); const result = await MedsiOverlayTransport.chats(session, 'unread'); return (result.chats || []).filter(row => row.hasUnread); },
+    async unread() { const session = await ensureD1Fresh(); const result = await MedsiOverlayTransport.chats(session, 'unread', {fresh:true}); return (result.chats || []).filter(row => row.hasUnread); },
     newSubmissionId: reportSubmissionId,
     submitReport: submitReportPayload,
     async deleteRecord(target) {
@@ -346,6 +346,7 @@
       if (!result || !result.ok) throw new Error('DELETE_FAILED');
       parentsCache = parentsCache.filter(row => phone10(row.phone) !== phone10(current.phone));
       parentsSignature = parentSig(parentsCache);
+      window.MedsiEducatorPrewarm?.clear();
       refreshUnreadBadge();
       return result;
     },
