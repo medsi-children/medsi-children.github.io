@@ -42,6 +42,11 @@
   }
   const rowLabel = row => `${row.childName || 'Без имени'} · ${row.parentName || 'Родитель'} · ${displayPhone(row.phone)}`;
   const helpText = 'Помогу найти ребёнка и телефоны родителей, покажу непрочитанные чаты, открою нужный раздел или удалю выбранную запись после подтверждения.\n\nНапример: «дай телефон мамы Маши Д.», «есть новые сообщения?», «удали Машу Д.». Отчёты отправляю только после вашей проверки и подтверждения.';
+  const fallbackTexts = [
+    'Простите, я не очень понимаю, что от меня требуется. Попробуйте сформулировать задачу иначе.',
+    'Не совсем понял запрос. Напишите, что нужно сделать, например: найти телефон, показать новые сообщения или подготовить отчёт.',
+    'Пока не могу распознать эту задачу. Попробуйте описать её другими словами.'
+  ];
   const sentenceCase = value => {
     const text = String(value || '').trim();
     return text ? text.charAt(0).toLocaleUpperCase('ru') + text.slice(1) : '';
@@ -235,7 +240,7 @@
       if (/^(?:открыть |открой )?(?:телефоны|телефоны родителей)$/.test(value)) { waiting = null; return result('Открою список контактов.', [nav('Открыть телефоны', 'phones')]); }
       if (/телефон|номер|контакт|позвонить|связаться|найди|найдите|найти/.test(value)) return lookup(text, 'contact');
       if (waiting && ['delete','contact'].includes(waiting.intent) && Date.now() < waiting.expires) return lookup(text, waiting.intent);
-      return result(helpText, navigation);
+      return result(fallbackTexts[Math.floor(Math.random() * fallbackTexts.length)]);
     }
     return {respond, canClose:()=>!writing, dispose() {alive = false; version++; waiting = null;}};
   }
