@@ -94,8 +94,16 @@ function snapshotCurrentReportsForD1_(kindRaw) {
 }
 
 function syncD1CurrentReportsToWorker_(kindRaw) {
-  const reports = snapshotCurrentReportsForD1_(kindRaw);
-  const result = d1AdminRequest_('/admin/report-current', 'post', { reports:reports });
+  const requestedKind = String(kindRaw || '').trim().toLowerCase();
+  const reports = snapshotCurrentReportsForD1_(requestedKind);
+  const now = Date.now();
+  const notificationKind = requestedKind === 'morning' || requestedKind === 'evening' ? requestedKind : '';
+  const reportDate = Utilities.formatDate(new Date(now), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const result = d1AdminRequest_('/admin/report-current', 'post', {
+    reports:reports,
+    notificationKind:notificationKind,
+    reportDate:reportDate
+  });
   return { ok:true, reports:reports.length, updated:Number(result.updated || 0) };
 }
 

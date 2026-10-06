@@ -660,11 +660,25 @@ async function getParentReportHistory(env, auth) {
   });
 }
 
-async function upsertCurrentReports(request, env) {
+async function upsertCurrentReports(request, env, ctx) {
   const payload = await body(request) || {};
   const reports = Array.isArray(payload.reports) ? payload.reports.slice(0, 500) : [];
+  const notificationKind = ['morning', 'evening'].includes(String(payload.notificationKind || '').toLowerCase())
+    ? String(payload.notificationKind).toLowerCase()
+    : '';
+  const reportDate = /^\d{4}-\d{2}-\d{2}$/.test(String(payload.reportDate || ''))
+    ? String(payload.reportDate)
+    : '';
+  const previousReports = new Map();
+  if (notificationKind && reportDate) {
+    const previous = await env.CHAT_DB.prepare(
+      'SELECT phone10, version, updated_at FROM report_current WHERE kind = ?'
+    ).bind(notificationKind).all();
+    (previous.results || []).forEach(row => previousReports.set(row.phone10, row));
+  }
   const statements = [];
   const seen = new Set();
+  const notificationTargets = [];
   reports.forEach(item => {
     const phone = phone10(item && item.phone);
     const kind = String(item && item.kind || '').trim().toLowerCase();
@@ -686,9 +700,74 @@ async function upsertCurrentReports(request, env) {
       String(item && item.version || '').slice(0, 180),
       Number(item && item.updatedAt || 0) || Date.now()
     ));
+    const text = String(item && item.text || '').trim();
+    if (kind === notificationKind && reportDate && text) {
+      const previous = previousReports.get(phone);
+      const previousDate = previous ? reportDateInMoscow(previous.updated_at) : '';
+      const samePublishedReport = previous &&
+        String(previous.version || '') === String(item && item.version || '') &&
+        previousDate === reportDate;
+      if (!samePublishedReport) notificationTargets.push({ phone, kind, reportDate });
+    }
   });
   if (statements.length) await env.CHAT_DB.batch(statements);
-  return json({ ok: true, received: statements.length, updated: statements.length });
+  let queued = 0;
+  if (notificationTargets.length) {
+    const reserved = await env.CHAT_DB.batch(notificationTargets.map(item => env.CHAT_DB.prepare(`
+      INSERT INTO report_push_dedup (phone10, kind, report_date, last_push_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(phone10, kind, report_date) DO UPDATE SET last_push_at = excluded.last_push_at
+      WHERE excluded.last_push_at - report_push_dedup.last_push_at >= 7200000
+    `).bind(item.phone, item.kind, item.reportDate, Date.now())));
+    const jobs = [];
+    reserved.forEach((result, index) => {
+      if (!result.meta || Number(result.meta.changes || 0) < 1) return;
+      queued += 1;
+      jobs.push(notifyParentReportBestEffort(env, notificationTargets[index].phone, notificationKind));
+    });
+    if (jobs.length) {
+      const pushJob = Promise.allSettled(jobs).then(results => {
+        const failed = results.filter(result => result.status === 'rejected').length;
+        if (failed) console.error('REPORT_PUSH_BATCH_FAILED', JSON.stringify({ kind: notificationKind, failed, total: results.length }));
+      });
+      if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(pushJob);
+      else await pushJob;
+    }
+  }
+  return json({ ok: true, received: statements.length, updated: statements.length, pushQueued: queued });
+}
+
+function reportDateInMoscow(timestamp) {
+  const value = Number(timestamp || 0);
+  if (!value) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date(value));
+  const fields = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${fields.year}-${fields.month}-${fields.day}`;
+}
+
+async function notifyParentReportBestEffort(env, phone, kind) {
+  if (!env.PUSH_WORKER || !env.MEDSI_CHAT_PUSH_SECRET) return;
+  const label = kind === 'morning' ? 'утренний' : 'вечерний';
+  const response = await env.PUSH_WORKER.fetch('https://medsi-push-worker.internal/notify', {
+    method: 'POST',
+    headers: {
+      'authorization': `Bearer ${env.MEDSI_CHAT_PUSH_SECRET}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      role: 'parent',
+      phone,
+      notification: {
+        title: 'Новый ' + label + ' отчёт',
+        body: 'Отчёт по вашему ребёнку уже доступен в Медси Боте.',
+        url: '/',
+        tag: 'medsi-report-' + kind + '-' + phone
+      }
+    })
+  });
+  if (!response.ok) throw new Error(`Push HTTP ${response.status}`);
 }
 
 async function getParentCurrentReports(env, auth) {
@@ -1280,7 +1359,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/admin/profile-s3-keys') return profileS3Keys(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/delete-profile-phone') return deleteProfilePhone(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/report-snapshots') return upsertReportSnapshots(request, env);
-      if (request.method === 'POST' && url.pathname === '/admin/report-current') return upsertCurrentReports(request, env);
+      if (request.method === 'POST' && url.pathname === '/admin/report-current') return upsertCurrentReports(request, env, ctx);
       if (request.method === 'GET' && url.pathname === '/admin/parent-registration-outbox') return listParentRegistrationOutbox(env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/ack') return acknowledgeParentRegistrationOutbox(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/fail') return failParentRegistrationOutbox(request, env);
