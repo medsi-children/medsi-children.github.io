@@ -48,7 +48,15 @@ function syncD1ProfilesFromReports() {
   // Timeweb uses D1 regardless of the retired CHAT_BACKEND switch, which is
   // still "sheets" in some installations for legacy Apps Script chat calls.
   ensureReportsD1ProfileSyncTriggers_();
-  return reconcileReportsProfilesToD1_('scheduled');
+  let registrationSync = { ok:true, synced:0 };
+  try { registrationSync = flushCloudflareParentRegistrationOutbox_(); }
+  catch (error) {
+    registrationSync = { ok:false, message:String(error && error.message || error) };
+    Logger.log('CLOUDFLARE_REGISTRATION_OUTBOX_FAILED ' + registrationSync.message);
+  }
+  const reconciliation = reconcileReportsProfilesToD1_('scheduled');
+  reconciliation.registrationSync = registrationSync;
+  return reconciliation;
 }
 
 function snapshotCurrentReportsForD1_(kindRaw) {
@@ -357,9 +365,25 @@ function reconcileReportsProfilesToD1_(reason) {
     if (!sheet) throw new Error('Лист REPORTS не найден; удаление профилей остановлено.');
     const current = reportsD1ProfilesSnapshot_();
     const sync = reconcileReportsProfilesToD1NonDestructive_(reason);
+    // If staff removed a just-mirrored registration before its outbox ACK
+    // completed, cancel that pending create before lifecycle reconciliation.
+    const removedPhones = Object.keys(sync.removedProfiles || {});
+    if (removedPhones.length) {
+      const pending = d1AdminRequest_('/admin/parent-registration-outbox', 'get');
+      const removedSet = new Set(removedPhones);
+      const cancelled = (pending.registrations || []).filter(function(item) {
+        return removedSet.has(last10_(item.phone10));
+      }).map(function(item) { return String(item.attempt_id || ''); }).filter(Boolean);
+      if (cancelled.length) d1AdminRequest_('/admin/parent-registration-outbox/ack', 'post', { attemptIds:cancelled });
+    }
     const inventory = d1AdminRequest_('/admin/profile-phones', 'get');
+    const pendingRegistrations = d1AdminRequest_('/admin/parent-registration-outbox', 'get');
+    const pendingRegistrationPhones = new Set((pendingRegistrations.registrations || []).map(function(item) {
+      return last10_(item.phone10);
+    }).filter(Boolean));
     const stale = (Array.isArray(inventory.phones) ? inventory.phones : []).filter(function(phone) {
-      return !current[last10_(phone)];
+      const normalized = last10_(phone);
+      return !current[normalized] && !pendingRegistrationPhones.has(normalized);
     });
     const deleted = [];
     const failed = [];

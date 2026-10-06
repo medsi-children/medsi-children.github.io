@@ -8,7 +8,8 @@
 | `medsi-chat-worker` | Cloudflare Worker + D1 + KV | Чаты, вложения, сессии D1, снапшоты и фоновые задачи |
 | `medsi-chat-gateway` | Cloudflare Worker | Узкий service-binding прокси к основному чат-Worker |
 | `medsi-push-worker` | Cloudflare Worker + KV | Web Push-подписки и уведомления |
-| Apps Script и Google Sheets | Google | Распределение отчётов, таблица, авторизация и фоновая синхронизация с Cloudflare |
+| Apps Script и Google Sheets | Google | Отчёты и ручной справочник родителей; обратная совместимость старых сессий и синхронизация справочника с Cloudflare |
+| Родительская регистрация и повторная авторизация | Cloudflare Worker + D1 | Хранение новых профилей и запросов на подтверждение; регистрация проецируется в Google Sheets |
 
 ## Где находятся исходники
 

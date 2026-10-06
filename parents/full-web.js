@@ -32,6 +32,16 @@
     }
     throw lastError||new Error('TIMEOUT');
   }
+  async function callCloudflareRegistration(status,data){
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+    const url=status?'/lab/parent-registration/status?phone='+encodeURIComponent(data.phone)+'&attemptId='+encodeURIComponent(data.attemptId):'/lab/parent-registration';
+    try{
+      const response=await fetch(url,{method:status?'GET':'POST',headers:status?{}:{'content-type':'application/json'},body:status?undefined:JSON.stringify({parentName:data.parentName,childName:data.childName,phone:data.phone,attemptId:data.attemptId}),cache:'no-store',signal:controller.signal});
+      let value;try{value=await response.json()}catch(_){throw new Error('Cloudflare вернул некорректный ответ.')}
+      if(!response.ok||!value||value.ok!==true)throw new Error(value&&value.message||('HTTP '+response.status));
+      return value;
+    }finally{clearTimeout(timer)}
+  }
   function isStartLike(id){return id==='screenStart'||id==='screenChoose'}
   function initPush(){if(pushReady||!window.MedsiPush)return;pushReady=true;const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));MedsiPush.init({frameId:'__no_parent_iframe__',appEndpointUrl:PUSH_APP_URL,pushServiceUrl:PUSH_SERVICE_URL,identity:validPhone(ph)?{role:'parent',phone:ph}:null})}
   function syncPushIdentity(){if(!window.MedsiPush)return;if(validPhone(currentPhone))MedsiPush.setIdentity({role:'parent',phone:currentPhone,parentSession:parentSession||''});else MedsiPush.clearIdentity()}
@@ -78,7 +88,7 @@
   function readJson(key){try{return JSON.parse(safeGet(key)||'null')}catch(_){return null}}
   function makeFlowId(prefix){let value='';try{if(crypto&&crypto.randomUUID)value=crypto.randomUUID()}catch(_){}if(!value)value=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);return prefix+'_'+value.replace(/[^A-Za-z0-9_-]/g,'')}
   function registrationFingerprint(data){return [onlyDigits(data.phone).slice(-10),data.parentName,data.childName].join('|')}
-  function finishRegistration(res){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;showChoose();prewarmAll()}
+  function finishRegistration(res){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;showChoose();prewarmAll();const attempt=String(res.registrationAttemptId||'');if(attempt&&currentPhone&&parentSession)callApi('mirrorCloudflareParentRegistration',[currentPhone,attempt,parentSession],20000,true).catch(()=>null)}
   async function runRegistrationFlow(data){
     const run=++flowRun;
     show('screenRegistrationPending');
@@ -90,7 +100,7 @@
         let res=null;
         if(phase==='register'){
           try{
-            res=await callApi('registerParent',[data.parentName,data.childName,data.phone,data.attemptId],20000);
+            res=await callCloudflareRegistration(false,data);
           }catch(_){
             if(run!==flowRun)return;
             phase='status';
@@ -104,11 +114,12 @@
           }
         }
         if(phase==='status'){
-          const statusRes=await callApi('getParentRegistrationStatus',[data.phone,data.attemptId],10000);
+          const statusRes=await callCloudflareRegistration(true,data);
           if(run!==flowRun)return;
           if(statusRes&&statusRes.ok&&statusRes.parentSession){finishRegistration(statusRes);return}
           if(statusRes&&statusRes.result&&statusRes.result.parentSession){finishRegistration(statusRes.result);return}
           const status=String(statusRes&&(statusRes.status||statusRes.code)||'').toUpperCase();
+          if(status==='REVOKED'){safeRemove(REG_ATTEMPT_KEY);showStart();return}
           if(status==='PROCESSING'){
             processingCount++;
             if(processingCount>=3){phase='register';processingCount=0;pendingText.textContent='Завершаем сохранение данных…'}

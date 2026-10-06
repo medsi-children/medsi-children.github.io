@@ -54,6 +54,261 @@ async function body(request) {
   try { return await request.json(); } catch { return null; }
 }
 
+function registrationId(value) {
+  const id = String(value || '').trim();
+  return /^reg_[A-Za-z0-9_-]{16,115}$/.test(id) ? id : '';
+}
+
+function parentAccessRequestId(value) {
+  const id = String(value || '').trim();
+  return /^auth_[A-Za-z0-9_-]{16,115}$/.test(id) ? id : '';
+}
+
+function issueParentSession(phone, secret) {
+  const exp = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  const payload = b64url(new TextEncoder().encode(JSON.stringify({
+    role: 'parent', phone10: phone, exp, version: 'cf-parent-v1'
+  })));
+  return hmac(secret, payload).then(signature => ({
+    token: payload + '.' + signature,
+    expiresAt: exp
+  }));
+}
+
+async function registerParent(request, env) {
+  const payload = await body(request) || {};
+  const phone = phone10(payload.phone);
+  const parentName = String(payload.parentName || '').trim().slice(0, 160);
+  const childName = String(payload.childName || '').trim().slice(0, 160);
+  const attemptId = registrationId(payload.attemptId);
+  if (!phone || !parentName || !childName || !attemptId) {
+    return json({ ok: false, message: 'Заполните имя родителя, имя ребёнка и корректный телефон.' }, 400);
+  }
+  if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис регистрации временно недоступен.' }, 503);
+
+  const priorAttempt = await env.CHAT_DB.prepare(
+    'SELECT phone10, parent_name, child_name FROM parent_registration_attempts WHERE attempt_id = ?'
+  ).bind(attemptId).first();
+  if (priorAttempt) {
+    if (priorAttempt.phone10 !== phone || priorAttempt.parent_name !== parentName || priorAttempt.child_name !== childName) {
+      return json({ ok: false, message: 'Эта попытка регистрации относится к другим данным. Вернитесь назад и повторите ввод.' }, 409);
+    }
+    const active = await env.CHAT_DB.prepare('SELECT phone10 FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
+    if (!active) return json({ ok: false, status: 'REVOKED', message: 'Регистрация уже удалена. Начните заново.' }, 410);
+    const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET);
+    return json({ ok: true, duplicate: false, phone: '8' + phone, parentName, childName,
+      parentSession: session.token, d1Session: { ok: true, ...session }, registrationAttemptId: attemptId });
+  }
+
+  const existing = await env.CHAT_DB.prepare(
+    'SELECT phone10 FROM chat_profiles WHERE phone10 = ?'
+  ).bind(phone).first();
+  if (existing) return json({ ok: true, duplicate: true });
+
+  const createdAt = Date.now();
+  await env.CHAT_DB.batch([
+    env.CHAT_DB.prepare(`INSERT INTO parent_registration_attempts
+      (attempt_id, phone10, parent_name, child_name, status, created_at) VALUES (?, ?, ?, ?, 'COMPLETED', ?)
+      ON CONFLICT(attempt_id) DO NOTHING`).bind(attemptId, phone, parentName, childName, createdAt),
+    env.CHAT_DB.prepare(`INSERT INTO chat_profiles (phone10, parent_name, child_name)
+      VALUES (?, ?, ?) ON CONFLICT(phone10) DO NOTHING`).bind(phone, parentName, childName),
+    env.CHAT_DB.prepare(`INSERT INTO parent_registration_outbox (attempt_id, phone10, parent_name, child_name, created_at)
+      SELECT ?, phone10, parent_name, child_name, ? FROM chat_profiles
+      WHERE phone10 = ? AND parent_name = ? AND child_name = ?
+      ON CONFLICT(attempt_id) DO NOTHING`).bind(attemptId, createdAt, phone, parentName, childName)
+  ]);
+
+  const saved = await env.CHAT_DB.prepare(
+    'SELECT phone10, parent_name, child_name FROM parent_registration_attempts WHERE attempt_id = ?'
+  ).bind(attemptId).first();
+  const savedProfile = await env.CHAT_DB.prepare(
+    'SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?'
+  ).bind(phone).first();
+  if (!saved || saved.phone10 !== phone || saved.parent_name !== parentName || saved.child_name !== childName ||
+      !savedProfile || savedProfile.parent_name !== parentName || savedProfile.child_name !== childName) {
+    if (saved) await env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE attempt_id = ?').bind(attemptId).run();
+    if (savedProfile) return json({ ok: true, duplicate: true });
+    return json({ ok: false, message: 'Не удалось сохранить регистрацию. Попробуйте ещё раз.' }, 503);
+  }
+
+  const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET);
+  return json({ ok: true, duplicate: false, phone: '8' + phone, parentName, childName,
+    parentSession: session.token, d1Session: { ok: true, ...session }, registrationAttemptId: attemptId });
+}
+
+async function getParentRegistrationStatus(request, env) {
+  const url = new URL(request.url);
+  const phone = phone10(url.searchParams.get('phone'));
+  const attemptId = registrationId(url.searchParams.get('attemptId'));
+  if (!phone || !attemptId) return json({ ok: true, status: 'NOT_FOUND' });
+  if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис регистрации временно недоступен.' }, 503);
+  const attempt = await env.CHAT_DB.prepare(
+    'SELECT phone10, parent_name, child_name FROM parent_registration_attempts WHERE attempt_id = ?'
+  ).bind(attemptId).first();
+  if (!attempt || attempt.phone10 !== phone) return json({ ok: true, status: 'NOT_FOUND' });
+  const active = await env.CHAT_DB.prepare('SELECT phone10 FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
+  if (!active) return json({ ok: true, status: 'REVOKED' });
+  const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET);
+  return json({ ok: true, status: 'COMPLETED', phone: '8' + phone,
+    parentName: attempt.parent_name, childName: attempt.child_name,
+    parentSession: session.token, d1Session: { ok: true, ...session }, registrationAttemptId: attemptId });
+}
+
+async function listParentRegistrationOutbox(env) {
+  const rows = await env.CHAT_DB.prepare(`SELECT attempt_id, phone10, parent_name, child_name, created_at
+    FROM parent_registration_outbox ORDER BY created_at ASC LIMIT 50`).all();
+  return json({ ok: true, registrations: rows.results || [] });
+}
+
+async function acknowledgeParentRegistrationOutbox(request, env) {
+  const payload = await body(request) || {};
+  const ids = Array.isArray(payload.attemptIds) ? payload.attemptIds.map(registrationId).filter(Boolean).slice(0, 50) : [];
+  if (!ids.length) return json({ ok: true, acknowledged: 0 });
+  await env.CHAT_DB.batch(ids.map(id => env.CHAT_DB.prepare(
+    'DELETE FROM parent_registration_outbox WHERE attempt_id = ?'
+  ).bind(id)));
+  return json({ ok: true, acknowledged: ids.length });
+}
+
+async function failParentRegistrationOutbox(request, env) {
+  const payload = await body(request) || {};
+  const id = registrationId(payload.attemptId);
+  if (!id) return json({ ok: false, message: 'Invalid attempt ID.' }, 400);
+  await env.CHAT_DB.prepare(`UPDATE parent_registration_outbox SET attempts = attempts + 1, last_error = ?
+    WHERE attempt_id = ?`).bind(String(payload.message || 'Sync failed').slice(0, 500), id).run();
+  return json({ ok: true });
+}
+
+async function requestParentAccess(request, env) {
+  const payload = await body(request) || {};
+  const phone = phone10(payload.phone);
+  const requestId = parentAccessRequestId(payload.requestId);
+  if (!phone || !requestId) return json({ ok: false, message: 'Проверьте номер телефона.' }, 400);
+  const profile = await env.CHAT_DB.prepare('SELECT phone10 FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
+  if (!profile) return json({ ok: false, code: 'NOT_FOUND', message: 'Этот номер не найден среди активных родителей.' }, 404);
+
+  const prior = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
+  if (prior) {
+    if (prior.phone10 !== phone) return json({ ok: false, message: 'Запрос относится к другому номеру телефона.' }, 409);
+    if (prior.status === 'PENDING' && Number(prior.expires_at) <= Date.now()) {
+      await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE request_id=? AND status='PENDING'").bind(Date.now(), requestId).run();
+      prior.status = 'EXPIRED';
+    }
+    return json({ ok: true, requestId, code: prior.code, status: prior.status,
+      createdAt: new Date(Number(prior.created_at)).toISOString(),
+      expiresAt: new Date(Number(prior.expires_at)).toISOString(), created: false });
+  }
+
+  const recent = await env.CHAT_DB.prepare(`SELECT COUNT(*) AS total FROM parent_access_requests
+    WHERE phone10 = ? AND created_at > ?`).bind(phone, Date.now() - 15 * 60 * 1000).first();
+  if (Number(recent && recent.total || 0) >= 3) {
+    return json({ ok: false, code: 'RATE_LIMITED', message: 'Слишком много запросов. Подождите немного и попробуйте ещё раз.' }, 429);
+  }
+
+  const createdAt = Date.now(), expiresAt = createdAt + 2 * 60 * 60 * 1000;
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(requestId + '|' + phone)));
+  const code = String((((digest[0] & 255) * 256) + (digest[1] & 255)) % 10000).padStart(4, '0');
+  await env.CHAT_DB.prepare(`INSERT INTO parent_access_requests
+    (request_id, phone10, code, status, created_at, updated_at, expires_at)
+    VALUES (?, ?, ?, 'PENDING', ?, ?, ?) ON CONFLICT(request_id) DO NOTHING`)
+    .bind(requestId, phone, code, createdAt, createdAt, expiresAt).run();
+  const saved = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
+  if (!saved || saved.phone10 !== phone) return json({ ok: false, message: 'Не удалось создать запрос на вход.' }, 503);
+  return json({ ok: true, requestId, code: saved.code, status: saved.status,
+    createdAt: new Date(Number(saved.created_at)).toISOString(),
+    expiresAt: new Date(Number(saved.expires_at)).toISOString(), created: true });
+}
+
+async function getParentAccessStatus(request, env) {
+  const url = new URL(request.url), phone = phone10(url.searchParams.get('phone'));
+  const requestId = parentAccessRequestId(url.searchParams.get('requestId'));
+  if (!phone || !requestId) return json({ ok: true, status: 'NOT_FOUND' });
+  const row = await env.CHAT_DB.prepare('SELECT * FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
+  if (!row || row.phone10 !== phone) return json({ ok: true, status: 'NOT_FOUND' });
+  let status = String(row.status || '').toUpperCase();
+  const now = Date.now();
+  if (status === 'PENDING' && Number(row.expires_at) <= now) {
+    await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE request_id=? AND status='PENDING'").bind(now, requestId).run();
+    status = 'EXPIRED';
+  }
+  if (status === 'APPROVED' || status === 'CONSUMED') {
+    if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис авторизации временно недоступен.' }, 503);
+    const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
+    if (!profile) {
+      await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE request_id=?").bind(now, requestId).run();
+      return json({ ok: true, status: 'DENIED' });
+    }
+    if (status === 'APPROVED') await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='CONSUMED', updated_at=? WHERE request_id=? AND status='APPROVED'").bind(now, requestId).run();
+    const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET);
+    return json({ ok: true, status: 'APPROVED', requestId, phone: '8' + phone,
+      parentName: profile.parent_name || '', childName: profile.child_name || '',
+      parentSession: session.token, d1Session: { ok: true, ...session } });
+  }
+  return json({ ok: true, requestId, phone: '8' + phone, code: row.code, status,
+    createdAt: new Date(Number(row.created_at)).toISOString(),
+    expiresAt: new Date(Number(row.expires_at)).toISOString() });
+}
+
+async function listParentAccessRequests(env) {
+  const now = Date.now();
+  await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE status='PENDING' AND expires_at<=?").bind(now, now).run();
+  const result = await env.CHAT_DB.prepare(`SELECT request_id, phone10, code, status, created_at, expires_at
+    FROM parent_access_requests WHERE status='PENDING' ORDER BY created_at ASC LIMIT 100`).all();
+  return json({ ok: true, requests: (result.results || []).map(row => ({
+    requestId: row.request_id, phone: '8' + row.phone10, code: row.code,
+    status: row.status, createdAt: new Date(Number(row.created_at)).toISOString(),
+    expiresAt: new Date(Number(row.expires_at)).toISOString()
+  })) });
+}
+
+async function importParentAccessRequests(request, env) {
+  const payload = await body(request) || {};
+  const items = Array.isArray(payload.requests) ? payload.requests.slice(0, 500) : [];
+  let imported = 0, skipped = 0;
+  for (const item of items) {
+    const requestId = parentAccessRequestId(item && item.requestId);
+    const phone = phone10(item && item.phone);
+    const code = String(item && item.code || '').padStart(4, '0');
+    const status = String(item && item.status || '').toUpperCase();
+    const createdAt = Number(item && item.createdAt), updatedAt = Number(item && item.updatedAt);
+    const expiresAt = Number(item && item.expiresAt), decidedAt = Number(item && item.decidedAt) || null;
+    const decision = String(item && item.decision || '').toUpperCase();
+    if (!requestId || !phone || !/^\d{4}$/.test(code) || !['PENDING','APPROVED','CONSUMED','DENIED','EXPIRED'].includes(status) ||
+        !Number.isFinite(createdAt) || !Number.isFinite(updatedAt) || !Number.isFinite(expiresAt)) {
+      skipped++;
+      continue;
+    }
+    const profile = await env.CHAT_DB.prepare('SELECT phone10 FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
+    if (!profile) { skipped++; continue; }
+    const result = await env.CHAT_DB.prepare(`INSERT INTO parent_access_requests
+      (request_id, phone10, code, status, created_at, updated_at, expires_at, decided_at, decision)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING`)
+      .bind(requestId, phone, code, status, createdAt, updatedAt, expiresAt, decidedAt, decision).run();
+    imported += Number(result.meta && result.meta.changes || 0);
+  }
+  return json({ ok: true, imported, skipped });
+}
+
+async function decideParentAccessRequest(request, env) {
+  const payload = await body(request) || {};
+  const requestId = parentAccessRequestId(payload.requestId);
+  const decision = String(payload.decision || '').trim().toUpperCase();
+  if (!requestId || !['APPROVE', 'DENY'].includes(decision)) return json({ ok: false, message: 'Некорректное решение.' }, 400);
+  const now = Date.now(), status = decision === 'APPROVE' ? 'APPROVED' : 'DENIED';
+  const result = await env.CHAT_DB.prepare(`UPDATE parent_access_requests SET status=?, updated_at=?, decided_at=?, decision=?
+    WHERE request_id=? AND status='PENDING' AND expires_at>?`).bind(status, now, now, decision, requestId, now).run();
+  const row = await env.CHAT_DB.prepare('SELECT status, expires_at FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
+  if (!row) return json({ ok: false, message: 'Запрос уже недоступен.' }, 404);
+  if (!result.meta || !result.meta.changes) {
+    if (row.status === 'PENDING' && Number(row.expires_at) <= now) {
+      await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE request_id=? AND status='PENDING'").bind(now, requestId).run();
+      return json({ ok: true, status: 'EXPIRED', alreadyResolved: true });
+    }
+    return json({ ok: true, status: row.status, alreadyResolved: true });
+  }
+  return json({ ok: true, status, alreadyResolved: false });
+}
+
 function assertPhone(raw, env) {
   const phone = phone10(raw);
   if (!phone) throw new Error('A valid phone is required.');
@@ -575,6 +830,9 @@ async function reconcileProfiles(request, env) {
         deletions.push(env.CHAT_DB.prepare('DELETE FROM chat_pins WHERE phone10 = ?').bind(phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM report_snapshots WHERE phone10 = ?').bind(phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM report_current WHERE phone10 = ?').bind(phone));
+        deletions.push(env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(Date.now(), phone));
+        deletions.push(env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(phone));
+        deletions.push(env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM chat_profiles WHERE phone10 = ?').bind(phone));
       });
       await env.CHAT_DB.batch(deletions);
@@ -587,6 +845,19 @@ async function reconcileProfiles(request, env) {
 async function listProfilePhones(env) {
   const rows = await env.CHAT_DB.prepare('SELECT phone10 FROM chat_profiles ORDER BY phone10').all();
   return json({ ok: true, phones: (rows.results || []).map(row => row.phone10) });
+}
+
+async function getProfileForAdmin(env, phoneRaw) {
+  const phone = phone10(phoneRaw);
+  if (!phone) return json({ ok: false, message: 'A valid phone is required.' }, 400);
+  const profile = await env.CHAT_DB.prepare(
+    'SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?'
+  ).bind(phone).first();
+  return json({ ok: true, profile: profile ? {
+    phone: '8' + profile.phone10,
+    parentName: profile.parent_name || '',
+    childName: profile.child_name || ''
+  } : null });
 }
 
 // These two lifecycle operations are intentionally admin-only.  REPORTS is
@@ -610,7 +881,11 @@ async function moveProfilePhone(request, env) {
     env.CHAT_DB.prepare('UPDATE report_snapshots SET phone10 = ? WHERE phone10 = ?').bind(to, from),
     env.CHAT_DB.prepare('UPDATE report_current SET phone10 = ? WHERE phone10 = ?').bind(to, from),
     env.CHAT_DB.prepare('UPDATE chat_profiles SET phone10 = ?, parent_name = ?, child_name = ? WHERE phone10 = ?').bind(to, parentName, childName, from),
-    env.CHAT_DB.prepare('INSERT INTO chat_profiles (phone10, parent_name, child_name) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM chat_profiles WHERE phone10 = ?)').bind(to, parentName, childName, to)
+    env.CHAT_DB.prepare('INSERT INTO chat_profiles (phone10, parent_name, child_name) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM chat_profiles WHERE phone10 = ?)').bind(to, parentName, childName, to),
+    env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(from),
+    env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(to),
+    env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(Date.now(), from),
+    env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(from)
   ]);
   return json({ ok: true, fromPhone: from, toPhone: to, movedMessages: Number(before && before.messages || 0) });
 }
@@ -632,7 +907,10 @@ async function deleteProfilePhone(request, env) {
     env.CHAT_DB.prepare('DELETE FROM chat_pins WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM report_snapshots WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM report_current WHERE phone10 = ?').bind(phone),
-    env.CHAT_DB.prepare('DELETE FROM chat_profiles WHERE phone10 = ?').bind(phone)
+    env.CHAT_DB.prepare('DELETE FROM chat_profiles WHERE phone10 = ?').bind(phone),
+    env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(phone),
+    env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone),
+    env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(Date.now(), phone)
   ]);
   return json({ ok: true, phone, s3Keys, deletedKvKeys:kvKeys.length });
 }
@@ -964,13 +1242,32 @@ export default {
       if (request.method === 'GET' && url.pathname === '/admin/export') return exportChatMessages(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/reconcile') return reconcileProfiles(request, env);
       if (request.method === 'GET' && url.pathname === '/admin/profile-phones') return listProfilePhones(env);
+      if (request.method === 'GET' && url.pathname.startsWith('/admin/profile/')) return getProfileForAdmin(env, url.pathname.slice('/admin/profile/'.length));
       if (request.method === 'POST' && url.pathname === '/admin/move-profile-phone') return moveProfilePhone(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/profile-s3-keys') return profileS3Keys(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/delete-profile-phone') return deleteProfilePhone(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/report-snapshots') return upsertReportSnapshots(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/report-current') return upsertCurrentReports(request, env);
+      if (request.method === 'GET' && url.pathname === '/admin/parent-registration-outbox') return listParentRegistrationOutbox(env);
+      if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/ack') return acknowledgeParentRegistrationOutbox(request, env);
+      if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/fail') return failParentRegistrationOutbox(request, env);
+      if (request.method === 'GET' && url.pathname === '/admin/parent-access-requests') return listParentAccessRequests(env);
+      if (request.method === 'POST' && url.pathname === '/admin/parent-access-requests/import') return importParentAccessRequests(request, env);
+      if (request.method === 'POST' && url.pathname === '/admin/parent-access-requests/decision') return decideParentAccessRequest(request, env);
       if (request.method === 'GET' && url.pathname === '/admin/verify') return verifySnapshot(env);
       return json({ ok: false, message: 'Not found' }, 404);
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-registration') {
+      return registerParent(request, env);
+    }
+    if (request.method === 'GET' && url.pathname === '/lab/parent-registration/status') {
+      return getParentRegistrationStatus(request, env);
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-access/request') {
+      return requestParentAccess(request, env);
+    }
+    if (request.method === 'GET' && url.pathname === '/lab/parent-access/status') {
+      return getParentAccessStatus(request, env);
     }
     if (request.method === 'POST' && url.pathname === '/lab/upload-form') {
       return uploadMediaForm(request, env);

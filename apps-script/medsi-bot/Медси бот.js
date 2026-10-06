@@ -12,8 +12,6 @@ const CHAT_PINS_SHEET_NAME    = 'CHAT_PINS';
 const REPORT_STATE_SHEET_NAME = 'REPORT_NOTIFICATION_STATE';
 const REPORT_INACTIVITY_STATE_SHEET_NAME = 'REPORT_INACTIVITY_STATE';
 const PUSH_SUBSCRIPTIONS_SHEET_NAME = 'PUSH_SUBSCRIPTIONS';
-const PARENT_REGISTRATION_ATTEMPTS_SHEET_NAME = 'PARENT_REGISTRATION_ATTEMPTS';
-const PARENT_ACCESS_REQUESTS_SHEET_NAME = 'PARENT_ACCESS_REQUESTS';
 const PARENT_AUTH_SECRET_PROPERTY = 'PARENT_AUTH_SECRET';
 const CHAT_PHOTOS_FOLDER_NAME = 'MEDSI_CHAT_PHOTOS';
 const CHAT_IMAGE_TTL_DAYS     = 30;
@@ -448,6 +446,7 @@ function getApiMethodMap_() {
     getParentReauthorizationStatus,
     listPendingParentReauthorizations,
     decideParentReauthorization,
+    mirrorCloudflareParentRegistration,
     getD1ChatSession,
     listD1ChatsForEducator,
     getD1ThreadForEducator,
@@ -589,15 +588,35 @@ function isParentSessionValid_(phoneRaw, tokenRaw) {
   const token = String(tokenRaw || '').trim();
   const parts = token.split('.');
   if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
-  const expected = Utilities.base64EncodeWebSafe(
-    Utilities.computeHmacSha256Signature(parts[0], getParentAuthSecret_())
+  const parentSecret = getParentAuthSecret_();
+  const parentSignature = Utilities.base64EncodeWebSafe(
+    Utilities.computeHmacSha256Signature(parts[0], parentSecret)
   ).replace(/=+$/g, '');
-  if (!secureTextEqual_(parts[1], expected)) return false;
+  let validParentSignature = secureTextEqual_(parts[1], parentSignature);
+  // Cloudflare issues the new parent session using the already shared D1
+  // signing secret. Retain validation of existing Apps Script sessions while
+  // allowing D1 to own new registration and session issuance.
+  if (!validParentSignature) {
+    let d1Secret = String(PropertiesService.getScriptProperties().getProperty('D1_SESSION_SECRET') || '');
+    if (!d1Secret) {
+      try { d1Secret = getWorkerSharedSecret_(); } catch (_) {}
+    }
+    if (d1Secret) {
+      const d1Signature = Utilities.base64EncodeWebSafe(
+        Utilities.computeHmacSha256Signature(parts[0], d1Secret)
+      ).replace(/=+$/g, '');
+      validParentSignature = secureTextEqual_(parts[1], d1Signature);
+    }
+  }
+  if (!validParentSignature) return false;
   try {
     const claims = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString());
     // Accept old signed claims as well as v2 so existing saved sessions are
     // not logged out merely because the retired password layer was removed.
-    return last10_(claims.phone10) === last10_(phoneRaw) && !!String(claims.version || '');
+    const matchingPhone = last10_(claims.phone10) === last10_(phoneRaw);
+    const legacyClaim = !!String(claims.version || '') && !claims.role;
+    const cloudflareClaim = claims.role === 'parent' && Number(claims.exp) > Date.now();
+    return matchingPhone && (legacyClaim || cloudflareClaim);
   } catch (_) {
     return false;
   }
@@ -805,66 +824,9 @@ function splitNameSmart(fullNameRaw) {
 
 /** ========= Регистрация родителя ========= **/
 function registerParent(parentNameRaw, childNameRaw, phoneRaw, registrationAttemptIdRaw) {
-  const phone = normalizePhone_(phoneRaw);
-  const parentName = String(parentNameRaw || '').trim();
-  const childName  = String(childNameRaw  || '').trim();
-  const registrationAttemptId = normalizeParentAccessId_(registrationAttemptIdRaw);
-  if (!registrationAttemptId) {
-    return registerParentLegacyDuringCutover_(parentNameRaw, childNameRaw, phoneRaw, registrationAttemptIdRaw);
-  }
-  if (!parentName || !childName || !phone || phone.length < 10) {
-    return { ok: false, message: 'Заполните имя родителя, имя ребёнка и корректный телефон.' };
-  }
-
-  try {
-    const result = withChatWriteLock_(function() {
-      const recovered = recoverParentRegistrationAttempt_(registrationAttemptId, phone, parentName, childName);
-      if (recovered) return recovered;
-      const sh = getDataSheet_();
-      if (!sh) return { ok:false, message:'Лист REPORTS не найден.' };
-      const lastRow = sh.getLastRow();
-      const data = lastRow > 1
-        ? sh.getRange(2, 1, lastRow - 1, 1).getValues().flat()
-        : [];
-      const phone10 = last10_(phone);
-      if (data.some(p => last10_(p) === phone10)) return { ok: true, duplicate: true };
-
-      createParentRegistrationAttempt_(registrationAttemptId, phone10, parentName, childName);
-      try {
-        smartRegisterFromInboxCore(phone, parentName, childName, true);
-      } catch (registrationError) {
-        if (!isPhoneActiveInReports_(phone10)) {
-          throw registrationError;
-        }
-        Logger.log('Registration completed with a secondary sync error: ' + String(registrationError && registrationError.message || registrationError));
-      }
-      const profile = getProfileByPhone_(phone10);
-      if (!profile || !profile.phone) {
-        throw new Error('Не удалось сохранить профиль родителя.');
-      }
-      // Issue the local signed token without holding the global lock across a network call.
-      let d1Session = null;
-      try { d1Session = createD1ChatSession_('parent', phone10); } catch (_) {}
-      completeParentRegistrationAttempt_(registrationAttemptId);
-
-      return {
-        ok: true,
-        duplicate: false,
-        phone: profile.phone,
-        parentName: profile.parentName || parentName,
-        childName: profile.childName || childName,
-        parentSession: issueParentSession_(phone10),
-        d1Session: d1Session,
-        registrationAttemptId: registrationAttemptId
-      };
-    });
-    // Return as soon as the authoritative REPORTS row, registration attempt,
-    // and parent session are safely committed.  The first chat-session warmup
-    // mirrors this profile to D1 outside the registration request.
-    return result;
-  } catch (e) {
-    return { ok: false, message: 'Ошибка регистрации: ' + (e.message || e) };
-  }
+  // Compatibility for cached clients. Cloudflare is the registration writer;
+  // REPORTS is filled from the D1 outbox and remains manually editable.
+  return registerParentInCloudflare_(parentNameRaw, childNameRaw, phoneRaw, registrationAttemptIdRaw);
 }
 
 function smartRegisterFromInboxCore(phoneRaw, parentNameRaw, childNameRaw, deferD1Sync) {
@@ -2937,7 +2899,15 @@ function isPhoneActiveInReports_(phoneRaw) {
   if (!phone10) return false;
 
   const activePhones = getActiveReportPhonesSet_();
-  return activePhones.has(phone10);
+  if (activePhones.has(phone10)) return true;
+  // Newly registered accounts are committed in D1 first and materialized to
+  // REPORTS asynchronously. During that short sync window, D1 is authoritative.
+  try {
+    const value = d1AdminRequest_('/admin/profile/' + encodeURIComponent(phone10), 'get');
+    return !!(value && value.profile && last10_(value.profile.phone) === phone10);
+  } catch (_) {
+    return false;
+  }
 }
 
 /**
@@ -3931,6 +3901,14 @@ function getProfileByPhone_(phoneRaw) {
       }
     }
   }
+
+  // A Cloudflare-first registration may be active before its queued row has
+  // been copied to REPORTS. Read its canonical profile from D1 in that window.
+  try {
+    const value = d1AdminRequest_('/admin/profile/' + encodeURIComponent(phone10), 'get');
+    const profile = value && value.profile;
+    if (profile && last10_(profile.phone) === phone10) return profile;
+  } catch (_) {}
 
   const chatSh = ensureChatSheet_();
   const chatLastRow = chatSh.getLastRow();

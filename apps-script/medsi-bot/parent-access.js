@@ -1,204 +1,224 @@
 /** ========= РЕГИСТРАЦИЯ И ПОВТОРНАЯ АВТОРИЗАЦИЯ РОДИТЕЛЕЙ ========= **/
-const PARENT_ACCESS_REQUEST_TTL_MS_ = 2 * 60 * 60 * 1000;
+const PARENT_ACCESS_REQUESTS_SHEET_NAME = 'PARENT_ACCESS_REQUESTS';
+const PARENT_ACCESS_D1_IMPORT_PROPERTY_ = 'PARENT_ACCESS_D1_IMPORTED_AT';
 
 function normalizeParentAccessId_(value) {
   const id = String(value || '').trim();
   return /^(reg|auth)_[A-Za-z0-9_-]{16,115}$/.test(id) ? id : '';
 }
 
-// Compatibility path for an older cached form. It now uses the same
-// passwordless registration contract and only exists until that form expires.
-function registerParentLegacyDuringCutover_(parentNameRaw, childNameRaw, phoneRaw) {
+function cloudflareParentRegistrationRequest_(method, payload) {
+  const base = 'https://medsi-chat-worker.medsi-children.workers.dev/lab/parent-registration';
+  const options = { method: method, muteHttpExceptions: true };
+  let url = base;
+  if (method === 'post') {
+    options.contentType = 'application/json';
+    options.payload = JSON.stringify(payload || {});
+  } else {
+    url += '/status?phone=' + encodeURIComponent(String(payload.phone || '')) +
+      '&attemptId=' + encodeURIComponent(String(payload.attemptId || ''));
+  }
+  const response = UrlFetchApp.fetch(url, options);
+  let value = {};
+  try { value = JSON.parse(response.getContentText() || '{}'); } catch (_) {}
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300 || !value.ok) {
+    return { ok:false, message:value.message || 'Не удалось связаться с Cloudflare.' };
+  }
+  return value;
+}
+
+function registerParentInCloudflare_(parentNameRaw, childNameRaw, phoneRaw, attemptIdRaw) {
   const phone = normalizePhone_(phoneRaw);
   const parentName = String(parentNameRaw || '').trim();
   const childName = String(childNameRaw || '').trim();
-  if (!parentName || !childName || !phone || phone.length < 10) {
-    return { ok: false, message: 'Заполните имя родителя, имя ребёнка и корректный телефон.' };
+  const attemptId = normalizeParentAccessId_(attemptIdRaw);
+  if (!phone || phone.length < 10 || !parentName || !childName || !attemptId) {
+    return { ok:false, message:'Заполните имя родителя, имя ребёнка и корректный телефон.' };
   }
   try {
+    return cloudflareParentRegistrationRequest_('post', {
+      parentName:parentName, childName:childName, phone:phone, attemptId:attemptId
+    });
+  } catch (error) {
+    return { ok:false, message:'Не удалось связаться с Cloudflare: ' + String(error && error.message || error) };
+  }
+}
+
+function decodeCloudflareParentSession_(phoneRaw, tokenRaw) {
+  const phone10 = last10_(phoneRaw);
+  const parts = String(tokenRaw || '').trim().split('.');
+  if (!phone10 || parts.length !== 2 || !parts[0] || !parts[1]) return null;
+  let secret = String(PropertiesService.getScriptProperties().getProperty('D1_SESSION_SECRET') || '');
+  if (!secret) {
+    try { secret = getWorkerSharedSecret_(); } catch (_) {}
+  }
+  if (!secret) return null;
+  const expected = Utilities.base64EncodeWebSafe(
+    Utilities.computeHmacSha256Signature(parts[0], secret)
+  ).replace(/=+$/g, '');
+  if (!secureTextEqual_(parts[1], expected)) return null;
+  try {
+    const claims = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString());
+    if (claims.role !== 'parent' || last10_(claims.phone10) !== phone10 || Number(claims.exp) <= Date.now()) return null;
+    return claims;
+  } catch (_) { return null; }
+}
+
+// Materialize a D1-first registration in REPORTS after the parent menu is
+// already available. The D1 session restricts the operation to that parent's
+// own account; the outbox makes the projection retryable if this call fails.
+function mirrorCloudflareParentRegistration(phoneRaw, attemptIdRaw, parentSessionRaw) {
+  const phone10 = last10_(phoneRaw);
+  const attemptId = normalizeParentAccessId_(attemptIdRaw);
+  const claims = decodeCloudflareParentSession_(phone10, parentSessionRaw);
+  if (!phone10 || !attemptId || !claims) return { ok: false, message: 'Не удалось подтвердить регистрацию.' };
+
+  try {
     return withChatWriteLock_(function() {
-      const phone10 = last10_(phone);
-      if (isPhoneActiveInReports_(phone10)) return { ok: true, duplicate: true };
-      smartRegisterFromInboxCore(phone, parentName, childName);
-      const profile = getProfileByPhone_(phone10);
-      if (!profile || !profile.phone) throw new Error('Не удалось сохранить профиль родителя.');
-      return Object.assign(buildParentBootstrap_(profile, issueParentSession_(phone10)), {
-        duplicate: false
+      const outbox = d1AdminRequest_('/admin/parent-registration-outbox', 'get');
+      const item = (outbox.registrations || []).find(function(row) {
+        return String(row.attempt_id || '') === attemptId && last10_(row.phone10) === phone10;
       });
+      if (!item) {
+        return getReportRowsByPhone_(phone10).length
+          ? { ok: true, alreadySynced: true }
+          : { ok: true, pending: true };
+      }
+
+      // A row created or deliberately edited by staff wins; never overwrite it
+      // with the initial registration form contents.
+      if (!getReportRowsByPhone_(phone10).length) {
+        smartRegisterFromInboxCore('8' + phone10, item.parent_name, item.child_name, true);
+      }
+      // Keep the sheet-diff baseline aligned with the just-materialized row so
+      // a subsequent manual deletion is recognized as an explicit revocation.
+      if (typeof reportsD1ProfilesSnapshot_ === 'function' && typeof saveReportsD1ProfilesSnapshot_ === 'function') {
+        saveReportsD1ProfilesSnapshot_(reportsD1ProfilesSnapshot_());
+      }
+      d1AdminRequest_('/admin/parent-registration-outbox/ack', 'post', { attemptIds: [attemptId] });
+      return { ok: true, synced: true };
     });
   } catch (e) {
-    return { ok: false, message: 'Ошибка регистрации: ' + String(e && e.message || e) };
+    try {
+      d1AdminRequest_('/admin/parent-registration-outbox/fail', 'post', {
+        attemptId: attemptId, message: String(e && e.message || e)
+      });
+    } catch (_) {}
+    return { ok: false, pending: true, message: 'Профиль сохранён; синхронизация с таблицей продолжится автоматически.' };
   }
 }
 
-function ensureParentRegistrationAttemptsSheet_() {
-  const ss = getSpreadsheet_();
-  let sh = ss.getSheetByName(PARENT_REGISTRATION_ATTEMPTS_SHEET_NAME);
-  if (!sh) {
-    sh = ss.insertSheet(PARENT_REGISTRATION_ATTEMPTS_SHEET_NAME);
-    sh.getRange(1, 1, 1, 7).setValues([[
-      'ATTEMPT_ID', 'PHONE10', 'STATUS', 'PARENT_NAME', 'CHILD_NAME', 'CREATED_AT', 'UPDATED_AT'
-    ]]);
-    sh.setFrozenRows(1);
-    sh.hideSheet();
-  }
-  return sh;
-}
-
-function findParentRegistrationAttempt_(attemptIdRaw) {
-  const attemptId = normalizeParentAccessId_(attemptIdRaw);
-  if (!attemptId) return null;
-  const sh = ensureParentRegistrationAttemptsSheet_();
-  const lastRow = sh.getLastRow();
-  if (lastRow < 2) return null;
-  const ids = sh.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-  const index = ids.findIndex(value => String(value || '').trim() === attemptId);
-  if (index < 0) return null;
-  const row = index + 2;
-  const values = sh.getRange(row, 1, 1, 7).getValues()[0];
-  return {
-    sh, row,
-    attemptId,
-    phone10: last10_(values[1]),
-    status: String(values[2] || '').trim().toUpperCase(),
-    parentName: String(values[3] || '').trim(),
-    childName: String(values[4] || '').trim()
-  };
-}
-
-function createParentRegistrationAttempt_(attemptIdRaw, phoneRaw, parentNameRaw, childNameRaw) {
-  const attemptId = normalizeParentAccessId_(attemptIdRaw);
-  const existing = findParentRegistrationAttempt_(attemptId);
-  if (existing) return existing;
-  const sh = ensureParentRegistrationAttemptsSheet_();
-  const now = new Date();
-  sh.appendRow([
-    attemptId,
-    last10_(phoneRaw),
-    'PENDING',
-    String(parentNameRaw || '').trim(),
-    String(childNameRaw || '').trim(),
-    now,
-    now
-  ]);
-  return findParentRegistrationAttempt_(attemptId);
-}
-
-function completeParentRegistrationAttempt_(attemptIdRaw) {
-  const attempt = findParentRegistrationAttempt_(attemptIdRaw);
-  if (!attempt) return;
-  attempt.sh.getRange(attempt.row, 3).setValue('COMPLETED');
-  attempt.sh.getRange(attempt.row, 7).setValue(new Date());
-}
-
-function parentRegistrationResult_(attempt) {
-  const profile = getProfileByPhone_(attempt.phone10);
-  if (!profile || !profile.phone) return null;
-  return Object.assign(parentAuthorizedProfile_(profile), {
-    duplicate: false, registrationAttemptId: attempt.attemptId
+function flushCloudflareParentRegistrationOutbox_() {
+  const outbox = d1AdminRequest_('/admin/parent-registration-outbox', 'get');
+  const acknowledged = [], failed = [];
+  (outbox.registrations || []).forEach(function(item) {
+    const phone10 = last10_(item.phone10);
+    const attemptId = normalizeParentAccessId_(item.attempt_id);
+    if (!phone10 || !attemptId) return;
+    try {
+      if (!getReportRowsByPhone_(phone10).length) {
+        smartRegisterFromInboxCore('8' + phone10, item.parent_name, item.child_name, true);
+      }
+      acknowledged.push(attemptId);
+    } catch (e) {
+      failed.push({ attemptId: attemptId, message: String(e && e.message || e) });
+      try {
+        d1AdminRequest_('/admin/parent-registration-outbox/fail', 'post', {
+          attemptId: attemptId, message: String(e && e.message || e)
+        });
+      } catch (_) {}
+    }
   });
-}
-
-// Complete entry without waiting for remote unread-message metadata.
-// The parent page refreshes that metadata in the background after entry.
-function parentAuthorizedProfile_(profile) {
-  let d1Session = null;
-  try { d1Session = createD1ChatSession_('parent', profile.phone); } catch (_) {}
-  return {
-    ok: true, phone: profile.phone, parentName: profile.parentName || '',
-    childName: profile.childName || '', parentSession: issueParentSession_(profile.phone),
-    d1Session: d1Session
-  };
-}
-
-function recoverParentRegistrationAttempt_(attemptIdRaw, phoneRaw, parentNameRaw, childNameRaw) {
-  const attempt = findParentRegistrationAttempt_(attemptIdRaw);
-  if (!attempt) return null;
-  if (
-    attempt.phone10 !== last10_(phoneRaw) ||
-    attempt.parentName !== String(parentNameRaw || '').trim() ||
-    attempt.childName !== String(childNameRaw || '').trim()
-  ) {
-    throw new Error('Эта попытка регистрации относится к другим данным. Вернитесь назад и повторите ввод.');
+  if (acknowledged.length) {
+    d1AdminRequest_('/admin/parent-registration-outbox/ack', 'post', { attemptIds: acknowledged });
   }
-  if (attempt.status === 'COMPLETED') return parentRegistrationResult_(attempt);
-  if (isPhoneActiveInReports_(attempt.phone10)) {
-    completeParentRegistrationAttempt_(attempt.attemptId);
-    return parentRegistrationResult_(attempt);
-  }
-  return null;
+  return { ok: failed.length === 0, synced: acknowledged.length, failed: failed };
 }
 
 function getParentRegistrationStatus(phoneRaw, attemptIdRaw) {
+  const phone = normalizePhone_(phoneRaw);
+  const attemptId = normalizeParentAccessId_(attemptIdRaw);
+  if (!phone || !attemptId) return { ok:true, status:'NOT_FOUND' };
   try {
-    return withChatWriteLock_(function() {
-      const attempt = findParentRegistrationAttempt_(attemptIdRaw);
-      if (!attempt || attempt.phone10 !== last10_(phoneRaw)) return { ok: true, status: 'NOT_FOUND' };
-      if (attempt.status === 'COMPLETED' || isPhoneActiveInReports_(attempt.phone10)) {
-        if (attempt.status !== 'COMPLETED') completeParentRegistrationAttempt_(attempt.attemptId);
-        const result = parentRegistrationResult_(attempt);
-        return result || { ok: true, status: 'PROCESSING' };
-      }
-      return { ok: true, status: 'PROCESSING' };
-    });
+    return cloudflareParentRegistrationRequest_('get', { phone:phone, attemptId:attemptId });
   } catch (e) {
-    return { ok: false, message: 'Не удалось проверить регистрацию: ' + String(e && e.message || e) };
+    return { ok:false, message:'Не удалось проверить регистрацию: ' + String(e && e.message || e) };
   }
 }
 
-function ensureParentAccessRequestsSheet_() {
-  const ss = getSpreadsheet_();
-  let sh = ss.getSheetByName(PARENT_ACCESS_REQUESTS_SHEET_NAME);
-  if (!sh) {
-    sh = ss.insertSheet(PARENT_ACCESS_REQUESTS_SHEET_NAME);
-    sh.getRange(1, 1, 1, 9).setValues([[
-      'REQUEST_ID', 'PHONE10', 'CODE', 'STATUS', 'CREATED_AT', 'UPDATED_AT', 'EXPIRES_AT', 'DECIDED_AT', 'DECISION'
-    ]]);
-    sh.setFrozenRows(1);
-    sh.hideSheet();
+function cloudflareParentAccessRequest_(method, path, payload) {
+  const base = 'https://medsi-chat-worker.medsi-children.workers.dev';
+  const options = { method:method, muteHttpExceptions:true };
+  let url = base + path;
+  if (method === 'post') {
+    options.contentType = 'application/json';
+    options.payload = JSON.stringify(payload || {});
+  } else if (path === '/lab/parent-access/status') {
+    url += '?phone=' + encodeURIComponent(String(payload.phone || '')) +
+      '&requestId=' + encodeURIComponent(String(payload.requestId || ''));
   }
-  return sh;
+  const response = UrlFetchApp.fetch(url, options);
+  let value = {};
+  try { value = JSON.parse(response.getContentText() || '{}'); } catch (_) {}
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+    return Object.assign({ ok:false }, value, { ok:false });
+  }
+  return value;
 }
 
-function findParentAccessRequest_(requestIdRaw) {
-  const requestId = normalizeParentAccessId_(requestIdRaw);
-  if (!requestId) return null;
-  const sh = ensureParentAccessRequestsSheet_();
-  const lastRow = sh.getLastRow();
-  if (lastRow < 2) return null;
-  const ids = sh.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-  const index = ids.findIndex(value => String(value || '').trim() === requestId);
-  if (index < 0) return null;
-  const row = index + 2;
-  const values = sh.getRange(row, 1, 1, 9).getValues()[0];
-  const request = {
-    sh, row,
-    requestId,
-    phone10: last10_(values[1]),
-    code: String(values[2] || '').padStart(4, '0'),
-    status: String(values[3] || '').trim().toUpperCase(),
-    createdAt: values[4] instanceof Date ? values[4] : new Date(values[4]),
-    updatedAt: values[5] instanceof Date ? values[5] : new Date(values[5]),
-    expiresAt: values[6] instanceof Date ? values[6] : new Date(values[6]),
-    decision: String(values[8] || '').trim().toUpperCase()
-  };
-  if (request.status === 'PENDING' && request.expiresAt.getTime() <= Date.now()) {
-    request.status = 'EXPIRED';
-    sh.getRange(row, 4).setValue('EXPIRED');
-    sh.getRange(row, 6).setValue(new Date());
-  }
-  return request;
+function parentAccessTimestamp_(value) {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function parentAccessRequestClientValue_(request) {
-  return {
-    ok: true,
-    requestId: request.requestId,
-    code: request.code,
-    status: request.status,
-    createdAt: request.createdAt.toISOString(),
-    expiresAt: request.expiresAt.toISOString()
-  };
+// One-time compatibility bridge for requests created before Cloudflare became
+// the registration/access store. In particular, an already approved request
+// must still complete on the parent's phone after the cutover.
+function ensureLegacyParentAccessRequestsImported_() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty(PARENT_ACCESS_D1_IMPORT_PROPERTY_)) return { ok:true, alreadyImported:true };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    if (props.getProperty(PARENT_ACCESS_D1_IMPORT_PROPERTY_)) return { ok:true, alreadyImported:true };
+    const sheet = getSpreadsheet_().getSheetByName(PARENT_ACCESS_REQUESTS_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) {
+      props.setProperty(PARENT_ACCESS_D1_IMPORT_PROPERTY_, String(Date.now()));
+      return { ok:true, imported:0 };
+    }
+    const requests = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues().map(function(row) {
+      const status = String(row[3] || '').trim().toUpperCase();
+      if (!['PENDING','APPROVED'].includes(status)) return null;
+      const phone = last10_(row[1]);
+      const requestId = normalizeParentAccessId_(row[0]);
+      const createdAt = parentAccessTimestamp_(row[4]);
+      const updatedAt = parentAccessTimestamp_(row[5]) || createdAt;
+      const expiresAt = parentAccessTimestamp_(row[6]);
+      if (!phone || !requestId || !createdAt || !expiresAt) return null;
+      // D1's access request table requires an active profile. Seed only the
+      // matching profile from the existing REPORTS row before importing.
+      syncD1ProfileForPhone_(phone);
+      return {
+        requestId:requestId, phone:'8' + phone,
+        code:String(row[2] || '').trim().padStart(4, '0'), status:status,
+        createdAt:createdAt, updatedAt:updatedAt, expiresAt:expiresAt,
+        decidedAt:parentAccessTimestamp_(row[7]) || null,
+        decision:String(row[8] || '').trim().toUpperCase()
+      };
+    }).filter(Boolean);
+    let imported = 0;
+    for (let i = 0; i < requests.length; i += 100) {
+      const result = d1AdminRequest_('/admin/parent-access-requests/import', 'post', { requests:requests.slice(i, i + 100) });
+      imported += Number(result.imported || 0);
+      if (Number(result.skipped || 0)) throw new Error('Не все старые запросы на авторизацию удалось перенести. Импорт будет повторён.');
+    }
+    props.setProperty(PARENT_ACCESS_D1_IMPORT_PROPERTY_, String(Date.now()));
+    return { ok:true, imported:imported };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function parentReauthorizationActor_(phoneRaw) {
@@ -220,28 +240,15 @@ function requestParentReauthorization(phoneRaw, requestIdRaw) {
   const phone10 = last10_(phoneRaw);
   const requestId = normalizeParentAccessId_(requestIdRaw);
   if (!phone10 || !requestId) return { ok: false, message: 'Проверьте номер телефона.' };
-  if (!isPhoneActiveInReports_(phone10)) return { ok: false, code: 'NOT_FOUND', message: 'Этот номер не найден среди активных родителей.' };
   try {
-    let created = false;
-    const request = withChatWriteLock_(function() {
-      const existing = findParentAccessRequest_(requestId);
-      if (existing) {
-        if (existing.phone10 !== phone10) throw new Error('Запрос относится к другому номеру телефона.');
-        return existing;
-      }
-      const sh = ensureParentAccessRequestsSheet_();
-      const now = new Date();
-      const expiresAt = new Date(now.getTime() + PARENT_ACCESS_REQUEST_TTL_MS_);
-      const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, requestId + '|' + phone10);
-      const code = String((((bytes[0] & 255) * 256) + (bytes[1] & 255)) % 10000).padStart(4, '0');
-      sh.appendRow([requestId, phone10, code, 'PENDING', now, now, expiresAt, '', '']);
-      created = true;
-      return findParentAccessRequest_(requestId);
+    ensureLegacyParentAccessRequestsImported_();
+    const result = cloudflareParentAccessRequest_('post', '/lab/parent-access/request', {
+      phone:'8' + phone10, requestId:requestId
     });
-    // Push is only a delivery hint.  The request is already safely queued in
-    // Sheets, so a disabled worker or browser notification must never block
-    // the parent authorization flow.  Keep the notification free of PII.
-    if (created) {
+    if (!result || result.ok === false) return result || { ok:false, message:'Не удалось отправить запрос.' };
+    // D1 stores the request before push is attempted. A notification failure
+    // never loses the pending request; the educator panel polls Cloudflare.
+    if (result.created) {
       try {
         const actor = parentReauthorizationActor_(phone10);
         sendPushNotification_('educator', '', {
@@ -254,7 +261,7 @@ function requestParentReauthorization(phoneRaw, requestIdRaw) {
         // The pending request remains visible in the educator panel.
       }
     }
-    return parentAccessRequestClientValue_(request);
+    return result;
   } catch (e) {
     return { ok: false, message: 'Не удалось отправить запрос: ' + String(e && e.message || e) };
   }
@@ -262,80 +269,35 @@ function requestParentReauthorization(phoneRaw, requestIdRaw) {
 
 function getParentReauthorizationStatus(phoneRaw, requestIdRaw) {
   const phone10 = last10_(phoneRaw);
+  const requestId = normalizeParentAccessId_(requestIdRaw);
+  if (!phone10 || !requestId) return { ok:true, status:'NOT_FOUND' };
   try {
-    return withChatWriteLock_(function() {
-      const request = findParentAccessRequest_(requestIdRaw);
-      if (!request || request.phone10 !== phone10) return { ok: true, status: 'NOT_FOUND' };
-      if ((request.status === 'APPROVED' || request.status === 'CONSUMED') && isPhoneActiveInReports_(phone10)) {
-        const profile = getProfileByPhone_(phone10);
-        if (!profile) return { ok: false, message: 'Профиль родителя больше не активен.' };
-        if (request.status !== 'CONSUMED') {
-          request.sh.getRange(request.row, 4).setValue('CONSUMED');
-          request.sh.getRange(request.row, 6).setValue(new Date());
-        }
-        return Object.assign(
-          parentAuthorizedProfile_(profile),
-          { status: 'APPROVED', requestId: request.requestId }
-        );
-      }
-      return parentAccessRequestClientValue_(request);
-    });
-  } catch (e) {
-    return { ok: false, message: 'Не удалось проверить авторизацию: ' + String(e && e.message || e) };
+    ensureLegacyParentAccessRequestsImported_();
+    return cloudflareParentAccessRequest_('get', '/lab/parent-access/status', { phone:'8' + phone10, requestId:requestId });
   }
+  catch (e) { return { ok:false, message:'Не удалось проверить авторизацию: ' + String(e && e.message || e) }; }
 }
 
 function listPendingParentReauthorizations(tutorTokenRaw) {
   requireTutorSession_(tutorTokenRaw);
-  const sh = ensureParentAccessRequestsSheet_();
-  const lastRow = sh.getLastRow();
-  if (lastRow < 2) return { ok: true, requests: [] };
-  const rows = sh.getRange(2, 1, lastRow - 1, 9).getValues();
-  const requests = [];
-  rows.forEach(function(values, index) {
-    if (String(values[3] || '').trim().toUpperCase() !== 'PENDING') return;
-    const expiresAt = values[6] instanceof Date ? values[6] : new Date(values[6]);
-    if (!(expiresAt.getTime() > Date.now())) {
-      sh.getRange(index + 2, 4).setValue('EXPIRED');
-      sh.getRange(index + 2, 6).setValue(new Date());
-      return;
-    }
-    const phone10 = last10_(values[1]);
-    const actor = parentReauthorizationActor_(phone10);
-    requests.push({
-      requestId: String(values[0] || '').trim(),
-      phone: '8' + phone10,
-      code: String(values[2] || '').padStart(4, '0'),
-      actor: actor,
-      text: actor + ' запрашивает повторную авторизацию',
-      createdAt: (values[4] instanceof Date ? values[4] : new Date(values[4])).toISOString(),
-      expiresAt: expiresAt.toISOString()
-    });
+  ensureLegacyParentAccessRequestsImported_();
+  const value = d1AdminRequest_('/admin/parent-access-requests', 'get');
+  const requests = (value.requests || []).map(function(request) {
+    const actor = parentReauthorizationActor_(last10_(request.phone));
+    return Object.assign({}, request, { actor:actor, text:actor + ' запрашивает повторную авторизацию' });
   });
-  requests.sort(function(a, b) { return String(a.createdAt).localeCompare(String(b.createdAt)); });
-  return { ok: true, requests: requests };
+  return { ok:true, requests:requests };
 }
 
 function decideParentReauthorization(requestIdRaw, decisionRaw, tutorTokenRaw) {
   requireTutorSession_(tutorTokenRaw);
+  ensureLegacyParentAccessRequestsImported_();
   const decision = String(decisionRaw || '').trim().toUpperCase();
   if (decision !== 'APPROVE' && decision !== 'DENY') return { ok: false, message: 'Неизвестное решение.' };
-  let changed = false;
   try {
-    const request = withChatWriteLock_(function() {
-      const found = findParentAccessRequest_(requestIdRaw);
-      if (!found) throw new Error('Запрос уже недоступен.');
-      if (found.status !== 'PENDING') return found;
-      const now = new Date();
-      found.status = decision === 'APPROVE' ? 'APPROVED' : 'DENIED';
-      found.sh.getRange(found.row, 4).setValue(found.status);
-      found.sh.getRange(found.row, 6).setValue(now);
-      found.sh.getRange(found.row, 8).setValue(now);
-      found.sh.getRange(found.row, 9).setValue(decision);
-      changed = true;
-      return found;
+    return d1AdminRequest_('/admin/parent-access-requests/decision', 'post', {
+      requestId:normalizeParentAccessId_(requestIdRaw), decision:decision
     });
-    return { ok: true, status: request.status, alreadyResolved: !changed };
   } catch (e) {
     return { ok: false, message: 'Не удалось сохранить решение: ' + String(e && e.message || e) };
   }
