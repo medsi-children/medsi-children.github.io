@@ -588,35 +588,41 @@ function isParentSessionValid_(phoneRaw, tokenRaw) {
   const token = String(tokenRaw || '').trim();
   const parts = token.split('.');
   if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
-  const parentSecret = getParentAuthSecret_();
-  const parentSignature = Utilities.base64EncodeWebSafe(
-    Utilities.computeHmacSha256Signature(parts[0], parentSecret)
-  ).replace(/=+$/g, '');
-  let validParentSignature = secureTextEqual_(parts[1], parentSignature);
-  // Cloudflare issues the new parent session using the already shared D1
-  // signing secret. Retain validation of existing Apps Script sessions while
-  // allowing D1 to own new registration and session issuance.
-  if (!validParentSignature) {
-    let d1Secret = String(PropertiesService.getScriptProperties().getProperty('D1_SESSION_SECRET') || '');
-    if (!d1Secret) {
-      try { d1Secret = getWorkerSharedSecret_(); } catch (_) {}
-    }
-    if (d1Secret) {
-      const d1Signature = Utilities.base64EncodeWebSafe(
-        Utilities.computeHmacSha256Signature(parts[0], d1Secret)
-      ).replace(/=+$/g, '');
-      validParentSignature = secureTextEqual_(parts[1], d1Signature);
-    }
-  }
-  if (!validParentSignature) return false;
   try {
     const claims = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString());
-    // Accept old signed claims as well as v2 so existing saved sessions are
-    // not logged out merely because the retired password layer was removed.
     const matchingPhone = last10_(claims.phone10) === last10_(phoneRaw);
     const legacyClaim = !!String(claims.version || '') && !claims.role;
     const cloudflareClaim = claims.role === 'parent' && Number(claims.exp) > Date.now();
-    return matchingPhone && (legacyClaim || cloudflareClaim);
+    if (!matchingPhone) return false;
+
+    // New Cloudflare sessions are checked locally and never enter the old
+    // compatibility lookup, so their request path stays fast.
+    if (cloudflareClaim) {
+      let d1Secret = String(PropertiesService.getScriptProperties().getProperty('D1_SESSION_SECRET') || '');
+      if (!d1Secret) {
+        try { d1Secret = getWorkerSharedSecret_(); } catch (_) {}
+      }
+      if (!d1Secret) return false;
+      const d1Signature = Utilities.base64EncodeWebSafe(
+        Utilities.computeHmacSha256Signature(parts[0], d1Secret)
+      ).replace(/=+$/g, '');
+      return secureTextEqual_(parts[1], d1Signature);
+    }
+
+    // Old Apps Script sessions remain valid only for profiles that existed
+    // before Cloudflare registration was introduced and are still the same
+    // family record in D1. This network lookup is legacy-only.
+    if (!legacyClaim) return false;
+    const parentSignature = Utilities.base64EncodeWebSafe(
+      Utilities.computeHmacSha256Signature(parts[0], getParentAuthSecret_())
+    ).replace(/=+$/g, '');
+    if (!secureTextEqual_(parts[1], parentSignature)) return false;
+    try {
+      const access = d1AdminRequest_('/admin/parent-legacy-access/' + encodeURIComponent(last10_(phoneRaw)), 'get');
+      return access.allowed === true;
+    } catch (_) {
+      return false;
+    }
   } catch (_) {
     return false;
   }

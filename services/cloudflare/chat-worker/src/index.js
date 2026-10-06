@@ -813,6 +813,16 @@ async function reconcileProfiles(request, env) {
   const statements = [];
   active.forEach((profile, phone) => {
     statements.push(env.CHAT_DB.prepare(`
+      DELETE FROM legacy_parent_access
+      WHERE phone10 = ?
+        AND EXISTS (
+          SELECT 1 FROM chat_profiles AS current
+          WHERE current.phone10 = ?
+            AND current.parent_name <> ?
+            AND current.child_name <> ?
+        )
+    `).bind(phone, phone, profile.parentName, profile.childName));
+    statements.push(env.CHAT_DB.prepare(`
       INSERT INTO chat_profiles (phone10, parent_name, child_name) VALUES (?, ?, ?)
       ON CONFLICT(phone10) DO UPDATE SET parent_name = excluded.parent_name, child_name = excluded.child_name
     `).bind(phone, profile.parentName, profile.childName));
@@ -833,6 +843,7 @@ async function reconcileProfiles(request, env) {
         deletions.push(env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(Date.now(), phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone));
+        deletions.push(env.CHAT_DB.prepare('DELETE FROM legacy_parent_access WHERE phone10 = ?').bind(phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM chat_profiles WHERE phone10 = ?').bind(phone));
       });
       await env.CHAT_DB.batch(deletions);
@@ -860,6 +871,25 @@ async function getProfileForAdmin(env, phoneRaw) {
   } : null });
 }
 
+async function getLegacyParentAccess(env, phoneRaw) {
+  const phone = phone10(phoneRaw);
+  if (!phone) return json({ ok: false, allowed: false }, 400);
+  const result = await env.CHAT_DB.prepare(`
+    SELECT legacy.parent_name AS legacy_parent_name, legacy.child_name AS legacy_child_name,
+      profile.parent_name AS parent_name, profile.child_name AS child_name
+    FROM legacy_parent_access AS legacy
+    JOIN chat_profiles AS profile ON profile.phone10 = legacy.phone10
+    WHERE legacy.phone10 = ?
+  `).bind(phone).first();
+  const allowed = !!result && (
+    result.legacy_parent_name === result.parent_name || result.legacy_child_name === result.child_name
+  );
+  if (result && !allowed) {
+    await env.CHAT_DB.prepare('DELETE FROM legacy_parent_access WHERE phone10 = ?').bind(phone).run();
+  }
+  return json({ ok: true, allowed });
+}
+
 // These two lifecycle operations are intentionally admin-only.  REPORTS is
 // the authority; Apps Script invokes them after a protected snapshot/diff.
 // Neither endpoint is reachable through the browser chat session.
@@ -880,6 +910,7 @@ async function moveProfilePhone(request, env) {
     env.CHAT_DB.prepare('UPDATE chat_pins SET phone10 = ? WHERE phone10 = ?').bind(to, from),
     env.CHAT_DB.prepare('UPDATE report_snapshots SET phone10 = ? WHERE phone10 = ?').bind(to, from),
     env.CHAT_DB.prepare('UPDATE report_current SET phone10 = ? WHERE phone10 = ?').bind(to, from),
+    env.CHAT_DB.prepare('DELETE FROM legacy_parent_access WHERE phone10 IN (?, ?)').bind(from, to),
     env.CHAT_DB.prepare('UPDATE chat_profiles SET phone10 = ?, parent_name = ?, child_name = ? WHERE phone10 = ?').bind(to, parentName, childName, from),
     env.CHAT_DB.prepare('INSERT INTO chat_profiles (phone10, parent_name, child_name) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM chat_profiles WHERE phone10 = ?)').bind(to, parentName, childName, to),
     env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(from),
@@ -908,6 +939,7 @@ async function deleteProfilePhone(request, env) {
     env.CHAT_DB.prepare('DELETE FROM report_snapshots WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM report_current WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM chat_profiles WHERE phone10 = ?').bind(phone),
+    env.CHAT_DB.prepare('DELETE FROM legacy_parent_access WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(Date.now(), phone)
@@ -1243,6 +1275,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/admin/reconcile') return reconcileProfiles(request, env);
       if (request.method === 'GET' && url.pathname === '/admin/profile-phones') return listProfilePhones(env);
       if (request.method === 'GET' && url.pathname.startsWith('/admin/profile/')) return getProfileForAdmin(env, url.pathname.slice('/admin/profile/'.length));
+      if (request.method === 'GET' && url.pathname.startsWith('/admin/parent-legacy-access/')) return getLegacyParentAccess(env, url.pathname.slice('/admin/parent-legacy-access/'.length));
       if (request.method === 'POST' && url.pathname === '/admin/move-profile-phone') return moveProfilePhone(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/profile-s3-keys') return profileS3Keys(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/delete-profile-phone') return deleteProfilePhone(request, env);
