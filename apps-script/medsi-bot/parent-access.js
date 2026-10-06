@@ -243,9 +243,10 @@ function requestParentReauthorization(phoneRaw, requestIdRaw) {
     // the parent authorization flow.  Keep the notification free of PII.
     if (created) {
       try {
+        const actor = parentReauthorizationActor_(phone10);
         sendPushNotification_('educator', '', {
           title: 'Медси Бот',
-          body: 'Родитель запрашивает повторный вход. Откройте панель воспитателей',
+          body: actor + ' запрашивает авторизацию в Медси Боте',
           url: '/tutors?reauth=' + encodeURIComponent(requestId),
           tag: 'medsi-parent-reauth-' + requestId
         });
