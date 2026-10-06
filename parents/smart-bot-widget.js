@@ -26,6 +26,12 @@
   const character = launcher.querySelector('.medsi-character');
   const bodyImage = launcher.querySelector('img');
   let assetReady = false;
+  const markAssetReady = () => {
+    if (assetReady) return;
+    assetReady = true;
+    syncLauncher();
+  };
+  bodyImage.addEventListener('load', markAssetReady, { once: true });
   dock.appendChild(launcher);
   const hint = document.createElement('button');
   hint.type = 'button';
@@ -329,7 +335,13 @@
   // Preload the chat independently; the menu logo only waits for image decoding.
   let chatReady = prepareChat();
   chatReady.catch(() => {});
-  const visualReady = bodyImage.decode().then(() => { assetReady = true; syncLauncher(); }).catch(() => {});
+  const visualReady = bodyImage.decode().catch(() => {}).then(() => {
+    // Safari may reject decode() even after the image has loaded.  The load
+    // event above is authoritative; this fallback covers cached images where
+    // that event fired before the listener was attached.
+    if (bodyImage.complete && bodyImage.naturalWidth > 0) markAssetReady();
+  });
+  if (bodyImage.complete && bodyImage.naturalWidth > 0) markAssetReady();
   syncLauncher();
   const gate = document.getElementById('tutorAuthGate');
   if (gate) new MutationObserver(syncLauncher).observe(gate, {attributes:true,attributeFilter:['class']});

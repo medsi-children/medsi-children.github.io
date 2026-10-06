@@ -395,6 +395,10 @@
       image.alt = 'QR-код для подключения Медси Бота';
       image.loading = 'eager';
       image.decoding = 'async';
+      // Keep the QR compact even if a browser ignores the shadow-DOM style
+      // sheet while the chat is opening.  The full-screen viewer remains
+      // available through the existing click handler.
+      image.style.cssText = 'display:block;width:min(100%,280px);max-width:100%;height:auto;max-height:none;object-fit:contain;margin:12px auto 2px;border-radius:18px;background:#fff;cursor:pointer';
       bubble.appendChild(image);
     }
     content.append(bubble, element('time', 'message-time', clock()));

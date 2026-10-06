@@ -222,6 +222,7 @@ function requestParentReauthorization(phoneRaw, requestIdRaw) {
   if (!phone10 || !requestId) return { ok: false, message: 'Проверьте номер телефона.' };
   if (!isPhoneActiveInReports_(phone10)) return { ok: false, code: 'NOT_FOUND', message: 'Этот номер не найден среди активных родителей.' };
   try {
+    let created = false;
     const request = withChatWriteLock_(function() {
       const existing = findParentAccessRequest_(requestId);
       if (existing) {
@@ -234,8 +235,24 @@ function requestParentReauthorization(phoneRaw, requestIdRaw) {
       const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, requestId + '|' + phone10);
       const code = String((((bytes[0] & 255) * 256) + (bytes[1] & 255)) % 10000).padStart(4, '0');
       sh.appendRow([requestId, phone10, code, 'PENDING', now, now, expiresAt, '', '']);
+      created = true;
       return findParentAccessRequest_(requestId);
     });
+    // Push is only a delivery hint.  The request is already safely queued in
+    // Sheets, so a disabled worker or browser notification must never block
+    // the parent authorization flow.  Keep the notification free of PII.
+    if (created) {
+      try {
+        sendPushNotification_('educator', '', {
+          title: 'Медси Бот',
+          body: 'Родитель запрашивает повторный вход. Откройте панель воспитателей',
+          url: '/tutors?reauth=' + encodeURIComponent(requestId),
+          tag: 'medsi-parent-reauth-' + requestId
+        });
+      } catch (_) {
+        // The pending request remains visible in the educator panel.
+      }
+    }
     return parentAccessRequestClientValue_(request);
   } catch (e) {
     return { ok: false, message: 'Не удалось отправить запрос: ' + String(e && e.message || e) };

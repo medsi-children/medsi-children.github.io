@@ -2874,7 +2874,6 @@ function sendPushNotification_(role, phone, notification) {
 
   Logger.log(
     'Push notify result: role=' + role +
-    ', phone=' + last10_(phone || '') +
     ', ok=' + !!(res && res.ok) +
     ', sent=' + String((res && res.sent) || '') +
     ', total=' + String((res && res.total) || '') +
