@@ -107,23 +107,10 @@ function getD1ChatSession(roleRaw, phoneRaw, tutorTokenRaw) {
 
     requireParentAccess_(phone10, tutorTokenRaw);
 
-    // Profile refresh is best-effort. An already active parent must still
-    // receive a D1 session if the administrative reconcile is temporarily down.
-    if (
-      String(
-        PropertiesService.getScriptProperties().getProperty('CHAT_BACKEND') || 'sheets'
-      ) === 'd1'
-    ) {
-      try {
-        syncD1ProfileForPhone_(phone10);
-      } catch (e) {
-        Logger.log(
-          'D1 profile refresh failed for ' +
-          phone10 + ': ' +
-          String(e && e.message || e)
-        );
-      }
-    }
+    // D1 mirrors are warmed on this chat-specific request.  Keep the parent
+    // registration response independent of Cloudflare availability/latency.
+    try { syncD1ProfileForPhone_(phone10); }
+    catch (e) { Logger.log('D1 profile refresh deferred: ' + String(e && e.message || e)); }
   } else {
     throw new Error('Некорректная роль.');
   }
@@ -871,12 +858,9 @@ function registerParent(parentNameRaw, childNameRaw, phoneRaw, registrationAttem
         registrationAttemptId: registrationAttemptId
       };
     });
-    // Critical storage is complete. Other parents can register or request access
-    // while this best-effort mirror waits for the Worker.
-    if (result && result.ok && !result.duplicate) {
-      try { syncD1ProfileForPhone_(phone); }
-      catch (e) { Logger.log('D1 registration mirror deferred: ' + String(e && e.message || e)); }
-    }
+    // Return as soon as the authoritative REPORTS row, registration attempt,
+    // and parent session are safely committed.  The first chat-session warmup
+    // mirrors this profile to D1 outside the registration request.
     return result;
   } catch (e) {
     return { ok: false, message: 'Ошибка регистрации: ' + (e.message || e) };
