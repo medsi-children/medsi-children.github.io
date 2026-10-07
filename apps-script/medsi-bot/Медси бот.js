@@ -6251,11 +6251,22 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
     next = next.slice(0, replacement.start) + replacement.text + next.slice(replacement.end);
   }
 
+  // Everything before the first explicit child header is report boilerplate:
+  // date, activities, authors, separators, etc.  Only a candidate that already
+  // passed the same child-header classifier can become the cut point, so a bare
+  // name mention without ':' or a dash can never trim the report accidentally.
+  let preambleRemoved = false;
+  if (candidates.length && candidates[0].start > 0) {
+    next = next.slice(candidates[0].start).replace(/^\s+/, '');
+    preambleRemoved = true;
+  }
+
   return {
     text:next,
     changed:next !== text,
     rewritten:replacements.length,
     recovered:recovered,
+    preambleRemoved:preambleRemoved,
     unresolved:uniqueStrings_(unresolved)
   };
 }

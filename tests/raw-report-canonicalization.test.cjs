@@ -148,3 +148,48 @@ test('a child name without colon or dash is plain text, never a canonicalized he
   );
   assert.doesNotMatch(result.text, /Лиза Ф\. —/);
 });
+
+
+test('canonicalizer removes report boilerplate before the first explicit child header', () => {
+  const x = api();
+  const artemK = child(x, 'Артём', 'Кузнецов', '89990000005');
+  const artemI = child(x, 'Артём', 'Иванов', '89990000006');
+  const raw = [
+    '# 🐸 ОТЧЕТ ПО ДЕТЯМ: ВЕЧЕР',
+    '6 октября 🌙 День-вечер',
+    'Сегодня у ребят были:',
+    '💃 Танцы',
+    '🎨 Творчество',
+    '💬 Общение',
+    '🎲 Настольные игры',
+    '🍿 Киносеанс',
+    '',
+    'Отчёт составили: Денис и Лиза',
+    '•••',
+    '',
+    'Артём К. - В целом поведение приемлемое.',
+    'Артём И. - Сегодня хорошо поужинал.'
+  ].join('\n');
+
+  const result = x.canonicalizeRawChildReport_(raw, { children:[artemK, artemI] });
+
+  assert.equal(
+    result.text,
+    'Артём К. — В целом поведение приемлемое.\nАртём И. — Сегодня хорошо поужинал.'
+  );
+  assert.equal(result.preambleRemoved, true);
+  assert.doesNotMatch(result.text, /ОТЧЕТ ПО ДЕТЯМ|Сегодня у ребят были|Отчёт составили|Танцы|Киносеанс/);
+});
+
+test('preamble trimming never starts from a bare child-name mention without a delimiter', () => {
+  const x = api();
+  const lisa = child(x, 'Лиза', 'Федорова', '89990000001');
+  const raw = [
+    'Служебная строка',
+    'Лиза Ф была на прогулке',
+    'Лиза Ф: Настоящий блок отчёта.'
+  ].join('\n');
+
+  const result = x.canonicalizeRawChildReport_(raw, { children:[lisa] });
+  assert.equal(result.text, 'Лиза Ф. — Настоящий блок отчёта.');
+});
