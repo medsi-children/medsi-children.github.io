@@ -134,3 +134,17 @@ test('service headers are preserved and are not mistaken for children', () => {
     'Лиза Ф. — Всё хорошо.\nДля врачей: Наблюдение без изменений.'
   );
 });
+
+
+test('a child name without colon or dash is plain text, never a canonicalized header', () => {
+  const x = api();
+  const lisa = child(x, 'Лиза', 'Федорова', '89990000001');
+  const raw = 'Маша: Сегодня общалась с Лиза Ф\nЛиза Ф потом присоединилась к игре.';
+  const result = x.canonicalizeRawChildReport_(raw, { children:[lisa] });
+
+  assert.equal(
+    result.text,
+    'Маша — Сегодня общалась с Лиза Ф\nЛиза Ф потом присоединилась к игре.'
+  );
+  assert.doesNotMatch(result.text, /Лиза Ф\. —/);
+});

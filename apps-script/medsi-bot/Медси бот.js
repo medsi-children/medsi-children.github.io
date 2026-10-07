@@ -1530,28 +1530,9 @@ function validateChildReportFormat_(reportType, text) {
     );
   }
 
-  const confirmedHeaderLines = buildConfirmedReportHeaderLines_(okCandidates);
-
-  const missingDelimiters = findMissingReportDelimiters_(
-    parsed.clean,
-    children,
-    1,
-    confirmedHeaderLines
-  );
-
-  if (missingDelimiters.length) {
-    const names = uniqueStrings_(
-      missingDelimiters.map(item => item.name)
-    ).slice(0, 8);
-
-    return makeReportFormatError_(
-      reportMissingDelimiterMessage_(names),
-      {
-        missingDelimiterNames: names,
-        missingDelimiterLines: missingDelimiters
-      }
-    );
-  }
+  // Only an explicit ":" or dash makes a child-name line a report header.
+  // A bare "Лиза Ф" can be an ordinary mention inside another child's block
+  // and must never become a validation error or a candidate header by itself.
 
   return {
     ok: true,
