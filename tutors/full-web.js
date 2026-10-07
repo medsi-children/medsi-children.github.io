@@ -34,10 +34,11 @@
   async function callApi(method,args,timeoutMs){
     const readOnly=/^(get|list|verify|check)/i.test(String(method||''));
     const attempts=readOnly?2:1;
+    const sessionMethod=['verifyTutorAccess','verifyTutorSession','getD1ChatSession'].includes(method);
     let lastError;
     for(let attempt=0;attempt<attempts;attempt++){
       const controller=new AbortController();
-      const timer=setTimeout(()=>controller.abort(),timeoutMs||15000);
+      const timer=setTimeout(()=>controller.abort(),sessionMethod?Math.max(timeoutMs||0,method==='verifyTutorAccess'?30000:45000):(timeoutMs||15000));
       try{
         const body=JSON.stringify({action:'api',method,args:args||[]});
         const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body,cache:'no-store',signal:controller.signal});
@@ -71,11 +72,10 @@
   function requestFreshD1(){
     if(d1RefreshPromise)return d1RefreshPromise;
     d1RefreshPromise=(async()=>{
-      let verify=null;
-      try{verify=await callApi('verifyTutorSession',[tutorToken],17000)}catch(_){}
-      let session=extractD1(verify);
+      let session=null;
+      try{session=extractD1(await callApi('getD1ChatSession',['educator','',tutorToken],17000))}catch(_){}
       if(!session){
-        try{session=extractD1(await callApi('getD1ChatSession',['educator','',tutorToken],17000))}catch(_){}
+        try{session=extractD1(await callApi('verifyTutorSession',[tutorToken],17000))}catch(_){}
       }
       if(!session||!session.token)throw new Error('Не удалось обновить сессию чата.');
       saveAuth(tutorToken,session);return session;
@@ -144,7 +144,7 @@
     if(!login||!password){setAuthError('Введите логин и пароль.');return}
     authBusy=true;$('tutorLoginBtn').disabled=true;$('tutorLoginBtn').textContent='Проверяем…';setAuthError('');
     try{
-      const res=await callApi('verifyTutorAccess',[login,password],18000);
+      const res=await callApi('verifyTutorAccess',[login,password],30000);
       if(!res||!res.ok||!res.token)throw new Error((res&&res.message)||'Не удалось войти.');
       saveAuth(String(res.token),extractD1(res));$('tutorPassword').value='';
       if(enterApp())scheduleD1Warm();
@@ -333,6 +333,7 @@
   $('btnParentChats').addEventListener('click',openChat);$('btnMorning').addEventListener('click',()=>openReport('morning'));$('btnEvening').addEventListener('click',()=>openReport('evening'));$('btnPsychology').addEventListener('click',()=>openReport('psychology'));$('btnParentPhones').addEventListener('click',openPhones);$('btnBack').addEventListener('click',showMenu);$('btnPhonesBack').addEventListener('click',showMenu);$('btnAgain').addEventListener('click',showMenu);$('btnSend').addEventListener('click',sendReport);$('tutorLoginBtn').addEventListener('click',submitLogin);$('tutorPassword').addEventListener('keydown',e=>{if(e.key==='Enter')submitLogin()});
   // The assistant uses the same authenticated operations as the existing panel.
   window.MedsiTutorAdmin = Object.freeze({
+    session: ensureD1Fresh,
     async parents() { if (!tutorToken) throw new Error('AUTH_REQUIRED'); await ensureD1Fresh(); return refreshPhones(); },
     async unread() { const session = await ensureD1Fresh(); const result = await MedsiOverlayTransport.chats(session, 'unread', {fresh:true}); return (result.chats || []).filter(row => row.hasUnread); },
     newSubmissionId: reportSubmissionId,

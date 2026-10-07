@@ -52,9 +52,13 @@
   let backgroundLock = null;
   let avatarImage = new Image();
   avatarImage.src = "/parents/blob.webp";
-  // Safari can reject decode() even when the image is already usable.
-  // The avatar is decorative, so it must never block chat creation.
-  const avatarReady = avatarImage.decode().catch(() => {});
+  // Wait for the actual load event so the small in-chat avatar never appears
+  // as a late, visibly growing image when the dialog opens.
+  const avatarReady = new Promise(resolve => {
+    if (avatarImage.complete) { resolve(); return; }
+    avatarImage.addEventListener('load', resolve, { once: true });
+    avatarImage.addEventListener('error', resolve, { once: true });
+  }).then(() => avatarImage.naturalWidth > 0 ? avatarImage.decode().catch(() => {}) : null);
   let dialogGeometry = null;
   let pointerActiveUntil = 0;
   let hintTimer = 0;
@@ -335,12 +339,14 @@
   // Preload the chat independently; the menu logo only waits for image decoding.
   let chatReady = prepareChat();
   chatReady.catch(() => {});
-  const visualReady = bodyImage.decode().catch(() => {}).then(() => {
-    // Safari may reject decode() even after the image has loaded.  The load
-    // event above is authoritative; this fallback covers cached images where
-    // that event fired before the listener was attached.
-    if (bodyImage.complete && bodyImage.naturalWidth > 0) markAssetReady();
-  });
+  const visualReady = new Promise(resolve => {
+    // Safari may reject decode() before the network load completes.  Wait for
+    // the real load event so the menu cannot reveal a half-loaded mascot.
+    if (bodyImage.complete) { resolve(); return; }
+    bodyImage.addEventListener('load', resolve, { once: true });
+    bodyImage.addEventListener('error', resolve, { once: true });
+  }).then(() => bodyImage.naturalWidth > 0 ? bodyImage.decode().catch(() => {}) : null)
+    .then(() => { if (bodyImage.naturalWidth > 0) markAssetReady(); });
   if (bodyImage.complete && bodyImage.naturalWidth > 0) markAssetReady();
   syncLauncher();
   const gate = document.getElementById('tutorAuthGate');

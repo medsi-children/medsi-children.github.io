@@ -179,12 +179,36 @@ async function failParentRegistrationOutbox(request, env) {
   return json({ ok: true });
 }
 
-async function requestParentAccess(request, env) {
+async function notifyEducatorParentAccessBestEffort(env, profile, requestId) {
+  if (!env.PUSH_WORKER || !env.MEDSI_CHAT_PUSH_SECRET) return;
+  const parent = String(profile.parent_name || '').trim();
+  const child = String(profile.child_name || '').trim();
+  const actor = parent ? (child ? `${parent} (ребёнок: ${child})` : parent) : 'Родитель';
+  const response = await env.PUSH_WORKER.fetch('https://medsi-push-worker.internal/notify', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${env.MEDSI_CHAT_PUSH_SECRET}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      role: 'educator', phone: '',
+      notification: {
+        title: 'Медси Бот',
+        body: `${actor} запрашивает авторизацию в Медси Боте`,
+        url: '/tutors?reauth=' + encodeURIComponent(requestId),
+        tag: 'medsi-parent-reauth-' + requestId
+      }
+    })
+  });
+  if (!response.ok) throw new Error(`Educator access push HTTP ${response.status}`);
+}
+
+async function requestParentAccess(request, env, ctx) {
   const payload = await body(request) || {};
   const phone = phone10(payload.phone);
   const requestId = parentAccessRequestId(payload.requestId);
   if (!phone || !requestId) return json({ ok: false, message: 'Проверьте номер телефона.' }, 400);
-  const profile = await env.CHAT_DB.prepare('SELECT phone10 FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
+  const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
   if (!profile) return json({ ok: false, code: 'NOT_FOUND', message: 'Этот номер не найден среди активных родителей.' }, 404);
 
   const prior = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
@@ -208,15 +232,22 @@ async function requestParentAccess(request, env) {
   const createdAt = Date.now(), expiresAt = createdAt + 2 * 60 * 60 * 1000;
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(requestId + '|' + phone)));
   const code = String((((digest[0] & 255) * 256) + (digest[1] & 255)) % 10000).padStart(4, '0');
-  await env.CHAT_DB.prepare(`INSERT INTO parent_access_requests
+  const inserted = await env.CHAT_DB.prepare(`INSERT INTO parent_access_requests
     (request_id, phone10, code, status, created_at, updated_at, expires_at)
     VALUES (?, ?, ?, 'PENDING', ?, ?, ?) ON CONFLICT(request_id) DO NOTHING`)
     .bind(requestId, phone, code, createdAt, createdAt, expiresAt).run();
   const saved = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
   if (!saved || saved.phone10 !== phone) return json({ ok: false, message: 'Не удалось создать запрос на вход.' }, 503);
+  const created = Number(inserted.meta && inserted.meta.changes || 0) > 0;
+  if (created) {
+    const pushJob = notifyEducatorParentAccessBestEffort(env, profile, requestId)
+      .catch(error => console.error('PARENT_ACCESS_PUSH_FAILED', String(error && error.message || error)));
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(pushJob);
+    else await pushJob;
+  }
   return json({ ok: true, requestId, code: saved.code, status: saved.status,
     createdAt: new Date(Number(saved.created_at)).toISOString(),
-    expiresAt: new Date(Number(saved.expires_at)).toISOString(), created: true });
+    expiresAt: new Date(Number(saved.expires_at)).toISOString(), created });
 }
 
 async function getParentAccessStatus(request, env) {
@@ -252,12 +283,17 @@ async function getParentAccessStatus(request, env) {
 async function listParentAccessRequests(env) {
   const now = Date.now();
   await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE status='PENDING' AND expires_at<=?").bind(now, now).run();
-  const result = await env.CHAT_DB.prepare(`SELECT request_id, phone10, code, status, created_at, expires_at
-    FROM parent_access_requests WHERE status='PENDING' ORDER BY created_at ASC LIMIT 100`).all();
+  const result = await env.CHAT_DB.prepare(`SELECT a.request_id, a.phone10, a.code, a.status, a.created_at, a.expires_at,
+      p.parent_name, p.child_name
+    FROM parent_access_requests AS a LEFT JOIN chat_profiles AS p ON p.phone10 = a.phone10
+    WHERE a.status='PENDING' ORDER BY a.created_at ASC LIMIT 100`).all();
   return json({ ok: true, requests: (result.results || []).map(row => ({
     requestId: row.request_id, phone: '8' + row.phone10, code: row.code,
     status: row.status, createdAt: new Date(Number(row.created_at)).toISOString(),
-    expiresAt: new Date(Number(row.expires_at)).toISOString()
+    expiresAt: new Date(Number(row.expires_at)).toISOString(),
+    actor: row.parent_name
+      ? `${row.parent_name}${row.child_name ? ` (ребёнок: ${row.child_name})` : ''}`
+      : 'Родитель'
   })) });
 }
 
@@ -1376,7 +1412,7 @@ export default {
       return getParentRegistrationStatus(request, env);
     }
     if (request.method === 'POST' && url.pathname === '/lab/parent-access/request') {
-      return requestParentAccess(request, env);
+      return requestParentAccess(request, env, ctx);
     }
     if (request.method === 'GET' && url.pathname === '/lab/parent-access/status') {
       return getParentAccessStatus(request, env);
@@ -1386,6 +1422,15 @@ export default {
     }
     const auth = await authorized(request, env);
     if (!auth) return json({ ok: false, message: 'Unauthorized' }, 401);
+
+    if (request.method === 'GET' && url.pathname === '/lab/parent-access/requests') {
+      if (auth.role !== 'educator') return json({ ok: false, message: 'Forbidden' }, 403);
+      return listParentAccessRequests(env);
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-access/decision') {
+      if (auth.role !== 'educator') return json({ ok: false, message: 'Forbidden' }, 403);
+      return decideParentAccessRequest(request, env);
+    }
 
     if (auth.role === 'parent') {
       const activeProfile = await env.CHAT_DB.prepare(

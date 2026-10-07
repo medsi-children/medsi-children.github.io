@@ -2,6 +2,7 @@
   if(window.MedsiParentApp)return;
   window.MedsiParentApp={};
   const APP_BASE_URL='/__session/apps-script';
+  const CHAT_WORKER_URL='https://medsi-chat-worker.medsi-children.workers.dev';
   const PUSH_APP_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
   const PUSH_SERVICE_URL='https://medsi-push-worker.medsi-children.workers.dev';
   const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',BOOTSTRAP_CHECK_KEY='medsi_parent_bootstrap_check_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1';
@@ -32,15 +33,33 @@
     }
     throw lastError||new Error('TIMEOUT');
   }
-  async function callCloudflareRegistration(status,data){
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
-    const url=status?'/lab/parent-registration/status?phone='+encodeURIComponent(data.phone)+'&attemptId='+encodeURIComponent(data.attemptId):'/lab/parent-registration';
-    try{
-      const response=await fetch(url,{method:status?'GET':'POST',headers:status?{}:{'content-type':'application/json'},body:status?undefined:JSON.stringify({parentName:data.parentName,childName:data.childName,phone:data.phone,attemptId:data.attemptId}),cache:'no-store',signal:controller.signal});
-      let value;try{value=await response.json()}catch(_){throw new Error('Cloudflare вернул некорректный ответ.')}
-      if(!response.ok||!value||value.ok!==true)throw new Error(value&&value.message||('HTTP '+response.status));
-      return value;
-    }finally{clearTimeout(timer)}
+  async function callCloudflare(path,method,payload){
+    let lastError;
+    for(const base of ['',CHAT_WORKER_URL]){
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),base?12000:10000);
+      try{
+        const response=await fetch(base+path,{method,headers:method==='GET'?{}:{'content-type':'application/json'},body:method==='GET'?undefined:JSON.stringify(payload||{}),cache:'no-store',signal:controller.signal});
+        let value;try{value=await response.json()}catch(_){throw new Error('Cloudflare вернул некорректный ответ.')}
+        if(response.ok&&value&&value.ok===true)return value;
+        if(response.status===404&&value&&value.code==='NOT_FOUND')return value;
+        const error=new Error(value&&value.message||('HTTP '+response.status));
+        error.status=response.status;
+        if(response.status<500||base)throw error;
+        lastError=error;
+      }catch(error){
+        lastError=error;
+        if(base||(error&&error.status<500))throw error;
+      }finally{clearTimeout(timer)}
+    }
+    throw lastError||new Error('Cloudflare временно недоступен.');
+  }
+  function callCloudflareRegistration(status,data){
+    const path=status?'/lab/parent-registration/status?phone='+encodeURIComponent(data.phone)+'&attemptId='+encodeURIComponent(data.attemptId):'/lab/parent-registration';
+    return callCloudflare(path,status?'GET':'POST',status?null:{parentName:data.parentName,childName:data.childName,phone:data.phone,attemptId:data.attemptId});
+  }
+  function callCloudflareAccess(status,data){
+    const path=status?'/lab/parent-access/status?phone='+encodeURIComponent(data.phone)+'&requestId='+encodeURIComponent(data.requestId):'/lab/parent-access/request';
+    return callCloudflare(path,status?'GET':'POST',status?null:{phone:data.phone,requestId:data.requestId});
   }
   function isStartLike(id){return id==='screenStart'||id==='screenChoose'}
   function initPush(){if(pushReady||!window.MedsiPush)return;pushReady=true;const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));MedsiPush.init({frameId:'__no_parent_iframe__',appEndpointUrl:PUSH_APP_URL,pushServiceUrl:PUSH_SERVICE_URL,identity:validPhone(ph)?{role:'parent',phone:ph}:null})}
@@ -67,7 +86,10 @@
     parentName=String(safeGet(PARENT_KEY)||'').trim();
     childName=String(safeGet(CHILD_KEY)||'').trim();
     parentSession=safeGet(PARENT_SESSION_KEY);if(!parentSession){clearSession();$('phoneInputAuth').value=ph;showAuth();return}syncPushIdentity();
-    const savedAuth=parentSession;showChoose();
+    const savedAuth=parentSession;
+    await Promise.resolve(window.MedsiAssistantReady);
+    if(currentPhone!==ph||parentSession!==savedAuth)return;
+    showChoose();
     try{if(await refreshProfileFromD1()){prewarmAll();return}}catch(_){/* fall back to the authoritative Apps Script check below */}
     const lastBootstrap=Number(safeGet(BOOTSTRAP_CHECK_KEY)||0);
     if(lastBootstrap&&Date.now()-lastBootstrap<15*60*1000){prewarmAll();return}
@@ -88,7 +110,7 @@
   function readJson(key){try{return JSON.parse(safeGet(key)||'null')}catch(_){return null}}
   function makeFlowId(prefix){let value='';try{if(crypto&&crypto.randomUUID)value=crypto.randomUUID()}catch(_){}if(!value)value=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);return prefix+'_'+value.replace(/[^A-Za-z0-9_-]/g,'')}
   function registrationFingerprint(data){return [onlyDigits(data.phone).slice(-10),data.parentName,data.childName].join('|')}
-  function finishRegistration(res){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;showChoose();prewarmAll();const attempt=String(res.registrationAttemptId||'');if(attempt&&currentPhone&&parentSession)callApi('mirrorCloudflareParentRegistration',[currentPhone,attempt,parentSession],20000,true).catch(()=>null)}
+  async function finishRegistration(res,run){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;prewarmAll();await Promise.resolve(window.MedsiAssistantReady);if(run===flowRun)showChoose()}
   async function runRegistrationFlow(data){
     const run=++flowRun;
     show('screenRegistrationPending');
@@ -109,15 +131,15 @@
           if(run!==flowRun)return;
           if(res){
             if(res.duplicate){safeRemove(REG_ATTEMPT_KEY);$('phoneInputAuth').value=data.phone;await beginReauthorization(data.phone);return}
-            if(res.ok&&res.parentSession){finishRegistration(res);return}
+            if(res.ok&&res.parentSession){await finishRegistration(res,run);return}
             phase='status';
           }
         }
         if(phase==='status'){
           const statusRes=await callCloudflareRegistration(true,data);
           if(run!==flowRun)return;
-          if(statusRes&&statusRes.ok&&statusRes.parentSession){finishRegistration(statusRes);return}
-          if(statusRes&&statusRes.result&&statusRes.result.parentSession){finishRegistration(statusRes.result);return}
+          if(statusRes&&statusRes.ok&&statusRes.parentSession){await finishRegistration(statusRes,run);return}
+          if(statusRes&&statusRes.result&&statusRes.result.parentSession){await finishRegistration(statusRes.result,run);return}
           const status=String(statusRes&&(statusRes.status||statusRes.code)||'').toUpperCase();
           if(status==='REVOKED'){safeRemove(REG_ATTEMPT_KEY);showStart();return}
           if(status==='PROCESSING'){
@@ -141,10 +163,35 @@
     }
   }
   async function register(){const digits=onlyDigits($('phoneInputReg').value),err=$('phoneErrorReg'),info=$('alreadyRegistered');err.classList.add('hidden');info.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}const snapshot={phone:digits,parentName:regParentName,childName:regChildName};const saved=readJson(REG_ATTEMPT_KEY);snapshot.attemptId=saved&&saved.fingerprint===registrationFingerprint(snapshot)?saved.attemptId:makeFlowId('reg');snapshot.fingerprint=registrationFingerprint(snapshot);safeSet(REG_ATTEMPT_KEY,JSON.stringify(snapshot));runRegistrationFlow(snapshot)}
-  function resetAuthPendingUi(){const screen=$('screenAuthPending');screen.classList.remove('is-approved');$('authPendingSpinner').classList.remove('hidden');$('authApprovedIcon').classList.add('hidden');$('authPendingTitle').textContent='Авторизация начата';$('authPendingText').textContent='Пожалуйста, подождите, пока воспитатель подтвердит вход.';$('authRequestCodeWrap').classList.remove('hidden');$('authPendingBackBtn').classList.add('hidden')}
-  function showAuthApproved(res){if(!applyBootstrap(res))throw new Error('Не удалось сохранить подтверждённый вход.');safeRemove(REAUTH_KEY);prewarmAll();const screen=$('screenAuthPending');screen.classList.add('is-approved');$('authPendingSpinner').classList.add('hidden');$('authApprovedIcon').classList.remove('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent='Авторизация подтверждена!';$('authPendingText').textContent='Вход сохранён на этом устройстве.';const approvedRun=flowRun;setTimeout(()=>{if(flowRun===approvedRun&&document.body.dataset.screen==='screenAuthPending'){justRegistered=false;showChoose()}},1800)}
+  function resetAuthPendingUi(){const screen=$('screenAuthPending');screen.classList.remove('is-approved');$('authPendingSpinner').classList.remove('hidden');$('authApprovedIcon').classList.add('hidden');$('authPendingTitle').textContent='Авторизация начата';$('authPendingText').textContent='Пожалуйста, подождите, пока воспитатель подтвердит вход.';$('authRequestCode').textContent='••••';$('authRequestCodeWrap').classList.remove('hidden');$('authPendingBackBtn').classList.add('hidden')}
+  function showAuthApproved(res){if(!applyBootstrap(res))throw new Error('Не удалось сохранить подтверждённый вход.');safeRemove(REAUTH_KEY);prewarmAll();const screen=$('screenAuthPending');screen.classList.add('is-approved');$('authPendingSpinner').classList.add('hidden');$('authApprovedIcon').classList.remove('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent='Авторизация подтверждена!';$('authPendingText').textContent='Вход сохранён на этом устройстве.';const approvedRun=flowRun;Promise.all([wait(1800),Promise.resolve(window.MedsiAssistantReady)]).then(()=>{if(flowRun===approvedRun&&document.body.dataset.screen==='screenAuthPending'){justRegistered=false;showChoose()}})}
   function showAuthStopped(status,message){$('authPendingSpinner').classList.add('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent=status==='DENIED'?'Авторизация отклонена':status==='NOT_FOUND'?'Номер не найден':'Срок запроса истёк';$('authPendingText').textContent=message||'Вы можете отправить новый запрос.';$('authPendingBackBtn').classList.remove('hidden')}
-  async function runReauthorizationFlow(data,createFirst){const run=++flowRun;resetAuthPendingUi();show('screenAuthPending');let shouldCreate=!!createFirst;while(run===flowRun){try{const res=shouldCreate?await callApi('requestParentReauthorization',[data.phone,data.requestId],30000):await callApi('getParentReauthorizationStatus',[data.phone,data.requestId],12000);if(run!==flowRun)return;if(res&&res.code==='NOT_FOUND'&&res.ok===false){safeRemove(REAUTH_KEY);showAuthStopped('NOT_FOUND',res.message||'Этот номер не найден среди активных родителей.');return}shouldCreate=false;if(!res||res.ok===false)throw new Error((res&&res.message)||'Не удалось проверить авторизацию.');if(res.code)$('authRequestCode').textContent=res.code;if(res.parentSession||res.status==='APPROVED'){showAuthApproved(res);return}if(res.status==='DENIED'){safeRemove(REAUTH_KEY);showAuthStopped('DENIED','Воспитатель отклонил запрос. При необходимости свяжитесь с отделением.');return}if(res.status==='EXPIRED'){safeRemove(REAUTH_KEY);showAuthStopped('EXPIRED','Запрос больше не действует. Отправьте новый запрос на вход.');return}if(res.status==='NOT_FOUND')shouldCreate=true}catch(e){if(run!==flowRun)return;$('authPendingText').textContent='Связь временно прервана. Продолжаем проверять запрос…'}await wait(1500)}}
+  async function runReauthorizationFlow(data,createFirst){
+    const run=++flowRun;resetAuthPendingUi();show('screenAuthPending');let shouldCreate=!!createFirst;
+    while(run===flowRun){
+      try{
+        let res=await callCloudflareAccess(!shouldCreate,data);
+        if(run!==flowRun)return;
+        // Only a parent missing from Cloudflare takes the old compatibility route.
+        if((res&&res.code==='NOT_FOUND')||(!shouldCreate&&res&&res.status==='NOT_FOUND')){
+          res=shouldCreate
+            ?await callApi('requestParentReauthorization',[data.phone,data.requestId],30000)
+            :await callApi('getParentReauthorizationStatus',[data.phone,data.requestId],12000);
+          if(run!==flowRun)return;
+        }
+        if(res&&res.code==='NOT_FOUND'&&res.ok===false){safeRemove(REAUTH_KEY);showAuthStopped('NOT_FOUND',res.message||'Этот номер не найден среди активных родителей.');return}
+        if(!res||res.ok===false)throw new Error((res&&res.message)||'Не удалось проверить авторизацию.');
+        shouldCreate=false;
+        $('authPendingText').textContent='Пожалуйста, подождите, пока воспитатель подтвердит вход.';
+        if(res.code)$('authRequestCode').textContent=res.code;
+        if(res.parentSession){showAuthApproved(res);return}
+        if(res.status==='DENIED'){safeRemove(REAUTH_KEY);showAuthStopped('DENIED','Воспитатель отклонил запрос. При необходимости свяжитесь с отделением.');return}
+        if(res.status==='EXPIRED'){safeRemove(REAUTH_KEY);showAuthStopped('EXPIRED','Запрос больше не действует. Отправьте новый запрос на вход.');return}
+        if(res.status==='NOT_FOUND')shouldCreate=true;
+      }catch(e){if(run!==flowRun)return;$('authPendingText').textContent='Связь временно прервана. Продолжаем проверять запрос…'}
+      await wait(1500);
+    }
+  }
   async function beginReauthorization(phoneRaw){const digits=onlyDigits(phoneRaw);if(!validPhone(digits))return;let saved=readJson(REAUTH_KEY);if(!saved||onlyDigits(saved.phone).slice(-10)!==digits.slice(-10))saved={phone:digits,requestId:makeFlowId('auth')};safeSet(REAUTH_KEY,JSON.stringify(saved));runReauthorizationFlow(saved,true)}
   async function auth(){const digits=onlyDigits($('phoneInputAuth').value),err=$('phoneErrorAuth');err.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}beginReauthorization(digits)}
   function extractSession(res){if(res&&res.token)return res;if(res&&res.session&&res.session.token)return res.session;return null}

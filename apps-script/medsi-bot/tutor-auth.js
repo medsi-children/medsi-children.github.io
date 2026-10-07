@@ -6,6 +6,7 @@ const TUTOR_ACCESS_PASSWORD_PROPERTY_ = 'MEDSI_TUTOR_ACCESS_PASSWORD';
 // Данные входа задаются только через Script Properties и никогда не хранятся в Git.
 const TUTOR_SESSION_PREFIX_ = 'MEDSI_TUTOR_SESSION_';
 const TUTOR_SESSION_VERSION_KEY_ = 'MEDSI_TUTOR_SESSION_VERSION';
+const TUTOR_LEGACY_CLEARED_KEY_ = 'MEDSI_TUTOR_LEGACY_CLEARED';
 
 function getTutorAccessCredentials_() {
   const props = PropertiesService.getScriptProperties();
@@ -68,10 +69,12 @@ function isSignedTutorSessionValid_(token) {
 
 function clearLegacyTutorSessionProperties_() {
   const props = PropertiesService.getScriptProperties();
+  if (props.getProperty(TUTOR_LEGACY_CLEARED_KEY_) === '1') return;
   const legacySessionKey = /^MEDSI_TUTOR_SESSION_[a-f0-9-]{36}$/i;
   Object.keys(props.getProperties()).forEach(function (key) {
     if (legacySessionKey.test(key)) props.deleteProperty(key);
   });
+  props.setProperty(TUTOR_LEGACY_CLEARED_KEY_, '1');
 }
 
 function isTutorSessionValid_(tokenRaw) {
@@ -127,9 +130,8 @@ function verifyTutorSession(tokenRaw) {
 // prevent a correctly authorised educator from entering the reports panel.
 function getTutorD1Session_() {
   try {
-    if (String(PropertiesService.getScriptProperties().getProperty('CHAT_BACKEND') || 'sheets') !== 'd1') {
-      return null;
-    }
+    // The web panel uses D1 even while old Apps Script chat calls retain a
+    // historical CHAT_BACKEND=sheets setting.
     return createD1ChatSession_('educator', '');
   } catch (e) {
     return null;

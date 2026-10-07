@@ -242,25 +242,18 @@ function requestParentReauthorization(phoneRaw, requestIdRaw) {
   if (!phone10 || !requestId) return { ok: false, message: 'Проверьте номер телефона.' };
   try {
     ensureLegacyParentAccessRequestsImported_();
-    const result = cloudflareParentAccessRequest_('post', '/lab/parent-access/request', {
+    let result = cloudflareParentAccessRequest_('post', '/lab/parent-access/request', {
       phone:'8' + phone10, requestId:requestId
     });
-    if (!result || result.ok === false) return result || { ok:false, message:'Не удалось отправить запрос.' };
-    // D1 stores the request before push is attempted. A notification failure
-    // never loses the pending request; the educator panel polls Cloudflare.
-    if (result.created) {
-      try {
-        const actor = parentReauthorizationActor_(phone10);
-        sendPushNotification_('educator', '', {
-          title: 'Медси Бот',
-          body: actor + ' запрашивает авторизацию в Медси Боте',
-          url: '/tutors?reauth=' + encodeURIComponent(requestId),
-          tag: 'medsi-parent-reauth-' + requestId
-        });
-      } catch (_) {
-        // The pending request remains visible in the educator panel.
-      }
+    if (result && result.code === 'NOT_FOUND' && getReportRowsByPhone_(phone10).length) {
+      // Only an old family missing its D1 mirror needs the REPORTS lookup.
+      syncD1ProfileForPhone_(phone10);
+      result = cloudflareParentAccessRequest_('post', '/lab/parent-access/request', {
+        phone:'8' + phone10, requestId:requestId
+      });
     }
+    if (!result || result.ok === false) return result || { ok:false, message:'Не удалось отправить запрос.' };
+    // Cloudflare sends the educator push when it commits a new request.
     return result;
   } catch (e) {
     return { ok: false, message: 'Не удалось отправить запрос: ' + String(e && e.message || e) };
@@ -280,7 +273,6 @@ function getParentReauthorizationStatus(phoneRaw, requestIdRaw) {
 
 function listPendingParentReauthorizations(tutorTokenRaw) {
   requireTutorSession_(tutorTokenRaw);
-  ensureLegacyParentAccessRequestsImported_();
   const value = d1AdminRequest_('/admin/parent-access-requests', 'get');
   const requests = (value.requests || []).map(function(request) {
     const actor = parentReauthorizationActor_(last10_(request.phone));
@@ -291,7 +283,6 @@ function listPendingParentReauthorizations(tutorTokenRaw) {
 
 function decideParentReauthorization(requestIdRaw, decisionRaw, tutorTokenRaw) {
   requireTutorSession_(tutorTokenRaw);
-  ensureLegacyParentAccessRequestsImported_();
   const decision = String(decisionRaw || '').trim().toUpperCase();
   if (decision !== 'APPROVE' && decision !== 'DENY') return { ok: false, message: 'Неизвестное решение.' };
   try {

@@ -92,7 +92,7 @@
 
   function sendSubscriptionToApp(subscription, targetWindow) {
     const target = targetWindow || (state.frame && state.frame.contentWindow);
-    if (!state.identity) return;
+    if (!state.identity) return Promise.resolve(null);
 
     const message = {
       type: PUSH_MESSAGE_TYPE,
@@ -105,7 +105,7 @@
     };
 
     if (target) target.postMessage(message, '*');
-    sendPushRequestToServer(message);
+    return sendPushRequestToServer(message);
   }
 
   function deleteSubscriptionInApp(subscription) {
@@ -120,14 +120,16 @@
     if (state.frame && state.frame.contentWindow) {
       state.frame.contentWindow.postMessage(message, '*');
     }
-    sendPushRequestToServer(message);
+    sendPushRequestToServer(message).catch(() => {});
   }
 
   function sendPushRequestToServer(message) {
-    if (!message) return;
+    if (!message) return Promise.resolve(null);
+
+    let pushRequest = Promise.resolve(null);
 
     if (state.pushServiceUrl && message.action === 'save') {
-      sendPushRequest(state.pushServiceUrl + '/subscribe', {
+      pushRequest = sendPushRequest(state.pushServiceUrl + '/subscribe', {
         role: message.role,
         phone: message.phone,
         parentSession: message.parentSession,
@@ -137,32 +139,42 @@
     }
 
     if (state.pushServiceUrl && message.action === 'delete') {
-      sendPushRequest(state.pushServiceUrl + '/unsubscribe', {
+      pushRequest = sendPushRequest(state.pushServiceUrl + '/unsubscribe', {
         endpoint: message.endpoint
       });
     }
 
-    if (!state.appEndpointUrl) return;
-    sendPushRequest(state.appEndpointUrl, {
-      action: message.action,
-      role: message.role,
-      phone: message.phone,
-      parentSession: message.parentSession,
-      endpoint: message.endpoint,
-      subscription: message.subscription,
-      userAgent: message.userAgent
-    });
+    if (state.appEndpointUrl) {
+      sendPushRequest(state.appEndpointUrl, {
+        action: message.action,
+        role: message.role,
+        phone: message.phone,
+        parentSession: message.parentSession,
+        endpoint: message.endpoint,
+        subscription: message.subscription,
+        userAgent: message.userAgent
+      }, true).catch(() => {});
+    }
+    return pushRequest;
   }
 
-  function sendPushRequest(url, body) {
+  async function sendPushRequest(url, body, opaque) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
     try {
-      fetch(url, {
+      const response = await fetch(url, {
         method: 'POST',
-        mode: 'no-cors',
+        mode: opaque ? 'no-cors' : 'cors',
         headers: { 'content-type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(body || {}),
-      }).catch(() => {});
-    } catch (e) {}
+        signal: controller.signal
+      });
+      if (opaque) return null;
+      let result;
+      try { result = await response.json(); } catch (_) { throw new Error('PUSH_BAD_RESPONSE'); }
+      if (!response.ok || !result || result.ok !== true) throw new Error(result && result.message || 'PUSH_SUBSCRIBE_FAILED');
+      return result;
+    } finally { clearTimeout(timer); }
   }
 
   async function getSubscription() {
@@ -209,7 +221,7 @@
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
 
-    sendSubscriptionToApp(subscription);
+    await sendSubscriptionToApp(subscription);
     setStatus('Уведомления включены.');
     updateButton({ reveal: true });
   }
@@ -303,7 +315,9 @@
       state.button.textContent = 'Отключить уведомления';
       state.button.disabled = false;
 
-      sendSubscriptionToApp(subscription);
+      sendSubscriptionToApp(subscription).catch(() => {
+        setStatus('Проверяем подключение уведомлений. Попробуем ещё раз при следующем открытии.');
+      });
 
       if (options && options.reveal) revealButtonFor(ENABLED_VISIBLE_MS);
       return;
@@ -340,7 +354,7 @@
 
     getSubscription()
       .then(subscription => {
-        if (subscription) sendSubscriptionToApp(subscription, event.source);
+        if (subscription) return sendSubscriptionToApp(subscription, event.source);
       })
       .catch(() => {});
   });
@@ -407,7 +421,8 @@
     },
     sendCurrentSubscription: async function () {
       const subscription = await getSubscription();
-      if (subscription) sendSubscriptionToApp(subscription);
+      if (subscription) return sendSubscriptionToApp(subscription);
+      return null;
     }
   };
 })();

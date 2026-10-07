@@ -48,6 +48,8 @@ function syncD1ProfilesFromReports() {
   // Timeweb uses D1 regardless of the retired CHAT_BACKEND switch, which is
   // still "sheets" in some installations for legacy Apps Script chat calls.
   ensureReportsD1ProfileSyncTriggers_();
+  try { ensureLegacyParentAccessRequestsImported_(); }
+  catch (error) { Logger.log('LEGACY_PARENT_ACCESS_IMPORT_DEFERRED ' + String(error && error.message || error)); }
   let registrationSync = { ok:true, synced:0 };
   try { registrationSync = flushCloudflareParentRegistrationOutbox_(); }
   catch (error) {
