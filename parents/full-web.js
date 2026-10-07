@@ -130,7 +130,7 @@
           }
           if(run!==flowRun)return;
           if(res){
-            if(res.duplicate){safeRemove(REG_ATTEMPT_KEY);$('phoneInputAuth').value=data.phone;await beginReauthorization(data.phone);return}
+            if(res.duplicate){safeRemove(REG_ATTEMPT_KEY);$('phoneInputAuth').value=data.phone;await beginReauthorization(data.phone,true);return}
             if(res.ok&&res.parentSession){await finishRegistration(res,run);return}
             phase='status';
           }
@@ -192,8 +192,8 @@
       await wait(1500);
     }
   }
-  async function beginReauthorization(phoneRaw){const digits=onlyDigits(phoneRaw);if(!validPhone(digits))return;let saved=readJson(REAUTH_KEY);if(!saved||onlyDigits(saved.phone).slice(-10)!==digits.slice(-10))saved={phone:digits,requestId:makeFlowId('auth')};safeSet(REAUTH_KEY,JSON.stringify(saved));runReauthorizationFlow(saved,true)}
-  async function auth(){const digits=onlyDigits($('phoneInputAuth').value),err=$('phoneErrorAuth');err.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}beginReauthorization(digits)}
+  async function beginReauthorization(phoneRaw,forceNew){const digits=onlyDigits(phoneRaw);if(!validPhone(digits))return;let saved=readJson(REAUTH_KEY);if(forceNew||!saved||onlyDigits(saved.phone).slice(-10)!==digits.slice(-10))saved={phone:digits,requestId:makeFlowId('auth')};safeSet(REAUTH_KEY,JSON.stringify(saved));runReauthorizationFlow(saved,true)}
+  async function auth(){const digits=onlyDigits($('phoneInputAuth').value),err=$('phoneErrorAuth');err.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}beginReauthorization(digits,true)}
   function extractSession(res){if(res&&res.token)return res;if(res&&res.session&&res.session.token)return res.session;return null}
   function saveD1Session(session){if(!session||!session.token)return null;d1Session=session;safeSet(D1_KEY,JSON.stringify({phone:onlyDigits(currentPhone).slice(-10),session}));return session}
   function loadCachedD1Session(phone){try{const saved=JSON.parse(safeGet(D1_KEY)||'null'),session=extractSession(saved),savedPhone=onlyDigits(saved&&saved.phone||phone).slice(-10);if(session&&savedPhone===onlyDigits(phone).slice(-10)&&Number(session.expiresAt||0)>Date.now()+30000)return saveD1Session(session)}catch(_){}return null}
