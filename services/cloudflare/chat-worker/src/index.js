@@ -705,10 +705,12 @@ async function upsertCurrentReports(request, env, ctx) {
   const reportDate = /^\d{4}-\d{2}-\d{2}$/.test(String(payload.reportDate || ''))
     ? String(payload.reportDate)
     : '';
+  const notificationEligible = payload.notificationEligible === true &&
+    reportNotificationWindowOpen(notificationKind, Date.now());
   const previousReports = new Map();
   if (notificationKind && reportDate) {
     const previous = await env.CHAT_DB.prepare(
-      'SELECT phone10, version, updated_at FROM report_current WHERE kind = ?'
+      'SELECT phone10, version, text, updated_at FROM report_current WHERE kind = ?'
     ).bind(notificationKind).all();
     (previous.results || []).forEach(row => previousReports.set(row.phone10, row));
   }
@@ -737,11 +739,21 @@ async function upsertCurrentReports(request, env, ctx) {
       Number(item && item.updatedAt || 0) || Date.now()
     ));
     const text = String(item && item.text || '').trim();
-    if (kind === notificationKind && reportDate && text) {
+    if (kind === notificationKind && reportDate && text && notificationEligible) {
       const previous = previousReports.get(phone);
       const previousDate = previous ? reportDateInMoscow(previous.updated_at) : '';
+      const incomingVersion = String(item && item.version || '');
+      const previousVersion = String(previous && previous.version || '');
+      // During rollout, old rows contain a fingerprint of the rendered text
+      // (which included the child name).  If the canonical body is unchanged,
+      // treat the first v2 sync as the same publication and do not emit a
+      // migration-time push.
+      const sameCanonicalTextOnVersionMigration = previous &&
+        incomingVersion.indexOf('v2:') === 0 &&
+        previousVersion.indexOf('v2:') !== 0 &&
+        canonicalReportTextForNotification(previous.text) === canonicalReportTextForNotification(text);
       const samePublishedReport = previous &&
-        String(previous.version || '') === String(item && item.version || '') &&
+        (previousVersion === incomingVersion || sameCanonicalTextOnVersionMigration) &&
         previousDate === reportDate;
       if (!samePublishedReport) notificationTargets.push({ phone, kind, reportDate });
     }
@@ -771,6 +783,27 @@ async function upsertCurrentReports(request, env, ctx) {
     }
   }
   return json({ ok: true, received: statements.length, updated: statements.length, pushQueued: queued });
+}
+
+function reportNotificationWindowOpen(kindRaw, timestamp) {
+  const kind = String(kindRaw || '').trim().toLowerCase();
+  if (kind !== 'morning' && kind !== 'evening') return false;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Moscow', hour: '2-digit', hour12: false
+  }).formatToParts(new Date(Number(timestamp || Date.now())));
+  const hourPart = parts.find(part => part.type === 'hour');
+  const hour = Number(hourPart && hourPart.value);
+  if (!Number.isFinite(hour)) return false;
+  if (kind === 'morning') return hour >= 13 && hour < 17;
+  return hour >= 18 && hour < 24;
+}
+
+function canonicalReportTextForNotification(raw) {
+  return String(raw || '')
+    .replace(/(^|\n\s*\n)\s*[^:\n]{1,100}:\s*/g, '$1')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function reportDateInMoscow(timestamp) {

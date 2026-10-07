@@ -86,7 +86,16 @@ function snapshotCurrentReportsForD1_(kindRaw) {
     kinds.filter(function(kind) { return kind !== 'psychology'; }).forEach(function(kind) {
       const snapshot = buildParentReportSnapshot_(phone, kind, false, rowsByPhone[phone] || []);
       const text = snapshot.hasReport ? String(snapshot.text || '').trim() : '';
-      reports.push({ phone:phone, kind:kind, text:text, version:reportFingerprint_(text), updatedAt:updatedAt });
+      // Keep the display name in `text`, but fingerprint only the report body.
+      // A REPORTS name-variant update must not look like a new report to the
+      // parent push pipeline.
+      reports.push({
+        phone:phone,
+        kind:kind,
+        text:text,
+        version:reportContentVersionForD1_(rowsByPhone[phone] || [], kind),
+        updatedAt:updatedAt
+      });
     });
     if (needsPsychology) {
       reports.push({ phone:phone, kind:'psychology', text:psychologyText, version:reportFingerprint_(psychologyText), updatedAt:updatedAt });
@@ -100,13 +109,39 @@ function syncD1CurrentReportsToWorker_(kindRaw) {
   const reports = snapshotCurrentReportsForD1_(requestedKind);
   const now = Date.now();
   const notificationKind = requestedKind === 'morning' || requestedKind === 'evening' ? requestedKind : '';
-  const reportDate = Utilities.formatDate(new Date(now), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const reportDate = reportHistoryDate_(new Date(now));
   const result = d1AdminRequest_('/admin/report-current', 'post', {
     reports:reports,
     notificationKind:notificationKind,
-    reportDate:reportDate
+    reportDate:reportDate,
+    notificationEligible: reportNotificationWindowOpen_(notificationKind, new Date(now))
   });
   return { ok:true, reports:reports.length, updated:Number(result.updated || 0) };
+}
+
+// Report pushes are intentionally limited to the publication windows shown
+// to parents.  This also prevents an accidental manual edit/test at 16:00
+// from sending an evening notification.
+function reportNotificationWindowOpen_(kindRaw, date) {
+  const kind = String(kindRaw || '').trim().toLowerCase();
+  if (!['morning', 'evening'].includes(kind)) return false;
+  const hour = Number(Utilities.formatDate(date || new Date(), 'Europe/Moscow', 'H'));
+  if (kind === 'morning') return hour >= 13 && hour < 17;
+  return hour >= 18 && hour < 24;
+}
+
+// D1 report versions use a prefix so the Worker can distinguish the new
+// content-only fingerprint from the old display-text fingerprint during the
+// one-time rollout.  The header is the generated child name, not report data.
+function reportContentVersionForD1_(rows, kindRaw) {
+  const kind = String(kindRaw || '').trim().toLowerCase();
+  const parts = (Array.isArray(rows) ? rows : []).map(function(row) {
+    const raw = kind === 'morning' ? row[4] : row[5];
+    if (!isActualReportText_(raw)) return '';
+    return stripLeadingNameHeader_(String(raw)).trim();
+  }).filter(Boolean);
+  const fingerprint = reportFingerprint_(parts.join('\n\n'));
+  return fingerprint ? 'v2:' + fingerprint : '';
 }
 
 function syncD1CurrentReportsToWorker() {
