@@ -1672,13 +1672,14 @@ function appendReport(param, tutorTokenRaw) {
     if (!sheet) return { ok: false, message: `Лист "${targetSheetName}" не найден.` };
 
     const raw = (param && param.text) || '';
-    const text = cleanIncomingText_(raw);
+    let text = cleanIncomingText_(raw);
 
     if (!text) return { ok: false, message: 'Пустой текст отчёта.' };
 
     if (targetSheetName !== SHEET_PSYCHOLOGY) {
-      const validation = validateChildReportFormat_(typeRaw, text);
-      if (!validation.ok) return validation;
+      const prepared = prepareRawReportSourceText_(typeRaw, text);
+      if (!prepared.ok) return prepared.validation;
+      text = prepared.text;
     }
 
     submissionId = normalizeReportSubmissionId_(param && param.submissionId);
@@ -5915,6 +5916,543 @@ function buildSafeDistribution_(reportType, parsed, contextByBase) {
   return { byRow };
 }
 
+
+function buildReportChildrenFromProfileSnapshot_(snapshotRaw) {
+  const snapshot = snapshotRaw || {};
+  const entries = Object.keys(snapshot).sort().map(function(phoneKey) {
+    const profile = snapshot[phoneKey] || {};
+    let displayName = String(profile.reportChildName || '').trim();
+    let family = String(profile.familyName || '').trim();
+
+    if (!displayName) {
+      const parts = String(profile.childName || '').trim().split(/\s+/).filter(Boolean);
+      if (parts.length) {
+        displayName = parts.shift();
+        if (!family) family = parts.join(' ');
+      }
+    }
+
+    return {
+      phone: last10_(profile.phone || phoneKey),
+      displayName: displayName,
+      family: family
+    };
+  }).filter(function(entry) {
+    return !!entry.displayName;
+  });
+
+  const children = buildReportChildren_(
+    entries.map(function(entry) {
+      return normalizeReportChildName_(entry.displayName, entry.family) || entry.displayName;
+    }),
+    entries.map(function(entry) { return entry.family; })
+  );
+
+  children.forEach(function(child, index) {
+    const phone10 = entries[index] && entries[index].phone || '';
+    child.phone = phone10 ? '8' + phone10 : '';
+    child.phone10 = phone10;
+    if (!child.suffixKey) child.identityKey = 'phone:' + (phone10 || child.index);
+  });
+
+  return children;
+}
+
+function uniqueReportChildrenByIdentity_(childrenRaw) {
+  const byIdentity = {};
+  (childrenRaw || []).filter(Boolean).forEach(function(child) {
+    const key = reportChildIdentityKey_(child) || ('row:' + String(child.index));
+    if (!byIdentity[key]) byIdentity[key] = child;
+  });
+  return Object.keys(byIdentity).map(function(key) { return byIdentity[key]; });
+}
+
+function formatRawReportNameToken_(valueRaw) {
+  return String(valueRaw || '')
+    .trim()
+    .split(/(-)/)
+    .map(function(part) {
+      if (part === '-') return part;
+      return part ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part;
+    })
+    .join('');
+}
+
+function canonicalRawReportLabelForChild_(child, contextByBase) {
+  if (!child) return '';
+
+  const baseKey = String(child.baseKey || getNameBaseKey_(child.baseName || child.fullName) || '').trim();
+  const baseName = capWord(baseKey || stripInitialFromName_(child.fullName || child.baseName));
+  if (!baseName) return '';
+
+  const familyKey = normalizeFamilyName_(child.family || '');
+  const suffixKey = String(child.suffixKey || '').trim();
+  const ctx = contextByBase && contextByBase[child.baseKey] || { registered: [] };
+  const siblings = uniqueReportChildrenByIdentity_(ctx.registered || []);
+
+  if (familyKey) {
+    const initial = familyKey.charAt(0);
+    const sameInitial = siblings.filter(function(candidate) {
+      const family = normalizeFamilyName_(candidate && candidate.family || '');
+      return family && family.charAt(0) === initial;
+    });
+
+    if (sameInitial.length <= 1) {
+      return baseName + ' ' + initial.toUpperCase() + '.';
+    }
+
+    for (let len = 2; len <= Math.min(4, familyKey.length); len += 1) {
+      const prefix = familyKey.slice(0, len);
+      const matching = uniqueReportChildrenByIdentity_(siblings.filter(function(candidate) {
+        const family = normalizeFamilyName_(candidate && candidate.family || '');
+        return family && family.indexOf(prefix) === 0;
+      }));
+      if (matching.length === 1 && reportChildIdentityKey_(matching[0]) === reportChildIdentityKey_(child)) {
+        return baseName + ' ' + formatRawReportNameToken_(prefix);
+      }
+    }
+
+    return baseName + ' ' + formatRawReportNameToken_(child.family || familyKey);
+  }
+
+  if (suffixKey) {
+    return suffixKey.length === 1
+      ? baseName + ' ' + suffixKey.toUpperCase() + '.'
+      : baseName + ' ' + formatRawReportNameToken_(child.suffix || suffixKey);
+  }
+
+  return baseName;
+}
+
+function canonicalRawReportLabelForHeader_(header) {
+  if (!header) return '';
+  const baseKey = String(header.baseKey || getNameBaseKey_(header.baseRaw) || '').trim();
+  const baseName = capWord(baseKey || header.baseRaw);
+  if (!baseName) return String(header.raw || '').trim();
+
+  const suffixKey = String(header.suffixKey || '').trim();
+  if (!suffixKey) return baseName;
+
+  return suffixKey.length === 1
+    ? baseName + ' ' + suffixKey.toUpperCase() + '.'
+    : baseName + ' ' + formatRawReportNameToken_(header.suffix || suffixKey);
+}
+
+function classifyRawReportHeader_(header, knownBaseKeys, contextByBase) {
+  if (!header || !header.baseKey) return { recognized:false, resolution:null };
+
+  const isKnownRegistered = !!(knownBaseKeys && knownBaseKeys[header.baseKey]);
+  const isKnownName = isInNameBase(normalizeName_(header.baseRaw));
+  const probableAliasChildren = (!isKnownRegistered && !isKnownName)
+    ? findProbableReportAliasChildren_(header, contextByBase)
+    : [];
+  const isProbableAlias = probableAliasChildren.length > 0;
+  const isUnassignedHeader = (!isKnownRegistered && !isKnownName && !isProbableAlias)
+    ? isPotentialUnassignedReportHeader_(header)
+    : false;
+
+  if (!isKnownRegistered && !isKnownName && !isProbableAlias && !isUnassignedHeader) {
+    return { recognized:false, resolution:null };
+  }
+
+  const block = {
+    rawName: header.raw,
+    baseRaw: header.baseRaw,
+    baseKey: header.baseKey,
+    suffix: header.suffix,
+    suffixKey: header.suffixKey,
+    hasSuffix: header.hasSuffix,
+    body: ''
+  };
+
+  const resolution = isProbableAlias
+    ? makeUnknownReportAliasResolution_(probableAliasChildren)
+    : (isUnassignedHeader ? makeUnassignedReportHeaderResolution_() : resolveReportBlock_(block, contextByBase));
+
+  return {
+    recognized:true,
+    resolution:resolution,
+    isUnassigned:isUnassignedHeader
+  };
+}
+
+function reportResolutionTargets_(resolution) {
+  if (!resolution) return [];
+  return resolution.children && resolution.children.length
+    ? resolution.children.filter(Boolean)
+    : (resolution.child ? [resolution.child] : []);
+}
+
+function mapPreviousResolutionToCurrentChildren_(previousResolution, currentChildrenRaw) {
+  const previousTargets = reportResolutionTargets_(previousResolution);
+  const currentChildren = currentChildrenRaw || [];
+  if (!previousTargets.length || !currentChildren.length) return [];
+
+  const phones = {};
+  previousTargets.forEach(function(child) {
+    const phone = last10_(child && (child.phone10 || child.phone));
+    if (phone) phones[phone] = true;
+  });
+
+  let matches = currentChildren.filter(function(child) {
+    const phone = last10_(child && (child.phone10 || child.phone));
+    return !!(phone && phones[phone]);
+  });
+  let unique = uniqueReportChildrenByIdentity_(matches);
+  if (unique.length === 1) {
+    const identity = reportChildIdentityKey_(unique[0]);
+    return currentChildren.filter(function(child) {
+      return reportChildIdentityKey_(child) === identity;
+    });
+  }
+
+  const previousIdentities = {};
+  previousTargets.forEach(function(child) {
+    const identity = reportChildIdentityKey_(child);
+    if (identity) previousIdentities[identity] = true;
+  });
+  matches = currentChildren.filter(function(child) {
+    return !!previousIdentities[reportChildIdentityKey_(child)];
+  });
+  unique = uniqueReportChildrenByIdentity_(matches);
+  if (unique.length !== 1) return [];
+
+  const identity = reportChildIdentityKey_(unique[0]);
+  return currentChildren.filter(function(child) {
+    return reportChildIdentityKey_(child) === identity;
+  });
+}
+
+function comparableReportBody_(valueRaw) {
+  return normalizeReportBlockBody_(
+    stripLeadingNameHeader_(String(valueRaw || ''))
+  );
+}
+
+function rawReportBlockWasPreviouslyDistributed_(kindRaw, block, previousTargets, currentTargets) {
+  const kind = String(kindRaw || '').toLowerCase();
+  if (!['morning', 'evening'].includes(kind) || !block) return false;
+
+  const expected = comparableReportBody_(block.body);
+  if (!expected) return false;
+
+  const phones = {};
+  (previousTargets || []).concat(currentTargets || []).forEach(function(child) {
+    const phone = last10_(child && (child.phone10 || child.phone));
+    if (phone) phones[phone] = true;
+  });
+  if (!Object.keys(phones).length) return false;
+
+  const sheet = getDataSheet_();
+  const lastRow = sheet ? sheet.getLastRow() : 0;
+  if (!sheet || lastRow < 2) return false;
+
+  const rows = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  const reportIndex = kind === 'morning' ? 4 : 5;
+
+  return rows.some(function(row) {
+    const phone = last10_(row[0]);
+    if (!phone || !phones[phone] || !isActualReportText_(row[reportIndex])) return false;
+    return comparableReportBody_(row[reportIndex]) === expected;
+  });
+}
+
+function canonicalizeRawChildReport_(textRaw, optionsRaw) {
+  const options = optionsRaw || {};
+  const text = cleanIncomingText_(textRaw);
+  if (!text) return { text:'', changed:false, rewritten:0, recovered:0, unresolved:[] };
+
+  const currentChildren = options.children || buildReportValidationChildren_();
+  const previousChildren = options.previousChildren || [];
+  const currentKnown = buildKnownBaseKeys_(currentChildren);
+  const previousKnown = buildKnownBaseKeys_(previousChildren);
+  const currentContext = buildDistributionContext_(currentChildren, []);
+  const previousContext = buildDistributionContext_(previousChildren, []);
+  const confirmPreviousAssignment = typeof options.confirmPreviousAssignment === 'function'
+    ? options.confirmPreviousAssignment
+    : function() { return false; };
+
+  const headerRe = /(^|\n)([ \t]*)([^:\-–—\n]+?)[ \t]*(?:\.?[ \t]*([:\-–—]))[ \t]*/g;
+  const candidates = [];
+  let match;
+
+  while ((match = headerRe.exec(text)) !== null) {
+    const header = getReportHeaderParts_(match[3].trim());
+    const currentClass = classifyRawReportHeader_(header, currentKnown, currentContext);
+    const previousClass = previousChildren.length
+      ? classifyRawReportHeader_(header, previousKnown, previousContext)
+      : { recognized:false, resolution:null };
+
+    if (!currentClass.recognized && !previousClass.recognized) continue;
+
+    candidates.push({
+      start:match.index,
+      end:headerRe.lastIndex,
+      prefix:match[1] || '',
+      indent:match[2] || '',
+      header:header,
+      currentClass:currentClass,
+      previousClass:previousClass,
+      bodyStart:headerRe.lastIndex
+    });
+  }
+
+  const replacements = [];
+  const unresolved = [];
+  let recovered = 0;
+
+  candidates.forEach(function(item, index) {
+    const bodyEnd = index + 1 < candidates.length ? candidates[index + 1].start : text.length;
+    const block = {
+      rawName:item.header.raw,
+      baseRaw:item.header.baseRaw,
+      baseKey:item.header.baseKey,
+      suffix:item.header.suffix,
+      suffixKey:item.header.suffixKey,
+      hasSuffix:item.header.hasSuffix,
+      body:normalizeReportBlockBody_(text.slice(item.bodyStart, bodyEnd))
+    };
+
+    let label = '';
+    const currentResolution = item.currentClass && item.currentClass.resolution;
+
+    if (currentResolution && currentResolution.status === 'ok') {
+      const targets = reportResolutionTargets_(currentResolution);
+      label = canonicalRawReportLabelForChild_(targets[0], currentContext);
+    } else if (
+      currentResolution &&
+      currentResolution.status === 'ambiguous' &&
+      !block.hasSuffix &&
+      item.previousClass &&
+      item.previousClass.resolution &&
+      item.previousClass.resolution.status === 'ok'
+    ) {
+      const previousTargets = reportResolutionTargets_(item.previousClass.resolution);
+      const mappedTargets = mapPreviousResolutionToCurrentChildren_(
+        item.previousClass.resolution,
+        currentChildren
+      );
+      if (
+        mappedTargets.length &&
+        confirmPreviousAssignment({
+          block:block,
+          previousTargets:previousTargets,
+          currentTargets:mappedTargets
+        })
+      ) {
+        label = canonicalRawReportLabelForChild_(mappedTargets[0], currentContext);
+        recovered += 1;
+      }
+    } else if (
+      currentResolution &&
+      (currentResolution.status === 'no_parent' || item.currentClass.isUnassigned)
+    ) {
+      label = canonicalRawReportLabelForHeader_(item.header);
+    }
+
+    if (!label) {
+      if (currentResolution && currentResolution.status === 'ambiguous') {
+        unresolved.push(String(item.header.raw || '').trim());
+      }
+      return;
+    }
+
+    const replacement = item.prefix + item.indent + label + ' — ';
+    const before = text.slice(item.start, item.end);
+    if (before !== replacement) {
+      replacements.push({ start:item.start, end:item.end, text:replacement });
+    }
+  });
+
+  let next = text;
+  for (let i = replacements.length - 1; i >= 0; i -= 1) {
+    const replacement = replacements[i];
+    next = next.slice(0, replacement.start) + replacement.text + next.slice(replacement.end);
+  }
+
+  return {
+    text:next,
+    changed:next !== text,
+    rewritten:replacements.length,
+    recovered:recovered,
+    unresolved:uniqueStrings_(unresolved)
+  };
+}
+
+function getLatestReportCell_(sheet, colIndex) {
+  const col = Number(colIndex || 1);
+  if (!sheet) return null;
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const values = sheet.getRange(1, col, lastRow, 1).getValues().flat();
+  for (let i = values.length - 1; i >= 0; i -= 1) {
+    if (String(values[i] || '').trim()) return sheet.getRange(i + 1, col);
+  }
+  return sheet.getRange(1, col);
+}
+
+function setRawReportSourceNote_(cell, messageRaw) {
+  if (!cell) return;
+  const message = String(messageRaw || '').trim();
+  if (message) cell.setNote(message);
+  else cell.clearNote();
+}
+
+function prepareRawReportSourceText_(kindRaw, textRaw) {
+  const kind = String(kindRaw || '').toLowerCase();
+  const canonical = canonicalizeRawChildReport_(textRaw);
+  const validation = validateChildReportFormat_(kind, canonical.text);
+  if (!validation.ok) {
+    return {
+      ok:false,
+      text:canonical.text,
+      canonical:canonical,
+      validation:validation,
+      message:validation.message
+    };
+  }
+  return {
+    ok:true,
+    text:canonical.text,
+    canonical:canonical,
+    validation:validation
+  };
+}
+
+function processRawReportSourceEdit_(kindRaw, sheet) {
+  const kind = String(kindRaw || '').toLowerCase();
+  if (!['morning', 'evening'].includes(kind) || !sheet) return { ok:false, message:'Неизвестный вид отчёта.' };
+
+  const cell = getLatestReportCell_(sheet, 1);
+  const raw = cell ? String(cell.getValue() || '') : '';
+  const prepared = prepareRawReportSourceText_(kind, raw);
+
+  if (!prepared.ok) {
+    setRawReportSourceNote_(
+      cell,
+      'Автоматическое распределение остановлено: ' + String(prepared.message || 'проверьте заголовки детей.')
+    );
+    return prepared.validation;
+  }
+
+  if (cell && String(cell.getValue() || '') !== prepared.text) cell.setValue(prepared.text);
+  setRawReportSourceNote_(cell, '');
+  distributeChildReports(kind);
+  return { ok:true, canonicalized:prepared.canonical.changed };
+}
+
+function redistributeChildReportKindMaintenanceCore_(kindRaw) {
+  const kind = String(kindRaw || '').toLowerCase();
+  if (!['morning', 'evening'].includes(kind)) return { ok:false, message:'Неизвестный вид отчёта.' };
+
+  const dataSheet = getDataSheet_();
+  const sourceSheet = getSheet_(kind === 'morning' ? SHEET_MORNING : SHEET_EVENING);
+  if (!dataSheet || !sourceSheet) return { ok:false, message:'Не найден лист отчёта.' };
+
+  const lastRow = dataSheet.getLastRow();
+  const count = Math.max(lastRow - 1, 0);
+  if (!count) return { ok:true, rows:0 };
+
+  const rawNames = dataSheet.getRange(2, 3, count, 1).getValues().flat();
+  const families = dataSheet.getRange(2, 4, count, 1).getValues().flat();
+  const baseNames = normalizeReportChildNames_(
+    dataSheet,
+    rawNames.map(function(value) { return String(value || '').trim(); }),
+    families
+  );
+
+  const children = attachPhonesToReportChildren_(
+    buildReportChildren_(baseNames, families),
+    dataSheet,
+    count
+  );
+  const knownBaseKeys = buildKnownBaseKeys_(children);
+  const contextByBase = buildDistributionContext_(children, []);
+  const parsed = parseReportBlocks_(getLatestReport(sourceSheet, 1) || '', knownBaseKeys, contextByBase);
+  const distribution = buildSafeDistribution_(kind, parsed, contextByBase);
+  const MISSING = 'Пока ещё нет отчёта 🙏';
+  const output = [];
+
+  for (let i = 0; i < count; i += 1) {
+    const storedName = baseNames[i];
+    const cleanName = stripInitialFromName_(storedName);
+    let value = distribution.byRow[i] || MISSING;
+    value = prepareReportForParent_(value, storedName, cleanName);
+    output.push([value]);
+  }
+
+  const targetColumn = kind === 'morning' ? 5 : 6;
+  dataSheet.getRange(2, targetColumn, count, 1).setValues(output);
+  return { ok:true, rows:count };
+}
+
+function maintainRawReportsAfterProfilesChangeCore_(previousSnapshotRaw, reasonRaw) {
+  const previousChildren = buildReportChildrenFromProfileSnapshot_(previousSnapshotRaw || {});
+  const currentChildren = buildReportValidationChildren_();
+  const result = {
+    ok:true,
+    reason:String(reasonRaw || ''),
+    rewritten:0,
+    recovered:0,
+    redistributed:0,
+    blocked:0
+  };
+
+  ['morning', 'evening'].forEach(function(kind) {
+    const sheet = getSheet_(kind === 'morning' ? SHEET_MORNING : SHEET_EVENING);
+    const cell = getLatestReportCell_(sheet, 1);
+    const raw = cell ? String(cell.getValue() || '') : '';
+    if (!raw.trim()) return;
+
+    const canonical = canonicalizeRawChildReport_(raw, {
+      children:currentChildren,
+      previousChildren:previousChildren,
+      confirmPreviousAssignment:function(payload) {
+        return rawReportBlockWasPreviouslyDistributed_(
+          kind,
+          payload.block,
+          payload.previousTargets,
+          payload.currentTargets
+        );
+      }
+    });
+
+    const validation = validateChildReportFormat_(kind, canonical.text);
+    if (!validation.ok) {
+      result.blocked += 1;
+      setRawReportSourceNote_(
+        cell,
+        'Автоматическое перераспределение остановлено: ' + String(validation.message || 'проверьте заголовки детей.')
+      );
+      return;
+    }
+
+    if (cell && String(cell.getValue() || '') !== canonical.text) {
+      cell.setValue(canonical.text);
+      if (typeof syncReportHistorySourceFingerprintSilently_ === 'function') {
+        syncReportHistorySourceFingerprintSilently_(kind, canonical.text);
+      }
+    }
+    setRawReportSourceNote_(cell, '');
+
+    result.rewritten += Number(canonical.rewritten || 0);
+    result.recovered += Number(canonical.recovered || 0);
+    const distributed = redistributeChildReportKindMaintenanceCore_(kind);
+    if (distributed && distributed.ok) result.redistributed += 1;
+  });
+
+  if (result.redistributed) {
+    try {
+      syncD1CurrentReportsToWorker_('');
+    } catch (error) {
+      result.ok = false;
+      Logger.log('REPORT_MAINTENANCE_D1_SYNC_FAILED ' + String(error && error.message || error));
+    }
+  }
+
+  return result;
+}
+
+
 function prepareReportForParent_(text, storedName, cleanName) {
   if (!text || text === 'Пока ещё нет отчёта 🙏') return text;
 
@@ -5926,14 +6464,14 @@ function prepareReportForParent_(text, storedName, cleanName) {
 function stripInitialFromName_(name) {
   return String(name || '')
     .trim()
-    .replace(/\s+[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё]{0,9}\.?$/, '')
+    .replace(/\s+[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё-]{0,31}\.?$/, '')
     .trim();
 }
 
 function getSuffixToken_(fullName) {
   const m = String(fullName || '')
     .trim()
-    .match(/\s+([A-ZА-ЯЁ][A-Za-zА-Яа-яЁё]{0,9})\.?$/);
+    .match(/\s+([A-ZА-ЯЁ][A-Za-zА-Яа-яЁё-]{0,31})\.?$/);
   return m ? m[1] : '';
 }
 
@@ -6077,6 +6615,7 @@ function prepareRawReportCleanupForChildren_(targetsRaw, allTargetsRaw) {
 }
 
 function applyRawReportCleanup_(plan) {
+  const touchedSheets = {};
   (plan && plan.patches || []).forEach(function(patch) {
     // Never overwrite a report that was edited after the deletion started.
     // The next REPORTS change will create a fresh cleanup plan instead.
@@ -6085,6 +6624,13 @@ function applyRawReportCleanup_(plan) {
       throw new Error('Сырой отчёт был изменён во время удаления; повторите удаление.');
     }
     range.setValue(patch.after);
+    touchedSheets[patch.sheet.getName()] = patch.sheet;
+  });
+  Object.keys(touchedSheets).forEach(function(sheetName) {
+    const kind = sheetName === SHEET_MORNING ? 'morning' : (sheetName === SHEET_EVENING ? 'evening' : '');
+    if (kind && typeof syncReportHistorySourceFingerprintSilently_ === 'function') {
+      syncReportHistorySourceFingerprintSilently_(kind, getLatestReport(touchedSheets[sheetName], 1) || '');
+    }
   });
   return { removedBlocks: Number(plan && plan.removedBlocks || 0) };
 }

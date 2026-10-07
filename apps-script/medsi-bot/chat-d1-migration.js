@@ -151,6 +151,34 @@ function recordReportHistoryPublication_(kind, textRaw, reportDateRaw) {
   }));
 }
 
+
+function syncReportHistorySourceFingerprintSilently_(kindRaw, textRaw) {
+  const kind = String(kindRaw || '').toLowerCase();
+  if (!['morning', 'evening'].includes(kind)) return;
+  PropertiesService.getScriptProperties().setProperty(
+    reportHistoryPublicationKey_(kind, 'SOURCE'),
+    reportFingerprint_(textRaw)
+  );
+}
+
+function reportsD1SnapshotSignature_(snapshotRaw) {
+  const snapshot = snapshotRaw || {};
+  return Object.keys(snapshot).sort().map(function(phone) {
+    const profile = snapshot[phone] || {};
+    return [
+      phone,
+      String(profile.parentName || '').trim().toLowerCase(),
+      String(profile.childName || '').trim().toLowerCase(),
+      String(profile.reportChildName || '').trim().toLowerCase(),
+      String(profile.familyName || '').trim().toLowerCase()
+    ].join('|');
+  }).join('~');
+}
+
+function reportsD1SnapshotsDiffer_(left, right) {
+  return reportsD1SnapshotSignature_(left) !== reportsD1SnapshotSignature_(right);
+}
+
 function syncReportHistoryPublicationFromSource_(kind, textRaw, explicitPublication) {
   const normalizedKind = String(kind || '').toLowerCase();
   const properties = PropertiesService.getScriptProperties();
@@ -373,7 +401,17 @@ function reconcileReportsProfilesToD1_(reason) {
   try {
     const sheet = getDataSheet_();
     if (!sheet) throw new Error('Лист REPORTS не найден; удаление профилей остановлено.');
+    const previousSnapshot = loadReportsD1ProfilesSnapshot_();
     const current = reportsD1ProfilesSnapshot_();
+    let reportMaintenance = { ok:true, skipped:true };
+    if (previousSnapshot && reportsD1SnapshotsDiffer_(previousSnapshot, current)) {
+      try {
+        reportMaintenance = maintainRawReportsAfterProfilesChangeCore_(previousSnapshot, 'reports:' + String(reason || ''));
+      } catch (error) {
+        reportMaintenance = { ok:false, message:String(error && error.message || error) };
+        Logger.log('REPORT_IDENTITY_MAINTENANCE_FAILED ' + reportMaintenance.message);
+      }
+    }
     const sync = reconcileReportsProfilesToD1NonDestructive_(reason);
     // If staff removed a just-mirrored registration before its outbox ACK
     // completed, cancel that pending create before lifecycle reconciliation.
@@ -453,6 +491,14 @@ function reconcileReportsProfilesToD1_(reason) {
       ok:failed.length === 0 && purge.ok,
       reason:reason || '',
       sync:sync,
+      reportMaintenance:{
+        ok:reportMaintenance.ok !== false,
+        skipped:!!reportMaintenance.skipped,
+        rewritten:Number(reportMaintenance.rewritten || 0),
+        recovered:Number(reportMaintenance.recovered || 0),
+        redistributed:Number(reportMaintenance.redistributed || 0),
+        blocked:Number(reportMaintenance.blocked || 0)
+      },
       staleFound:stale.length,
       deleted:deleted,
       failed:failed,
@@ -502,7 +548,10 @@ function onReportsD1Edit(event) {
     const sheetName = event.range.getSheet().getName();
     const coversA1 = event.range.getRow() === 1 && event.range.getColumn() === 1;
     if (coversA1 && (sheetName === SHEET_MORNING || sheetName === SHEET_EVENING)) {
-      distributeChildReports(sheetName === SHEET_MORNING ? 'morning' : 'evening');
+      processRawReportSourceEdit_(
+        sheetName === SHEET_MORNING ? 'morning' : 'evening',
+        event.range.getSheet()
+      );
       return;
     }
     if (coversA1 && sheetName === SHEET_PSYCHOLOGY) {

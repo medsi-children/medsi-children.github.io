@@ -75,6 +75,9 @@ function mirrorCloudflareParentRegistration(phoneRaw, attemptIdRaw, parentSessio
 
   try {
     return withChatWriteLock_(function() {
+      const previousSnapshot = typeof loadReportsD1ProfilesSnapshot_ === 'function'
+        ? (loadReportsD1ProfilesSnapshot_() || reportsD1ProfilesSnapshot_())
+        : null;
       const outbox = d1AdminRequest_('/admin/parent-registration-outbox', 'get');
       const item = (outbox.registrations || []).find(function(row) {
         return String(row.attempt_id || '') === attemptId && last10_(row.phone10) === phone10;
@@ -90,13 +93,35 @@ function mirrorCloudflareParentRegistration(phoneRaw, attemptIdRaw, parentSessio
       if (!getReportRowsByPhone_(phone10).length) {
         smartRegisterFromInboxCore('8' + phone10, item.parent_name, item.child_name, true);
       }
+      let reportMaintenance = { ok:true, skipped:true };
+      const currentSnapshot = typeof reportsD1ProfilesSnapshot_ === 'function'
+        ? reportsD1ProfilesSnapshot_()
+        : null;
+      if (
+        previousSnapshot && currentSnapshot &&
+        typeof reportsD1SnapshotsDiffer_ === 'function' &&
+        reportsD1SnapshotsDiffer_(previousSnapshot, currentSnapshot) &&
+        typeof maintainRawReportsAfterProfilesChangeCore_ === 'function'
+      ) {
+        reportMaintenance = maintainRawReportsAfterProfilesChangeCore_(previousSnapshot, 'registration');
+      }
       // Keep the sheet-diff baseline aligned with the just-materialized row so
       // a subsequent manual deletion is recognized as an explicit revocation.
-      if (typeof reportsD1ProfilesSnapshot_ === 'function' && typeof saveReportsD1ProfilesSnapshot_ === 'function') {
-        saveReportsD1ProfilesSnapshot_(reportsD1ProfilesSnapshot_());
+      // If an infrastructure error prevented report maintenance, keep the old
+      // baseline so the scheduled reconciliation can retry the transition.
+      if (
+        reportMaintenance.ok !== false &&
+        currentSnapshot &&
+        typeof saveReportsD1ProfilesSnapshot_ === 'function'
+      ) {
+        saveReportsD1ProfilesSnapshot_(currentSnapshot);
       }
       d1AdminRequest_('/admin/parent-registration-outbox/ack', 'post', { attemptIds: [attemptId] });
-      return { ok: true, synced: true };
+      return {
+        ok:true,
+        synced:true,
+        reportMaintenancePending:reportMaintenance.ok === false
+      };
     });
   } catch (e) {
     try {
