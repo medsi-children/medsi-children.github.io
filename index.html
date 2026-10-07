@@ -109,7 +109,7 @@
   window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261007-asset-ready-1',1).then(function(){
     return window.MedsiSmartBotWidget && window.MedsiSmartBotWidget.ready;
   }).catch(function(){});
-  load('/parents/full-web.js?v=20261007-cloudflare-access-1').then(function(){
+  load('/parents/full-web.js?v=20261007-report-history-refresh-1').then(function(){
     if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
     clearTimeout(notice);status.classList.add('hidden');
     window.MedsiLoadParentChat().then(function(){
