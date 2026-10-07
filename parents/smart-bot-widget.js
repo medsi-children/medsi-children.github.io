@@ -299,7 +299,7 @@
     if (shell) shell.remove();
     await Promise.all([
       educator || window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261002-15'),
-      window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20260909-leading-dot-1'),
+      window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20261007-document-title-1'),
       script('/parents/bot-chat-view.js?v=20261005-2'),
       script('/parents/bot-chat-runtime.js?v=20261005-5'),
       avatarReady

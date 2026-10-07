@@ -74,7 +74,7 @@
     </div>
   </section>
   <div id="logoutModal" class="parent-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="logoutModalTitle"><div class="parent-confirm-card"><div class="parent-confirm-icon">!</div><h2 id="logoutModalTitle">Выйти из аккаунта?</h2><p>Доступ на этом устройстве будет удалён. Чтобы войти снова, потребуется подтверждение воспитателя.</p><div class="grid2"><button id="logoutCancelBtn" class="btn" type="button">Остаться</button><button id="logoutConfirmBtn" class="btn parent-confirm-danger" type="button">Выйти</button></div></div></div>
-  <div id="reportHistoryModal" class="report-history-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reportHistoryModalTitle"><div class="report-history-modal-card"><div class="report-history-modal-head"><div><span class="report-history-kind">Отчёты за день</span><h2 id="reportHistoryModalTitle"></h2></div></div><div id="reportHistoryModalReports" class="report-history-day-reports"></div><button id="reportHistoryModalClose" class="btn" type="button">Закрыть</button></div></div>
+  <div id="reportHistoryModal" class="report-history-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reportHistoryModalTitle"><div class="report-history-modal-card"><div class="report-history-modal-head"><div><span class="report-history-kind">Отчёт за день</span><h2 id="reportHistoryModalTitle"></h2></div></div><div id="reportHistoryModalReports" class="report-history-day-reports"></div><button id="reportHistoryModalClose" class="btn" type="button">Закрыть</button></div></div>
 </article></div>
 
 <div id="parentBootStatus" class="hidden" role="status" style="text-align:center;padding:24px;color:#65858d">
@@ -106,17 +106,17 @@
   var status=document.getElementById('parentBootStatus');
   var notice=setTimeout(function(){if(!window.MedsiParentApp||!window.MedsiParentApp.ready)status.classList.remove('hidden');},4000);
   // The parent menu and registration must not wait for the assistant image.
-  window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261007-asset-ready-1',1).then(function(){
+  window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261007-document-title-1',1).then(function(){
     return window.MedsiSmartBotWidget && window.MedsiSmartBotWidget.ready;
   }).catch(function(){});
-  load('/parents/full-web.js?v=20261007-report-history-refresh-1').then(function(){
+  load('/parents/full-web.js?v=20261007-report-history-labels-1').then(function(){
     if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
     clearTimeout(notice);status.classList.add('hidden');
     window.MedsiLoadParentChat().then(function(){
       return series(["/chat-overlay/media-preload.js?v=20260907-1", "/chat-overlay/upload-ux.js?v=20260916-parent-recovery", "/chat-overlay/composer-ui.js?v=20260907-1", "/chat-overlay/reaction-icons.js?v=20260907-twemoji-2", "/chat-overlay/message-enhancements.js?v=20260924-message-input-1", "/chat-overlay/message-long-press.js?v=20261007-2", "/chat-overlay/chat-motion.js?v=20260911-first-open-only-1", "/chat-overlay/bottom-lock.js?v=20260906-1", "/chat-overlay/video-link.js?v=1"],true);
     }).catch(function(){});
     series(['/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20261007-verified-subscription-1'],true).then(function(){window.MedsiParentApp.helpersReady();}).catch(function(){});
-    ["/parents/psychology-format.js?v=20260909-leading-dot-1", "/parents/chat-opening.js?v=20260907-1", "/parents/report-disclaimer.js?v=20260907-1", "/chat-overlay/gesture-navigation.js?v=20260907-hint-1"].forEach(function(src){load(src,1).catch(function(){});});
+    ["/parents/psychology-format.js?v=20261007-document-title-1", "/parents/chat-opening.js?v=20260907-1", "/parents/report-disclaimer.js?v=20260907-1", "/chat-overlay/gesture-navigation.js?v=20260907-hint-1"].forEach(function(src){load(src,1).catch(function(){});});
     load('/parents/install-hint.js?v=20261003-2',1).catch(function(){});
   }).catch(function(){clearTimeout(notice);status.classList.remove('hidden');});
 })();
