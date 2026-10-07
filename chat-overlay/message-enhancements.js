@@ -301,7 +301,7 @@
     keepMenuOnScreen(menu);
   }
 
-  document.addEventListener('click',e=>{
+  function captureParentMenuTarget(e){
     const msg=e.target.closest&&e.target.closest('#parentChatMessages .parent-chat-msg');
     if(msg){
       const nodes=[...document.querySelectorAll('#parentChatMessages .parent-chat-msg')];
@@ -309,7 +309,9 @@
       const menu=document.querySelector('.parent-chat-context');
       if(menu&&idx>=0)menu.dataset.medsiIndex=String(idx);
     }
-  },true);
+  }
+  document.addEventListener('click',captureParentMenuTarget,true);
+  document.addEventListener('medsi:message-longpress',captureParentMenuTarget,true);
 
   const mo=new MutationObserver(()=>scheduleDecorate());
   mo.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});

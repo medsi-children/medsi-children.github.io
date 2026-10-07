@@ -251,7 +251,7 @@
       if(m.text){const body=document.createElement('div');body.className='msg-body';body.textContent=String(m.text);el.appendChild(body)}
       if(m.reaction){const r=document.createElement('span');r.className='msg-reaction';r.textContent=m.reaction;el.appendChild(r)}
       const time=document.createElement('span');time.className='msg-time';time.textContent=[fmt(m.timestamp),m.editedAt?'изм.':''].filter(Boolean).join(' · ');el.appendChild(time);
-      el.onclick=e=>openMessageMenu(m,el,e);el.oncontextmenu=e=>openMessageMenu(m,el,e);return el;
+      const openContext=e=>openMessageMenu(m,el,e);el.onclick=openContext;el.oncontextmenu=openContext;el.addEventListener('medsi:message-longpress',openContext);return el;
     }
     function renderRows(nextRows,stick=true,opts){
       const previousRows=activeRows,updatedRows=Array.isArray(nextRows)?nextRows:[],oldTop=chatThreadBox.scrollTop;

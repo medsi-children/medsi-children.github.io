@@ -154,7 +154,9 @@
       if(m.text){const b=document.createElement('div');b.textContent=String(m.text);el.appendChild(b)}
       if(m.reaction){const r=document.createElement('span');r.className='parent-chat-reaction';r.textContent=String(m.reaction);el.appendChild(r)}
       const tm=document.createElement('span');tm.className='parent-chat-time';tm.textContent=fmt(m.timestamp);el.appendChild(tm);
-      el.onclick=e=>{if(e.target.closest('img,video,button,.parent-chat-reaction'))return;e.preventDefault();e.stopPropagation();openReactionMenu(m,el)};
+      const openContext=e=>{if(e.type==='click'&&e.target.closest('img,video,button,.parent-chat-reaction'))return;e.preventDefault();e.stopPropagation();openReactionMenu(m,el)};
+      el.onclick=openContext;
+      el.addEventListener('medsi:message-longpress',openContext);
       return el
   }
   function render(list,opts){

@@ -48,6 +48,7 @@
   }
   document.addEventListener('click',toggle,true);
   document.addEventListener('contextmenu',toggle,true);
+  document.addEventListener('medsi:message-longpress',toggle,true);
   document.addEventListener('click',()=>{const menu=menuEl();if(menu&&menu.classList.contains('hidden'))activeMessage=null});
   window.addEventListener('resize',()=>{if(activeMessage)position(activeMessage)});
   if(window.visualViewport)window.visualViewport.addEventListener('resize',()=>{if(activeMessage)position(activeMessage)});
