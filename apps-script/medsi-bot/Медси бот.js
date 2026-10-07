@@ -6251,7 +6251,7 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
     next = next.slice(0, replacement.start) + replacement.text + next.slice(replacement.end);
   }
 
-  // Everything before the first explicit child header is report boilerplate:
+  // Everything before the first explicit child header is source-report boilerplate:
   // date, activities, authors, separators, etc.  Only a candidate that already
   // passed the same child-header classifier can become the cut point, so a bare
   // name mention without ':' or a dash can never trim the report accidentally.
