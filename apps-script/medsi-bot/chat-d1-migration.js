@@ -45,8 +45,9 @@ function syncD1ProfilesFromReports_(full) {
 
 // Public function: it can be run manually and is also used by the timed trigger.
 function syncD1ProfilesFromReports() {
-  // Timeweb uses D1 regardless of the retired CHAT_BACKEND switch, which is
-  // still "sheets" in some installations for legacy Apps Script chat calls.
+  // Timeweb/D1 is the active chat backend. The migration helpers below retain
+  // old import and rollback snapshots for manual recovery only; normal API
+  // calls never branch on the retired CHAT_BACKEND property.
   ensureReportsD1ProfileSyncTriggers_();
   try { ensureLegacyParentAccessRequestsImported_(); }
   catch (error) { Logger.log('LEGACY_PARENT_ACCESS_IMPORT_DEFERRED ' + String(error && error.message || error)); }
@@ -447,7 +448,15 @@ function reconcileReportsProfilesToD1_(reason) {
         Logger.log('REPORT_IDENTITY_MAINTENANCE_FAILED ' + reportMaintenance.message);
       }
     }
+    const maintenanceFailed = reportMaintenance.ok === false;
     const sync = reconcileReportsProfilesToD1NonDestructive_(reason);
+    // The D1 profile upsert may still be safe when raw-report maintenance
+    // failed, but the old snapshot must remain pending so the next scheduled
+    // pass retries the name/header repair instead of treating it as complete.
+    if (maintenanceFailed && previousSnapshot) {
+      saveReportsD1ProfilesSnapshot_(previousSnapshot);
+      Logger.log('REPORTS_D1_PROFILE_SNAPSHOT_RETRY_PENDING');
+    }
     // If staff removed a just-mirrored registration before its outbox ACK
     // completed, cancel that pending create before lifecycle reconciliation.
     const removedPhones = Object.keys(sync.removedProfiles || {});
@@ -563,7 +572,32 @@ function auditReportsD1Profiles() {
       if (!active.has(last10_(row[0]))) legacyInactiveRows++;
     });
   }
-  const triggers = ScriptApp.getProjectTriggers().map(function(trigger) { return trigger.getHandlerFunction(); });
+  const triggerObjects = ScriptApp.getProjectTriggers();
+  const triggerAudit = triggerObjects.map(function(trigger) {
+    let source = '', sourceId = '', eventType = '';
+    try { source = String(trigger.getTriggerSource() || ''); } catch (_) {}
+    try { sourceId = String(trigger.getTriggerSourceId() || ''); } catch (_) {}
+    try { eventType = String(trigger.getEventType() || ''); } catch (_) {}
+    return {
+      handler: trigger.getHandlerFunction(),
+      source: source,
+      sourceId: sourceId,
+      eventType: eventType
+    };
+  });
+  const triggers = triggerAudit.map(function(item) { return item.handler; });
+  const counts = {};
+  triggers.forEach(function(name) { counts[name] = Number(counts[name] || 0) + 1; });
+  const duplicateHandlers = Object.keys(counts).filter(function(name) { return counts[name] > 1; });
+  const expectedSpreadsheetId = getSpreadsheetId_();
+  const triggerIssues = duplicateHandlers.map(function(name) {
+    return 'duplicate:' + name + ':' + counts[name];
+  });
+  triggerAudit.forEach(function(item) {
+    if (['onReportsD1Edit', 'onReportsD1Change'].indexOf(item.handler) >= 0 && item.sourceId && item.sourceId !== expectedSpreadsheetId) {
+      triggerIssues.push('wrong-source:' + item.handler);
+    }
+  });
   return {
     ok:true,
     reportsProfiles:Object.keys(current).length,
@@ -571,6 +605,9 @@ function auditReportsD1Profiles() {
     stale:stale,
     legacyInactiveRows:legacyInactiveRows,
     triggerHandlers:triggers,
+    triggerAudit:triggerAudit,
+    duplicateHandlers:duplicateHandlers,
+    triggerIssues:triggerIssues,
     profileTriggers:triggers.filter(function(name) {
       return ['onReportsD1Edit', 'onReportsD1Change', 'syncD1ProfilesFromReports'].indexOf(name) >= 0;
     })
@@ -617,14 +654,33 @@ function installReportsD1ProfileSyncTriggers() {
 }
 
 function ensureReportsD1ProfileSyncTriggers_() {
-  const existing = ScriptApp.getProjectTriggers().map(function(trigger) { return trigger.getHandlerFunction(); });
-  if (existing.indexOf('onReportsD1Edit') < 0) {
-    ScriptApp.newTrigger('onReportsD1Edit').forSpreadsheet(getSpreadsheetId_()).onEdit().create();
+  const spreadsheetId = getSpreadsheetId_();
+  const triggers = ScriptApp.getProjectTriggers();
+  ['onReportsD1Edit', 'onReportsD1Change'].forEach(function(handler) {
+    const matching = triggers.filter(function(trigger) {
+      if (trigger.getHandlerFunction() !== handler) return false;
+      try { return String(trigger.getTriggerSourceId() || '') === spreadsheetId; }
+      catch (_) { return false; }
+    });
+    matching.slice(1).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+    triggers.filter(function(trigger) {
+      if (trigger.getHandlerFunction() !== handler) return false;
+      return matching.indexOf(trigger) < 0;
+    }).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+    if (matching.length) return;
+    if (handler === 'onReportsD1Edit') {
+      ScriptApp.newTrigger(handler).forSpreadsheet(spreadsheetId).onEdit().create();
+    } else {
+      ScriptApp.newTrigger(handler).forSpreadsheet(spreadsheetId).onChange().create();
+    }
+  });
+  const syncTriggers = triggers.filter(function(trigger) {
+    return trigger.getHandlerFunction() === 'syncD1ProfilesFromReports';
+  });
+  syncTriggers.slice(1).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+  if (!syncTriggers.length) {
+    ScriptApp.newTrigger('syncD1ProfilesFromReports').timeBased().everyMinutes(10).create();
   }
-  if (existing.indexOf('onReportsD1Change') < 0) {
-    ScriptApp.newTrigger('onReportsD1Change').forSpreadsheet(getSpreadsheetId_()).onChange().create();
-  }
-  ensureD1ProfileSyncTrigger_();
 }
 
 /* ===== D1 + TIMEWEB S3 DELETION QUEUE =====
@@ -730,8 +786,9 @@ function verifyReportsS3PurgeQueueSetup() {
 
 function ensureD1ProfileSyncTrigger_() {
   const handler = 'syncD1ProfilesFromReports';
-  const already = ScriptApp.getProjectTriggers().some(trigger => trigger.getHandlerFunction() === handler);
-  if (!already) ScriptApp.newTrigger(handler).timeBased().everyMinutes(10).create();
+  const matching = ScriptApp.getProjectTriggers().filter(trigger => trigger.getHandlerFunction() === handler);
+  matching.slice(1).forEach(trigger => ScriptApp.deleteTrigger(trigger));
+  if (!matching.length) ScriptApp.newTrigger(handler).timeBased().everyMinutes(10).create();
 }
 function importChatHistoryToD1Production() {
   const snapshot = snapshotChatForD1_(), batchSize = 250;

@@ -89,7 +89,7 @@ function include(filename) {
 }
 
 function getChatBackendConfig() {
-  return { ok: true, backend: String(PropertiesService.getScriptProperties().getProperty('CHAT_BACKEND') || 'sheets') };
+  return { ok: true, backend: 'd1' };
 }
 
 function getD1ChatSession(roleRaw, phoneRaw, tutorTokenRaw) {
@@ -298,6 +298,34 @@ function getD1ThreadForParent(phoneRaw, beforeKeyRaw, limitRaw) {
   return value;
 }
 
+function d1ParentWorkerRequest_(phoneRaw, path, method) {
+  const phone = last10_(phoneRaw);
+  if (!phone) throw new Error('Некорректный номер родительской D1-сессии.');
+  const session = createD1ChatSession_('parent', phone);
+  const response = UrlFetchApp.fetch(
+    'https://medsi-chat-worker.medsi-children.workers.dev' + path,
+    {
+      method: method || 'get',
+      muteHttpExceptions: true,
+      headers: { 'X-Medsi-Chat-Session': session.token }
+    }
+  );
+  const value = JSON.parse(response.getContentText() || '{}');
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300 || !value.ok) {
+    throw new Error(value.message || 'D1 HTTP ' + response.getResponseCode());
+  }
+  return value;
+}
+
+function getD1ParentUnreadState_(phoneRaw) {
+  return d1ParentWorkerRequest_(phoneRaw, '/lab/parent-unread', 'get');
+}
+
+function markD1ParentMessagesRead_(phoneRaw) {
+  const phone = last10_(phoneRaw);
+  return d1ParentWorkerRequest_(phone, '/lab/read-parent/' + encodeURIComponent(phone), 'post');
+}
+
 function sendD1MessageForParent(phoneRaw, messageRaw) {
   const phone = last10_(phoneRaw);
   if (!phone || !isPhoneActiveInReports_(phone)) {
@@ -397,16 +425,13 @@ function doPost(e) {
 
     // One narrowly scoped server-to-server migration control. It is protected
     // by the existing private server secret and can never be called by UI code.
-    if (action === 'd1Import' || action === 'd1Activate' || action === 'd1Rollback' || action === 'reportHistoryCapture' || action === 'd1ReportCurrentSync' || action === 'd1ProfileReconcile' || action === 'd1ProfileAudit' || action === 'reportQueueProcess') {
+    if (action === 'reportHistoryCapture' || action === 'd1ReportCurrentSync' || action === 'd1ProfileReconcile' || action === 'd1ProfileAudit' || action === 'reportQueueProcess') {
       if (String(payload.authorization || '') !== getWorkerSharedSecret_()) {
         return ContentService.createTextOutput(JSON.stringify({ ok:false, message:'Unauthorized' }))
           .setMimeType(ContentService.MimeType.JSON);
       }
       let result;
-      if (action === 'd1Import') result = importChatHistoryToD1Production();
-      else if (action === 'd1Activate') result = activateD1ChatBackend();
-      else if (action === 'd1Rollback') result = rollbackD1ChatBackend();
-      else if (action === 'd1ReportCurrentSync') result = syncD1CurrentReportsToWorker();
+      if (action === 'd1ReportCurrentSync') result = syncD1CurrentReportsToWorker();
       else if (action === 'd1ProfileReconcile') result = syncD1ProfilesFromReports();
       else if (action === 'd1ProfileAudit') result = auditReportsD1Profiles();
       else if (action === 'reportQueueProcess') result = appendReportFromWorker_(payload.param || {});
@@ -464,8 +489,6 @@ function getApiMethodMap_() {
     testValidateAndWriteReport,
     getReportChildDeletionPreview,
     deleteReportChildByPhone,
-    auditD1ToSheetsRollback,
-    restoreD1ToSheetsRollback,
     getReportInactivityReminder,
     acknowledgeReportInactivityReminder,
     getParentUnreadState,
@@ -647,6 +670,11 @@ function verifyParentSession(phoneRaw, parentSessionRaw) {
 }
 
 function buildParentBootstrap_(profile, parentSession) {
+  // Legacy bootstrap callers may arrive before the periodic REPORTS -> D1
+  // reconciliation. Warm the profile before asking D1 for chat state so the
+  // unread badge does not become a false negative during that short window.
+  try { syncD1ProfileForPhone_(profile.phone); }
+  catch (e) { Logger.log('D1 profile bootstrap refresh deferred: ' + String(e && e.message || e)); }
   const unreadRes = hasUnreadEducatorMessages(profile.phone);
   let d1Session = null;
   try { d1Session = createD1ChatSession_('parent', profile.phone); } catch (e) { Logger.log('D1 session piggyback unavailable: ' + String(e && e.message || e)); }
@@ -3317,8 +3345,9 @@ function cleanupInactiveChatMessages() {
 function ensureInactiveChatCleanupTrigger_() {
   const handler = 'cleanupInactiveChatMessages';
   const triggers = ScriptApp.getProjectTriggers();
-  const exists = triggers.some(t => t.getHandlerFunction() === handler);
-  if (exists) return;
+  const matching = triggers.filter(t => t.getHandlerFunction() === handler);
+  matching.slice(1).forEach(trigger => ScriptApp.deleteTrigger(trigger));
+  if (matching.length) return;
 
   ScriptApp.newTrigger(handler)
     .timeBased()
@@ -3337,8 +3366,9 @@ function getChatPhotosFolder_() {
 function ensureChatCleanupTrigger_() {
   const handler = 'cleanupExpiredChatImages';
   const triggers = ScriptApp.getProjectTriggers();
-  const exists = triggers.some(t => t.getHandlerFunction() === handler);
-  if (exists) return;
+  const matching = triggers.filter(t => t.getHandlerFunction() === handler);
+  matching.slice(1).forEach(trigger => ScriptApp.deleteTrigger(trigger));
+  if (matching.length) return;
 
   ScriptApp.newTrigger(handler)
     .timeBased()
@@ -4499,10 +4529,6 @@ function updateMessage(phoneRaw, messageKeyRaw, newTextRaw, actorSideRaw, tutorT
   }
 }
 
-function isD1ChatBackendActive_() {
-  return String(PropertiesService.getScriptProperties().getProperty('CHAT_BACKEND') || 'sheets') === 'd1';
-}
-
 // Keeps the old Apps Script UI contract while making D1 the only write that
 // determines success.  The Worker itself schedules push strictly after the
 // insert, so legacy clients cannot produce a Sheets-only/push-only message.
@@ -4536,32 +4562,13 @@ function sendParentChatMessage(phoneRaw, textRaw, replyToKeyRaw, parentSessionRa
       return { ok: false, message: 'Ваш номер не найден в системе.' };
     }
 
-    // Old cached Apps Script pages can still call this server function even
-    // after the visible product moved to Timeweb.  Once D1 is active, never
-    // let that compatibility path create a Sheets-only message: the Worker
-    // stores the canonical message before it sends a push notification.
-    if (isD1ChatBackendActive_()) {
-      return legacyD1MessageResult_(
-        sendD1MessageForParent(phoneRaw, {
-          type: 'text',
-          text: text,
-          replyToKey: String(replyToKeyRaw || '')
-        })
-      );
-    }
-
-    const appended = appendChatMessage_(profile, 'parent', 'text', text, '', '', 'active', replyToKeyRaw);
-    const pushResult = notifyNewChatMessage_(profile, 'parent', 'text', text);
-    clearGetChatMessagesCache(phoneRaw);
-
-    return {
-      ok: true,
-      messageKey: appended.messageKey,
-      timestamp: appended.timestamp,
-      type: appended.type,
-      pushClient: pushResult && pushResult.fallback ? pushResult.fallback : pushResult,
-      pushDebug: pushResult && pushResult.server ? pushResult.server : pushResult
-    };
+    return legacyD1MessageResult_(
+      sendD1MessageForParent(phoneRaw, {
+        type: 'text',
+        text: text,
+        replyToKey: String(replyToKeyRaw || '')
+      })
+    );
 
   } catch (e) {
     return { ok: false, message: 'Ошибка отправки сообщения: ' + (e.message || e) };
@@ -4583,28 +4590,13 @@ function sendEducatorChatMessage(phoneRaw, textRaw, replyToKeyRaw, tutorTokenRaw
       return { ok: false, message: 'Не удалось определить чат по номеру телефона.' };
     }
 
-    if (isD1ChatBackendActive_()) {
-      return legacyD1MessageResult_(
-        sendD1MessageForEducator(phoneRaw, {
-          type: 'text',
-          text: text,
-          replyToKey: String(replyToKeyRaw || '')
-        }, tutorTokenRaw)
-      );
-    }
-
-    const appended = appendChatMessage_(profile, 'educator', 'text', text, '', '', 'active', replyToKeyRaw);
-    const pushResult = notifyNewChatMessage_(profile, 'educator', 'text', text);
-    clearGetChatMessagesCache(phoneRaw);
-
-    return {
-      ok: true,
-      messageKey: appended.messageKey,
-      timestamp: appended.timestamp,
-      type: appended.type,
-      pushClient: pushResult && pushResult.fallback ? pushResult.fallback : pushResult,
-      pushDebug: pushResult && pushResult.server ? pushResult.server : pushResult
-    };
+    return legacyD1MessageResult_(
+      sendD1MessageForEducator(phoneRaw, {
+        type: 'text',
+        text: text,
+        replyToKey: String(replyToKeyRaw || '')
+      }, tutorTokenRaw)
+    );
 
   } catch (e) {
     return { ok: false, message: 'Ошибка отправки ответа: ' + (e.message || e) };
@@ -4916,27 +4908,11 @@ function hasUnreadEducatorMessages(phoneRaw) {
   try {
     const phone10 = last10_(phoneRaw);
     if (!phone10) return { ok: false, hasUnread: false };
-
-    const indexedUnread = getChatIndexUnreadFlag_(phone10, 8);
-    if (indexedUnread !== null) {
-      return { ok: true, hasUnread: indexedUnread };
-    }
-
-    const sh = ensureChatSheet_();
-    const lastRow = sh.getLastRow();
-    if (lastRow < 2) return { ok: true, hasUnread: false };
-
-    const startRow = 2;
-    const rows = sh.getRange(startRow, 1, lastRow - startRow + 1, 13).getValues();
-
-    const hasUnread = rows.some(r => {
-      const rowPhone10 = last10_(r[1]);
-      const side = String(r[4] || '').trim();
-      const isRead = r[10] === true || String(r[10]).toLowerCase() === 'true';
-      return rowPhone10 === phone10 && side === 'educator' && !isRead;
-    });
-
-    return { ok: true, hasUnread };
+    // D1 is the only source of truth for chat state.  Do not fall back to the
+    // retired CHAT_MESSAGES/CHAT_INDEX sheets: that can show a stale badge
+    // after the browser has already marked the D1 thread as read.
+    const result = getD1ParentUnreadState_(phone10);
+    return { ok: true, hasUnread: !!result.hasUnread };
 
   } catch (e) {
     return { ok: false, hasUnread: false, message: 'Ошибка проверки новых сообщений: ' + (e.message || e) };
@@ -4948,14 +4924,10 @@ function markEducatorMessagesAsRead(phoneRaw, parentSessionRaw) {
     requireParentAccess_(phoneRaw, parentSessionRaw);
     const phone10 = last10_(phoneRaw);
     if (!phone10) return { ok: false };
-
-    return withChatWriteLock_(function() {
-      markChatMessagesRead_(phone10, 'educator', 11);
-      setChatIndexReadFlag_(phone10, 8, false);
-      setChatIndexReadFlag_(phone10, 11, true);
-      clearGetChatMessagesCache(phoneRaw);
-      return { ok: true };
-    });
+    // The visible parent chat already marks the D1 thread directly.  Keep
+    // this Apps Script API as a compatibility entry point, but make it update
+    // the same D1 state instead of the retired Sheets mirror.
+    return markD1ParentMessagesRead_(phone10);
 
   } catch (e) {
     return { ok: false, message: 'Ошибка отметки сообщений: ' + (e.message || e) };

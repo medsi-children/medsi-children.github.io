@@ -201,7 +201,7 @@
   readyPromise = callAppsScript('getChatBackendConfig', []).then(config => {
     mode = config && config.backend === 'd1' ? 'd1' : 'sheets';
     return { mode };
-  }).catch(() => ({ mode:'sheets' }));
+  }).catch(() => { mode = 'd1'; return { mode:'d1' }; });
   window.MedsiChatBackend = {
     get mode() { return mode; }, isD1: () => mode === 'd1', ready: () => readyPromise,
     isIOSReadTransport: isIOSReadTransport,

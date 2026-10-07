@@ -130,8 +130,8 @@ function verifyTutorSession(tokenRaw) {
 // prevent a correctly authorised educator from entering the reports panel.
 function getTutorD1Session_() {
   try {
-    // The web panel uses D1 even while old Apps Script chat calls retain a
-    // historical CHAT_BACKEND=sheets setting.
+    // The web panel uses the Cloudflare/D1 chat backend. Apps Script only
+    // mints the short-lived session token here.
     return createD1ChatSession_('educator', '');
   } catch (e) {
     return null;

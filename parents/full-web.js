@@ -90,7 +90,7 @@
     await Promise.resolve(window.MedsiAssistantReady);
     if(currentPhone!==ph||parentSession!==savedAuth)return;
     showChoose();
-    try{if(await refreshProfileFromD1()){prewarmAll();return}}catch(_){/* fall back to the authoritative Apps Script check below */}
+    try{if(await refreshProfileFromD1()){prewarmAll();refreshChatUnreadFromD1();return}}catch(_){/* fall back to the authoritative Apps Script check below */}
     const lastBootstrap=Number(safeGet(BOOTSTRAP_CHECK_KEY)||0);
     if(lastBootstrap&&Date.now()-lastBootstrap<15*60*1000){prewarmAll();return}
     try{
@@ -242,6 +242,7 @@
   }
   function normalizeCurrentReports(value){const reports={morning:{ok:true,text:'Отчёта пока нет. Пожалуйста, попробуйте позже 🙏',hasReport:false,version:'',updatedAt:0},evening:{ok:true,text:'Отчёта пока нет. Пожалуйста, попробуйте позже 🙏',hasReport:false,version:'',updatedAt:0},psychology:{ok:true,text:'Отчёта пока нет. Пожалуйста, попробуйте позже 🙏',hasReport:false,version:'',updatedAt:0}};(Array.isArray(value&&value.reports)?value.reports:[]).forEach(item=>{const kind=String(item&&item.kind||'').toLowerCase();if(!['morning','evening','psychology'].includes(kind))return;const text=String(item&&item.text||'').trim();reports[kind]={ok:true,text:text||'Отчёта пока нет. Пожалуйста, попробуйте позже 🙏',hasReport:!!text,version:String(item&&item.version||''),updatedAt:Number(item&&item.updatedAt||0)}});return reports}
   async function fetchCurrentReportsFromD1(){return normalizeCurrentReports(await readD1('/lab/report-current'))}
+  async function refreshChatUnreadFromD1(){const phone=currentPhone,auth=parentSession;try{const res=await readD1('/lab/parent-unread');if(phone!==currentPhone||auth!==parentSession)return null;setBadge('newMsgBanner',!!(res&&res.hasUnread));return res}catch(_){return null}}
   function warmAllReports(){
     const kinds=['morning','evening','psychology'];
     if(!currentPhone||kinds.every(kind=>freshReport(kind)||reportPending[kind]))return;
@@ -261,7 +262,8 @@
     const phone=currentPhone,auth=parentSession;prewarmAll();
     const bootstrap=refreshProfileFromD1().then(ready=>{if(ready||phone!==currentPhone||auth!==parentSession)return;return callApi('getParentBootstrap',[phone,auth],35000).then(res=>{if(phone!==currentPhone||auth!==parentSession)return;if(applyBootstrap(res)){safeSet(BOOTSTRAP_CHECK_KEY,String(Date.now()));setChips();}});}).catch(()=>null);
     const chat=warmD1().then(session=>session&&window.MedsiParentPrewarm?MedsiParentPrewarm.warm(session,currentPhone):null);
-    const pending=Promise.allSettled([bootstrap,chat]).finally(()=>{if(menuPending===pending)menuPending=null});menuPending=pending;return pending;
+    const unread=refreshChatUnreadFromD1();
+    const pending=Promise.allSettled([bootstrap,chat,unread]).finally(()=>{if(menuPending===pending)menuPending=null});menuPending=pending;return pending;
   }
   function reportTitle(kind){return kind==='morning'?'Утренний отчёт':kind==='evening'?'Вечерний отчёт':'Групповая психотерапия'}
   function normalizeBlock(v){return String(v||'').replace(/\s+/g,' ').trim()}

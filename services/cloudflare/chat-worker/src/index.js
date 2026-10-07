@@ -863,6 +863,17 @@ async function getOwnProfile(env, auth) {
   return json({ ok: true, phone: profile.phone10, parentName: profile.parent_name || '', childName: profile.child_name || '' });
 }
 
+async function getParentUnreadState(env, auth) {
+  if (auth.role !== 'parent' || !auth.phone10) return json({ ok: false, message: 'Forbidden' }, 403);
+  const row = await env.CHAT_DB.prepare(`
+    SELECT EXISTS(
+      SELECT 1 FROM chat_messages
+      WHERE phone10 = ? AND side = 'educator' AND status = 'active' AND read_by_parent = 0
+    ) AS has_unread
+  `).bind(auth.phone10).first();
+  return json({ ok: true, hasUnread: Number(row && row.has_unread || 0) === 1 });
+}
+
 async function captureScheduledReportHistory(env) {
   if (!env.APP_SCRIPT_URL || !env.CHAT_ADMIN_TOKEN) throw new Error('Report history scheduler is not configured');
   const response = await fetch(env.APP_SCRIPT_URL, {
@@ -1499,6 +1510,9 @@ export default {
     }
     if (request.method === 'GET' && url.pathname === '/lab/profile') {
       return getOwnProfile(env, auth);
+    }
+    if (request.method === 'GET' && url.pathname === '/lab/parent-unread') {
+      return getParentUnreadState(env, auth);
     }
     if (request.method === 'POST' && url.pathname === '/lab/bot-log') {
       return json({ ok: false }, 410);
