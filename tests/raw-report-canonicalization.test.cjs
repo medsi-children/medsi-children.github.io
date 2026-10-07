@@ -175,7 +175,7 @@ test('canonicalizer removes report boilerplate before the first explicit child h
 
   assert.equal(
     result.text,
-    'Артём К. — В целом поведение приемлемое.\nАртём И. — Сегодня хорошо поужинал.'
+    'Артем К. — В целом поведение приемлемое.\nАртем И. — Сегодня хорошо поужинал.'
   );
   assert.equal(result.preambleRemoved, true);
   assert.doesNotMatch(result.text, /ОТЧЕТ ПО ДЕТЯМ|Сегодня у ребят были|Отчёт составили|Танцы|Киносеанс/);
