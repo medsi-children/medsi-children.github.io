@@ -631,49 +631,104 @@ async function upsertReportSnapshots(request, env) {
   const snapshots = Array.isArray(payload.snapshots) ? payload.snapshots.slice(0, 500) : [];
   const candidates = [];
   const seen = new Set();
+
   snapshots.forEach(item => {
     const phone = phone10(item && item.phone);
     const kind = String(item && item.kind || '').trim().toLowerCase();
     const reportDate = String(item && item.reportDate || '').trim();
     const text = String(item && item.text || '').trim();
-    if (!phone || !['morning', 'evening'].includes(kind) || !/^\d{4}-\d{2}-\d{2}$/.test(reportDate) || !text) return;
+    if (!phone || !['morning', 'evening', 'psychology'].includes(kind) || !/^\d{4}-\d{2}-\d{2}$/.test(reportDate) || !text) return;
+
     const key = `${phone}|${kind}|${reportDate}`;
     if (seen.has(key)) return;
     seen.add(key);
-    candidates.push({ phone, kind, reportDate, text: text.slice(0, 30000), capturedAt: Number(item.capturedAt || 0) || Date.now() });
+    candidates.push({
+      phone,
+      kind,
+      reportDate,
+      text: text.slice(0, 30000),
+      capturedAt: Number(item.capturedAt || 0) || Date.now()
+    });
   });
+
   const normalizeText = value => String(value || '').normalize('NFC').replace(/\s+/g, ' ').trim();
   let saved = 0;
+  let updated = 0;
   let skippedDuplicate = 0;
   let skippedExisting = 0;
+
   for (const candidate of candidates) {
+    const existing = await env.CHAT_DB.prepare(`
+      SELECT text
+      FROM report_snapshots
+      WHERE phone10 = ? AND kind = ? AND report_date = ?
+      LIMIT 1
+    `).bind(candidate.phone, candidate.kind, candidate.reportDate).first();
+
+    if (existing) {
+      if (normalizeText(existing.text) === normalizeText(candidate.text)) {
+        skippedDuplicate++;
+        continue;
+      }
+
+      const result = await env.CHAT_DB.prepare(`
+        UPDATE report_snapshots
+        SET text = ?, captured_at = ?
+        WHERE phone10 = ? AND kind = ? AND report_date = ?
+      `).bind(
+        candidate.text,
+        candidate.capturedAt,
+        candidate.phone,
+        candidate.kind,
+        candidate.reportDate
+      ).run();
+
+      updated += Number(result && result.meta && result.meta.changes || 0);
+      continue;
+    }
+
     if (payload.skipIfMatchesPrevious === true) {
       const previous = await env.CHAT_DB.prepare(`
-        SELECT text FROM report_snapshots
+        SELECT text
+        FROM report_snapshots
         WHERE phone10 = ? AND kind = ? AND report_date < ?
-        ORDER BY report_date DESC LIMIT 1
+        ORDER BY report_date DESC, captured_at DESC
+        LIMIT 1
       `).bind(candidate.phone, candidate.kind, candidate.reportDate).first();
+
       if (previous && normalizeText(previous.text) === normalizeText(candidate.text)) {
         skippedDuplicate++;
         continue;
       }
     }
+
     const result = await env.CHAT_DB.prepare(`
       INSERT INTO report_snapshots (phone10, kind, report_date, text, captured_at)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(phone10, kind, report_date) DO NOTHING
     `).bind(candidate.phone, candidate.kind, candidate.reportDate, candidate.text, candidate.capturedAt).run();
+
     const changes = Number(result && result.meta && result.meta.changes || 0);
     if (changes) saved += changes;
     else skippedExisting++;
   }
+
   const beforeDate = String(payload.beforeDate || '').trim();
   let pruned = 0;
   if (/^\d{4}-\d{2}-\d{2}$/.test(beforeDate)) {
     const result = await env.CHAT_DB.prepare('DELETE FROM report_snapshots WHERE report_date < ?').bind(beforeDate).run();
     pruned = Number(result && result.meta && result.meta.changes || 0);
   }
-  return json({ ok: true, received: candidates.length, saved, skippedDuplicate, skippedExisting, pruned });
+
+  return json({
+    ok: true,
+    received: candidates.length,
+    saved,
+    updated,
+    skippedDuplicate,
+    skippedExisting,
+    pruned
+  });
 }
 
 async function getParentReportHistory(env, auth) {
@@ -682,8 +737,8 @@ async function getParentReportHistory(env, auth) {
     SELECT kind, report_date, text, captured_at
     FROM report_snapshots
     WHERE phone10 = ?
-    ORDER BY report_date DESC, CASE kind WHEN 'evening' THEN 0 ELSE 1 END
-    LIMIT 80
+    ORDER BY report_date DESC, CASE kind WHEN 'morning' THEN 0 WHEN 'psychology' THEN 1 ELSE 2 END
+    LIMIT 180
   `).bind(auth.phone10).all();
   return json({
     ok: true,

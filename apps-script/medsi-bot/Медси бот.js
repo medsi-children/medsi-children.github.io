@@ -1719,6 +1719,7 @@ function appendReport(param, tutorTokenRaw) {
     }
 
     if (targetSheetName === SHEET_PSYCHOLOGY) {
+      recordReportHistoryPublication_('psychology', text);
       syncPsychologyNotificationState_(text);
       try {
         syncD1CurrentReportsToWorker_('psychology');

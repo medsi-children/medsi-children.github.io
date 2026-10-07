@@ -32,6 +32,7 @@ input[type="password"]{width:100%;min-width:0;padding:14px 16px;font-size:1.05re
 .report-calendar-number{font-size:.88rem;line-height:1;font-weight:750}
 .report-calendar-marks{height:14px;display:flex;align-items:center;justify-content:center;gap:3px;color:#15aeb7}
 .report-calendar-marks svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.report-calendar-marks img{width:13px;height:13px;display:block}
 .report-history-overlay{position:fixed;z-index:1200;inset:0;padding:18px;display:flex;align-items:center;justify-content:center;background:rgba(17,66,74,.38);backdrop-filter:blur(10px);animation:screenIn .2s ease both}
 .report-history-modal-card{width:min(660px,100%);max-height:min(86dvh,780px);display:flex;flex-direction:column;gap:14px;padding:18px;border-radius:22px;background:#fff;border:1px solid rgba(36,211,218,.22);box-shadow:0 24px 70px rgba(17,66,74,.24)}
 .report-history-modal-head h2{margin:3px 0 0;font-size:1.24rem;line-height:1.2}
@@ -41,8 +42,9 @@ input[type="password"]{width:100%;min-width:0;padding:14px 16px;font-size:1.05re
 .report-history-day-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-bottom:1px solid rgba(36,211,218,.15);background:#f4fcfc}
 .report-history-day-kind{display:flex;align-items:center;gap:8px;color:var(--medsi-dark);font-size:.94rem;font-weight:850}
 .report-history-day-kind svg{width:20px;height:20px;fill:none;stroke:#16aeb7;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.report-history-day-kind img{width:20px;height:20px;display:block}
 .report-history-day-text{padding:15px 16px;white-space:pre-wrap;word-break:break-word;color:var(--fg);font-size:.96rem;line-height:1.55;user-select:text;-webkit-user-select:text}
 .report-history-modal-card>.btn{min-height:48px;padding:11px}
 @keyframes reportCalendarIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-@media(max-width:560px){.report-calendar{padding:12px 9px;border-radius:18px}.report-calendar-nav{grid-template-columns:38px 1fr 38px;gap:7px;margin-bottom:12px}.report-calendar-arrow{width:38px;height:38px}.report-calendar-weekdays,.report-calendar-grid{gap:3px}.report-calendar-day{min-height:43px;aspect-ratio:auto;border-radius:11px;padding:3px}.report-calendar-number{font-size:.82rem}.report-calendar-marks{height:12px;gap:2px}.report-calendar-marks svg{width:11px;height:11px}.report-history-overlay{padding:10px}.report-history-modal-card{max-height:90dvh;padding:14px;border-radius:18px}.report-history-day-text{padding:13px 14px;font-size:.92rem}.report-history-day-head{padding:9px 10px}}
+@media(max-width:560px){.report-calendar{padding:12px 9px;border-radius:18px}.report-calendar-nav{grid-template-columns:38px 1fr 38px;gap:7px;margin-bottom:12px}.report-calendar-arrow{width:38px;height:38px}.report-calendar-weekdays,.report-calendar-grid{gap:3px}.report-calendar-day{min-height:43px;aspect-ratio:auto;border-radius:11px;padding:3px}.report-calendar-number{font-size:.82rem}.report-calendar-marks{height:12px;gap:2px}.report-calendar-marks svg,.report-calendar-marks img{width:11px;height:11px}.report-history-overlay{padding:10px}.report-history-modal-card{max-height:90dvh;padding:14px;border-radius:18px}.report-history-day-text{padding:13px 14px;font-size:.92rem}.report-history-day-head{padding:9px 10px}}
 @media(prefers-reduced-motion:reduce){.report-history-overlay,.report-calendar{animation:none}}

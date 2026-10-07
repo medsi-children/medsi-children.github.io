@@ -159,7 +159,7 @@ function readReportHistoryPublication_(kind) {
 }
 
 function recordReportHistoryPublication_(kind, textRaw, reportDateRaw) {
-  if (!['morning', 'evening'].includes(String(kind || '').toLowerCase())) return;
+  if (!['morning', 'evening', 'psychology'].includes(String(kind || '').toLowerCase())) return;
   const normalizedKind = String(kind).toLowerCase();
   const properties = PropertiesService.getScriptProperties();
   const fingerprint = reportFingerprint_(textRaw);
@@ -213,22 +213,46 @@ function syncReportHistoryPublicationFromSource_(kind, textRaw, explicitPublicat
 
 function reportHistoryPublicationMatches_(kind, reportDate) {
   const publication = readReportHistoryPublication_(kind);
-  return !publication || String(publication.date || '') === String(reportDate || '');
+  return !!publication && String(publication.date || '') === String(reportDate || '');
 }
 
-function seedReportHistoryPublication_(kind, reportDate) {
-  if (readReportHistoryPublication_(kind)) return;
-  const sheetName = kind === 'morning' ? SHEET_MORNING : SHEET_EVENING;
-  const sheet = getSheet_(sheetName);
-  const text = sheet ? (getLatestReport(sheet, 1) || '') : '';
-  recordReportHistoryPublication_(kind, text, reportDate);
+const REPORT_HISTORY_REFRESH_HOURS_ = {
+  morning: [15, 16, 17],
+  psychology: [16, 18, 21, 23],
+  evening: [20, 21, 22, 23]
+};
+
+function reportHistoryKindsForHour_(hourRaw) {
+  const hour = Number(hourRaw);
+  return Object.keys(REPORT_HISTORY_REFRESH_HOURS_).filter(function(kind) {
+    return REPORT_HISTORY_REFRESH_HOURS_[kind].indexOf(hour) >= 0;
+  });
 }
 
-function captureReportHistoryKind_(kind, reportDate) {
+function psychologyHistoryText_() {
+  const sheet = getSheet_(SHEET_PSYCHOLOGY);
+  return sheet ? String(sheet.getRange(1, 1).getValue() || '').trim() : '';
+}
+
+function captureReportHistoryKind_(kindRaw, reportDate) {
+  const kind = String(kindRaw || '').trim().toLowerCase();
+  if (!['morning', 'evening', 'psychology'].includes(kind)) {
+    return { ok:false, kind:kind, reportDate:reportDate, message:'Unknown report kind.' };
+  }
+
   const snapshots = [];
+  const psychologyText = kind === 'psychology' ? psychologyHistoryText_() : '';
+
   snapshotActiveProfilesForD1_().forEach(function(profile) {
     const phone = last10_(profile.phone);
-    const report = buildParentReportSnapshot_(phone, kind);
+    let report;
+
+    if (kind === 'psychology') {
+      report = { ok:true, hasReport:!!psychologyText, text:psychologyText };
+    } else {
+      report = buildParentReportSnapshot_(phone, kind);
+    }
+
     if (!phone || !report.ok || !report.hasReport || !String(report.text || '').trim()) return;
     snapshots.push({
       phone: phone,
@@ -238,18 +262,20 @@ function captureReportHistoryKind_(kind, reportDate) {
       capturedAt: Date.now()
     });
   });
+
   const beforeDate = reportHistoryDate_(reportHistoryShiftDays_(new Date(), -45));
   const result = d1AdminRequest_('/admin/report-snapshots', 'post', {
     snapshots: snapshots,
     beforeDate: beforeDate,
     skipIfMatchesPrevious: true
   });
-  seedReportHistoryPublication_(kind, reportDate);
+
   return {
     ok: true,
     kind: kind,
     reportDate: reportDate,
     saved: Number(result.saved || 0),
+    updated: Number(result.updated || 0),
     skippedDuplicate: Number(result.skippedDuplicate || 0),
     skippedExisting: Number(result.skippedExisting || 0)
   };
@@ -260,19 +286,22 @@ function captureDueReportHistorySnapshots_() {
   const hour = Number(Utilities.formatDate(now, 'Europe/Moscow', 'H'));
   const today = reportHistoryDate_(now);
   const captured = [];
-  // The D1 key (phone + kind + date) makes these retries idempotent. Running
-  // throughout the capture window also picks up a child whose report was
-  // distributed a little later than the others.
-  if (hour >= 16) {
-    if (reportHistoryPublicationMatches_('morning', today)) captured.push(captureReportHistoryKind_('morning', today));
-    else captured.push({ ok:true, kind:'morning', reportDate:today, skipped:true, reason:'No morning publication for this date.' });
-  }
-  if (hour < 4) {
-    const eveningDate = reportHistoryDate_(reportHistoryShiftDays_(now, -1));
-    if (reportHistoryPublicationMatches_('evening', eveningDate)) captured.push(captureReportHistoryKind_('evening', eveningDate));
-    else captured.push({ ok:true, kind:'evening', reportDate:eveningDate, skipped:true, reason:'No evening publication for this date.' });
-  }
-  return { ok: true, captured: captured };
+
+  reportHistoryKindsForHour_(hour).forEach(function(kind) {
+    if (reportHistoryPublicationMatches_(kind, today)) {
+      captured.push(captureReportHistoryKind_(kind, today));
+    } else {
+      captured.push({
+        ok:true,
+        kind:kind,
+        reportDate:today,
+        skipped:true,
+        reason:'No ' + kind + ' publication for this date.'
+      });
+    }
+  });
+
+  return { ok:true, hour:hour, captured:captured };
 }
 
 function captureScheduledReportHistory() {
@@ -612,6 +641,7 @@ function onReportsD1Edit(event) {
     }
     if (coversA1 && sheetName === SHEET_PSYCHOLOGY) {
       const text = String(event.range.getSheet().getRange(1, 1).getValue() || '');
+      recordReportHistoryPublication_('psychology', text);
       syncPsychologyNotificationState_(text);
       syncD1CurrentReportsToWorker_('psychology');
       return;
