@@ -10,7 +10,7 @@
     "verify:source-control": "node scripts/verify-source-control.mjs",
     "verify:bot": "node scripts/verify-smart-bot.mjs && node --check parents/bot-chat-runtime.js",
     "verify": "npm run verify:server && npm run verify:source-control && npm run verify:bot && npm run verify:reports",
-    "verify:reports": "node --test tests/raw-report-cleanup.test.cjs tests/raw-report-canonicalization.test.cjs"
+    "verify:reports": "node --test tests/raw-report-cleanup.test.cjs tests/raw-report-canonicalization.test.cjs tests/report-history-slots.test.cjs"
   },
   "engines": {
     "node": ">=20"

@@ -635,12 +635,27 @@ async function upsertReportSnapshots(request, env) {
     const phone = phone10(item && item.phone);
     const kind = String(item && item.kind || '').trim().toLowerCase();
     const reportDate = String(item && item.reportDate || '').trim();
+    const snapshotKey = String(item && item.snapshotKey || reportDate).trim();
     const text = String(item && item.text || '').trim();
-    if (!phone || !['morning', 'evening'].includes(kind) || !/^\d{4}-\d{2}-\d{2}$/.test(reportDate) || !text) return;
-    const key = `${phone}|${kind}|${reportDate}`;
+    if (
+      !phone ||
+      !['morning', 'evening', 'psychology'].includes(kind) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(reportDate) ||
+      !/^\d{4}-\d{2}-\d{2}(?:T(?:[01]\d|2[0-3]):00)?$/.test(snapshotKey) ||
+      snapshotKey.slice(0, 10) !== reportDate ||
+      !text
+    ) return;
+    const key = `${phone}|${kind}|${snapshotKey}`;
     if (seen.has(key)) return;
     seen.add(key);
-    candidates.push({ phone, kind, reportDate, text: text.slice(0, 30000), capturedAt: Number(item.capturedAt || 0) || Date.now() });
+    candidates.push({
+      phone,
+      kind,
+      reportDate,
+      snapshotKey,
+      text: text.slice(0, 30000),
+      capturedAt: Number(item.capturedAt || 0) || Date.now()
+    });
   });
   const normalizeText = value => String(value || '').normalize('NFC').replace(/\s+/g, ' ').trim();
   let saved = 0;
@@ -650,9 +665,9 @@ async function upsertReportSnapshots(request, env) {
     if (payload.skipIfMatchesPrevious === true) {
       const previous = await env.CHAT_DB.prepare(`
         SELECT text FROM report_snapshots
-        WHERE phone10 = ? AND kind = ? AND report_date < ?
-        ORDER BY report_date DESC LIMIT 1
-      `).bind(candidate.phone, candidate.kind, candidate.reportDate).first();
+        WHERE phone10 = ? AND kind = ?
+        ORDER BY captured_at DESC, report_date DESC LIMIT 1
+      `).bind(candidate.phone, candidate.kind).first();
       if (previous && normalizeText(previous.text) === normalizeText(candidate.text)) {
         skippedDuplicate++;
         continue;
@@ -662,7 +677,7 @@ async function upsertReportSnapshots(request, env) {
       INSERT INTO report_snapshots (phone10, kind, report_date, text, captured_at)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(phone10, kind, report_date) DO NOTHING
-    `).bind(candidate.phone, candidate.kind, candidate.reportDate, candidate.text, candidate.capturedAt).run();
+    `).bind(candidate.phone, candidate.kind, candidate.snapshotKey, candidate.text, candidate.capturedAt).run();
     const changes = Number(result && result.meta && result.meta.changes || 0);
     if (changes) saved += changes;
     else skippedExisting++;
@@ -682,17 +697,23 @@ async function getParentReportHistory(env, auth) {
     SELECT kind, report_date, text, captured_at
     FROM report_snapshots
     WHERE phone10 = ?
-    ORDER BY report_date DESC, CASE kind WHEN 'evening' THEN 0 ELSE 1 END
-    LIMIT 80
+    ORDER BY captured_at DESC, report_date DESC
+    LIMIT 500
   `).bind(auth.phone10).all();
   return json({
     ok: true,
-    reports: (result.results || []).map(row => ({
-      kind: row.kind,
-      reportDate: row.report_date,
-      text: row.text,
-      capturedAt: Number(row.captured_at || 0)
-    }))
+    reports: (result.results || []).map(row => {
+      const snapshotKey = String(row.report_date || '');
+      const slotMatch = /T(\d{2}:\d{2})$/.exec(snapshotKey);
+      return {
+        kind: row.kind,
+        reportDate: snapshotKey.slice(0, 10),
+        snapshotKey,
+        snapshotTime: slotMatch ? slotMatch[1] : '',
+        text: row.text,
+        capturedAt: Number(row.captured_at || 0)
+      };
+    })
   });
 }
 

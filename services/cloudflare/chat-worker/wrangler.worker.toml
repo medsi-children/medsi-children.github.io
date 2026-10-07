@@ -7,7 +7,7 @@ workers_dev = true
 CHAT_ENVIRONMENT = "production"
 
 [triggers]
-crons = ["0 13-15 * * *", "0 21-23 * * *"]
+crons = ["0 12-15 * * *", "0 17-20 * * *"]
 
 [[d1_databases]]
 binding = "CHAT_DB"
