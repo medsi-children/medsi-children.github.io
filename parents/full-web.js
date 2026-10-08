@@ -168,21 +168,26 @@
   function showAuthApproved(res){if(!applyBootstrap(res))throw new Error('Не удалось сохранить подтверждённый вход.');safeRemove(REAUTH_KEY);prewarmAll();const screen=$('screenAuthPending');screen.classList.add('is-approved');$('authPendingSpinner').classList.add('hidden');$('authApprovedIcon').classList.remove('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent='Авторизация подтверждена!';$('authPendingText').textContent='Вход сохранён на этом устройстве.';const approvedRun=flowRun;Promise.all([wait(1800),Promise.resolve(window.MedsiAssistantReady)]).then(()=>{if(flowRun===approvedRun&&document.body.dataset.screen==='screenAuthPending'){justRegistered=false;showChoose()}})}
   function showAuthStopped(status,message){$('authPendingSpinner').classList.add('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent=status==='DENIED'?'Авторизация отклонена':status==='NOT_FOUND'?'Номер не найден':'Срок запроса истёк';$('authPendingText').textContent=message||'Вы можете отправить новый запрос.';$('authPendingBackBtn').classList.remove('hidden')}
   async function runReauthorizationFlow(data,createFirst){
-    const run=++flowRun;resetAuthPendingUi();show('screenAuthPending');let shouldCreate=!!createFirst;
+    const run=++flowRun;resetAuthPendingUi();let shouldCreate=!!createFirst;
+    const authButton=$('authBtn'),originalButtonText=authButton.textContent;
+    let pendingVisible=!shouldCreate;
+    if(pendingVisible)show('screenAuthPending');
+    else if(document.body.dataset.screen==='screenAuth'){authButton.disabled=true;authButton.textContent='Проверяем…'}
+    const restoreButton=()=>{authButton.disabled=false;authButton.textContent=originalButtonText};
     while(run===flowRun){
       try{
         let res=await callCloudflareAccess(!shouldCreate,data);
         if(run!==flowRun)return;
-        // Only a parent missing from Cloudflare takes the old compatibility route.
-        if((res&&res.code==='NOT_FOUND')||(!shouldCreate&&res&&res.status==='NOT_FOUND')){
-          res=shouldCreate
-            ?await callApi('requestParentReauthorization',[data.phone,data.requestId],30000)
-            :await callApi('getParentReauthorizationStatus',[data.phone,data.requestId],12000);
-          if(run!==flowRun)return;
+        if(res&&res.code==='NOT_FOUND'&&res.ok===false){
+          restoreButton();safeRemove(REAUTH_KEY);$('phoneInputAuth').value=data.phone;showAuth();
+          $('phoneErrorAuth').textContent='Этот номер не найден среди активных родителей.';
+          $('phoneErrorAuth').classList.remove('hidden');return;
         }
-        if(res&&res.code==='NOT_FOUND'&&res.ok===false){safeRemove(REAUTH_KEY);showAuthStopped('NOT_FOUND',res.message||'Этот номер не найден среди активных родителей.');return}
         if(!res||res.ok===false)throw new Error((res&&res.message)||'Не удалось проверить авторизацию.');
+        if(res.status==='NOT_FOUND'){shouldCreate=true;continue}
+        restoreButton();
         if(res.autoApproved&&res.parentSession){await finishAutomaticAccess(res,run);return}
+        if(!pendingVisible){show('screenAuthPending');pendingVisible=true}
         shouldCreate=false;
         $('authPendingText').textContent='Пожалуйста, подождите, пока воспитатель подтвердит вход.';
         if(res.code){$('authRequestCode').textContent=res.code;$('authRequestCodeWrap').classList.remove('hidden')}
@@ -190,7 +195,7 @@
         if(res.status==='DENIED'){safeRemove(REAUTH_KEY);showAuthStopped('DENIED','Воспитатель отклонил запрос. При необходимости свяжитесь с отделением.');return}
         if(res.status==='EXPIRED'){safeRemove(REAUTH_KEY);showAuthStopped('EXPIRED','Запрос больше не действует. Отправьте новый запрос на вход.');return}
         if(res.status==='NOT_FOUND')shouldCreate=true;
-      }catch(e){if(run!==flowRun)return;$('authPendingText').textContent='Связь временно прервана. Продолжаем проверять запрос…'}
+      }catch(e){if(run!==flowRun)return;restoreButton();if(!pendingVisible){show('screenAuthPending');pendingVisible=true}$('authPendingText').textContent='Связь временно прервана. Продолжаем проверять запрос…'}
       await wait(1500);
     }
   }
@@ -316,7 +321,7 @@
   }
 
   $('btnGoRegister').onclick=()=>showNames();$('btnGoAuth').onclick=()=>showAuth();$('startHelpBtn').onclick=()=>{const p=$('startHelpPanel'),open=p.classList.toggle('is-open');p.setAttribute('aria-hidden',open?'false':'true')};
-  $('namesBackBtn').onclick=showStart;$('namesAuthBtn').onclick=showAuth;$('phoneRegBackBtn').onclick=showNames;$('authBackBtn').onclick=showStart;
+  $('namesBackBtn').onclick=showStart;$('namesAuthBtn').onclick=showAuth;$('phoneRegBackBtn').onclick=showNames;$('authBackBtn').onclick=()=>{flowRun++;safeRemove(REAUTH_KEY);$('authBtn').disabled=false;$('authBtn').textContent='Войти';showStart()};
   $('toPhoneReg').onclick=()=>{const pFirst=$('parentFirst').value.trim(),pLast=$('parentLast').value.trim(),cFirst=$('childFirst').value.trim(),cLast=$('childLast').value.trim(),err=$('namesError');if(!pFirst||!cFirst){err.textContent='Введите имя родителя и имя ребёнка.';err.classList.remove('hidden');return}if(!cLast&&!pLast){err.textContent='Введите фамилию ребёнка или фамилию родителя.';err.classList.remove('hidden');return}if(![pFirst,pLast,cFirst,cLast].filter(Boolean).every(isSingleWord)){err.textContent='В каждое поле вводите только имя или фамилию, без отчества.';err.classList.remove('hidden');return}err.classList.add('hidden');regParentName=[pFirst,pLast].filter(Boolean).join(' ');regChildName=[cFirst,cLast].filter(Boolean).join(' ');showPhoneReg()};
   $('registerBtn').onclick=register;$('authBtn').onclick=auth;$('btnChat').onclick=openChat;$('btnMorning').onclick=()=>openReport('morning');$('btnEvening').onclick=()=>openReport('evening');$('btnPsychology').onclick=()=>openReport('psychology');$('btnSchedule').onclick=showSchedule;
   $('reportCopyBtn').onclick=()=>copyText(currentReportText,$('reportCopyBtn'));$('reportHistoryBtn').onclick=openReportHistory;$('historyBackBtn').onclick=()=>{setHeader(reportTitle(currentReportKind),'');show('screenReport')};$('reportHistoryModalClose').onclick=closeHistoryModal;$('reportHistoryModal').onclick=e=>{if(e.target===$('reportHistoryModal'))closeHistoryModal()};

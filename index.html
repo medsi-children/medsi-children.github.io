@@ -42,7 +42,7 @@
 
   <section id="screenAuth" class="hidden"><h2 class="form-title">Авторизация</h2><p class="form-subtitle">Введите номер телефона, который вы указывали при регистрации.</p><div class="registration-fields">
     <div class="field-block"><label for="phoneInputAuth">Номер телефона</label><input id="phoneInputAuth" type="tel" inputmode="tel" autocomplete="tel" placeholder="88005553535"></div>
-  </div><p class="registration-note">После авторизации, ожидайте подтверждения от воспитателя.</p><p id="phoneErrorAuth" class="error hidden"></p><div class="grid2" style="margin-top:12px"><button id="authBackBtn" class="btn">Назад</button><button id="authBtn" class="btn btn-teal">Запросить вход</button></div></section>
+  </div><p class="registration-note">Если понадобится подтверждение воспитателя, код появится после проверки номера.</p><p id="phoneErrorAuth" class="error hidden"></p><div class="grid2" style="margin-top:12px"><button id="authBackBtn" class="btn">Назад</button><button id="authBtn" class="btn btn-teal">Войти</button></div></section>
 
   <section id="screenRegistrationPending" class="hidden access-wait-screen"><div class="access-spinner" aria-hidden="true"></div><h2 class="form-title">Регистрация…</h2><p id="registrationPendingText" class="form-subtitle">Пожалуйста, подождите. Мы сохраняем данные и готовим Медси Бот.</p></section>
 
@@ -109,7 +109,7 @@
   window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261007-document-title-1',1).then(function(){
     return window.MedsiSmartBotWidget && window.MedsiSmartBotWidget.ready;
   }).catch(function(){});
-  load('/parents/full-web.js?v=20261008-parent-open-access-1').then(function(){
+  load('/parents/full-web.js?v=20261008-parent-open-access-2').then(function(){
     if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
     clearTimeout(notice);status.classList.add('hidden');
     window.MedsiLoadParentChat().then(function(){
