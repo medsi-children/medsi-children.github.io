@@ -163,7 +163,8 @@
     }
   }
   async function register(){const digits=onlyDigits($('phoneInputReg').value),err=$('phoneErrorReg'),info=$('alreadyRegistered');err.classList.add('hidden');info.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}const snapshot={phone:digits,parentName:regParentName,childName:regChildName};const saved=readJson(REG_ATTEMPT_KEY);snapshot.attemptId=saved&&saved.fingerprint===registrationFingerprint(snapshot)?saved.attemptId:makeFlowId('reg');snapshot.fingerprint=registrationFingerprint(snapshot);safeSet(REG_ATTEMPT_KEY,JSON.stringify(snapshot));runRegistrationFlow(snapshot)}
-  function resetAuthPendingUi(){const screen=$('screenAuthPending');screen.classList.remove('is-approved');$('authPendingSpinner').classList.remove('hidden');$('authApprovedIcon').classList.add('hidden');$('authPendingTitle').textContent='Авторизация начата';$('authPendingText').textContent='Пожалуйста, подождите, пока воспитатель подтвердит вход.';$('authRequestCode').textContent='••••';$('authRequestCodeWrap').classList.remove('hidden');$('authPendingBackBtn').classList.add('hidden')}
+  function resetAuthPendingUi(){const screen=$('screenAuthPending');screen.classList.remove('is-approved');$('authPendingSpinner').classList.remove('hidden');$('authApprovedIcon').classList.add('hidden');$('authPendingTitle').textContent='Проверяем доступ';$('authPendingText').textContent='Пожалуйста, подождите…';$('authRequestCode').textContent='••••';$('authRequestCodeWrap').classList.add('hidden');$('authPendingBackBtn').classList.add('hidden')}
+  async function finishAutomaticAccess(res,run){if(!applyBootstrap(res))throw new Error('Не удалось сохранить вход.');safeRemove(REAUTH_KEY);prewarmAll();await Promise.resolve(window.MedsiAssistantReady);if(run===flowRun){justRegistered=false;showChoose()}}
   function showAuthApproved(res){if(!applyBootstrap(res))throw new Error('Не удалось сохранить подтверждённый вход.');safeRemove(REAUTH_KEY);prewarmAll();const screen=$('screenAuthPending');screen.classList.add('is-approved');$('authPendingSpinner').classList.add('hidden');$('authApprovedIcon').classList.remove('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent='Авторизация подтверждена!';$('authPendingText').textContent='Вход сохранён на этом устройстве.';const approvedRun=flowRun;Promise.all([wait(1800),Promise.resolve(window.MedsiAssistantReady)]).then(()=>{if(flowRun===approvedRun&&document.body.dataset.screen==='screenAuthPending'){justRegistered=false;showChoose()}})}
   function showAuthStopped(status,message){$('authPendingSpinner').classList.add('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent=status==='DENIED'?'Авторизация отклонена':status==='NOT_FOUND'?'Номер не найден':'Срок запроса истёк';$('authPendingText').textContent=message||'Вы можете отправить новый запрос.';$('authPendingBackBtn').classList.remove('hidden')}
   async function runReauthorizationFlow(data,createFirst){
@@ -181,9 +182,10 @@
         }
         if(res&&res.code==='NOT_FOUND'&&res.ok===false){safeRemove(REAUTH_KEY);showAuthStopped('NOT_FOUND',res.message||'Этот номер не найден среди активных родителей.');return}
         if(!res||res.ok===false)throw new Error((res&&res.message)||'Не удалось проверить авторизацию.');
+        if(res.autoApproved&&res.parentSession){await finishAutomaticAccess(res,run);return}
         shouldCreate=false;
         $('authPendingText').textContent='Пожалуйста, подождите, пока воспитатель подтвердит вход.';
-        if(res.code)$('authRequestCode').textContent=res.code;
+        if(res.code){$('authRequestCode').textContent=res.code;$('authRequestCodeWrap').classList.remove('hidden')}
         if(res.parentSession){showAuthApproved(res);return}
         if(res.status==='DENIED'){safeRemove(REAUTH_KEY);showAuthStopped('DENIED','Воспитатель отклонил запрос. При необходимости свяжитесь с отделением.');return}
         if(res.status==='EXPIRED'){safeRemove(REAUTH_KEY);showAuthStopped('EXPIRED','Запрос больше не действует. Отправьте новый запрос на вход.');return}

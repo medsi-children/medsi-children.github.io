@@ -75,6 +75,30 @@ function issueParentSession(phone, secret) {
   }));
 }
 
+const PARENT_OPEN_ACCESS_MS = 30 * 24 * 60 * 60 * 1000;
+
+async function recentParentRegistration(env, phone, now) {
+  const row = await env.CHAT_DB.prepare(`SELECT MIN(created_at) AS registered_at
+    FROM parent_registration_attempts WHERE phone10 = ? AND status = 'COMPLETED'`)
+    .bind(phone).first();
+  const registeredAt = Number(row && row.registered_at);
+  return registeredAt > 0 && registeredAt <= now && now - registeredAt < PARENT_OPEN_ACCESS_MS;
+}
+
+async function automaticParentAccess(env, phone, profile, requestId, now) {
+  if (!await recentParentRegistration(env, phone, now)) return null;
+  if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис авторизации временно недоступен.' }, 503);
+  // Old requests must disappear from the educator's queue, without becoming
+  // reusable approved request IDs after the open-access period ends.
+  await env.CHAT_DB.prepare(`UPDATE parent_access_requests
+    SET status='DENIED', decision='AUTO_ACCESS', updated_at=?
+    WHERE phone10=? AND status='PENDING'`).bind(now, phone).run();
+  const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET);
+  return json({ ok: true, status: 'APPROVED', autoApproved: true, requestId,
+    phone: '8' + phone, parentName: profile.parent_name || '', childName: profile.child_name || '',
+    parentSession: session.token, d1Session: { ok: true, ...session } });
+}
+
 async function registerParent(request, env) {
   const payload = await body(request) || {};
   const phone = phone10(payload.phone);
@@ -211,6 +235,9 @@ async function requestParentAccess(request, env, ctx) {
   const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
   if (!profile) return json({ ok: false, code: 'NOT_FOUND', message: 'Этот номер не найден среди активных родителей.' }, 404);
 
+  const automatic = await automaticParentAccess(env, phone, profile, requestId, Date.now());
+  if (automatic) return automatic;
+
   const prior = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
   if (prior) {
     if (prior.phone10 !== phone) return json({ ok: false, message: 'Запрос относится к другому номеру телефона.' }, 409);
@@ -254,6 +281,10 @@ async function getParentAccessStatus(request, env) {
   const url = new URL(request.url), phone = phone10(url.searchParams.get('phone'));
   const requestId = parentAccessRequestId(url.searchParams.get('requestId'));
   if (!phone || !requestId) return json({ ok: true, status: 'NOT_FOUND' });
+  const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
+  if (!profile) return json({ ok: true, status: 'NOT_FOUND' });
+  const automatic = await automaticParentAccess(env, phone, profile, requestId, Date.now());
+  if (automatic) return automatic;
   const row = await env.CHAT_DB.prepare('SELECT * FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
   if (!row || row.phone10 !== phone) return json({ ok: true, status: 'NOT_FOUND' });
   let status = String(row.status || '').toUpperCase();
@@ -264,11 +295,6 @@ async function getParentAccessStatus(request, env) {
   }
   if (status === 'APPROVED' || status === 'CONSUMED') {
     if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис авторизации временно недоступен.' }, 503);
-    const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
-    if (!profile) {
-      await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE request_id=?").bind(now, requestId).run();
-      return json({ ok: true, status: 'DENIED' });
-    }
     if (status === 'APPROVED') await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='CONSUMED', updated_at=? WHERE request_id=? AND status='APPROVED'").bind(now, requestId).run();
     const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET);
     return json({ ok: true, status: 'APPROVED', requestId, phone: '8' + phone,
