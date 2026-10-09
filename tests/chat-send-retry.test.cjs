@@ -24,6 +24,30 @@ function transport(fetch) {
   return window.MedsiOverlayTransport;
 }
 
+test('only educator text receives conservative punctuation spacing', async () => {
+  const requests = [];
+  const chat = transport(async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  });
+  const raw = 'Первое , второе. Третье ,четвёртое\nПятое .Шестое';
+  const fixed = 'Первое, второе. Третье, четвёртое\nПятое. Шестое';
+  assert.equal(chat.normalizeEducatorText(raw), fixed);
+  assert.equal(chat.normalizeEducatorText(fixed), fixed);
+  for (const sample of ['Первое , Второе', 'Первое ,Второе', 'Первое,Второе', 'Первое . Второе', 'Первое .Второе', 'Первое.Второе']) {
+    assert.equal(chat.normalizeEducatorText(sample), sample.includes(',') ? 'Первое, Второе' : 'Первое. Второе');
+  }
+  assert.equal(chat.normalizeEducatorText('В 17:00, 09.10.2026 — 3.14 и 1,5; т.д. А.С. https://example.test/путь,текст'),
+    'В 17:00, 09.10.2026 — 3.14 и 1,5; т.д. А.С. https://example.test/путь,текст');
+
+  await chat.sendMessage({ token: 'session' }, 'educator', '9991112233', { type: 'text', text: raw });
+  await chat.sendMessage({ token: 'session' }, 'parent', '9991112233', { type: 'text', text: raw });
+  await chat.sendMessage({ token: 'session' }, 'educator', '9991112233', { type: 'video', text: raw, fileId: 'video-id' });
+  await chat.edit({ token: 'session' }, 'educator', 'message-1', raw);
+  await chat.edit({ token: 'session' }, 'parent', 'message-2', raw);
+  assert.deepEqual(requests.map(request => request.text), [fixed, raw, raw, fixed, raw]);
+});
+
 test('a lost send response retries the same message id', async () => {
   const requests = [];
   const chat = transport(async (_url, options) => {

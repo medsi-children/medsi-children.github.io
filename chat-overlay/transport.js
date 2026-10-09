@@ -100,8 +100,29 @@
     return request(session, '/lab/parents');
   }
 
+  function normalizeEducatorText(text) {
+    const source = String(text || '');
+    const protectedText = /\b(?:https?:\/\/|www\.)[^\s]+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+    function normalizePlain(part) {
+      return part.replace(/([А-ЯЁа-яё]+)[ \t]*([,.])[ \t]*(?=[А-ЯЁа-яё]|\n|$)/g, (match, word, mark, offset, input) => {
+        // Single-letter initials and abbreviations such as «т.д.» are ambiguous.
+        if (mark === '.' && word.length === 1) return match;
+        const next = input[offset + match.length];
+        return word + mark + (next && next !== '\n' ? ' ' : '');
+      });
+    }
+    let result = '';
+    let start = 0;
+    for (const match of source.matchAll(protectedText)) {
+      result += normalizePlain(source.slice(start, match.index)) + match[0];
+      start = match.index + match[0].length;
+    }
+    return result + normalizePlain(source.slice(start));
+  }
+
   function sendMessage(session, role, phone, message) {
     const payload = { ...(message || {}) };
+    if (role === 'educator' && payload.type === 'text') payload.text = normalizeEducatorText(payload.text);
     if (!String(payload.clientMessageId || '').trim()) {
       payload.clientMessageId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
         ? crypto.randomUUID()
@@ -137,7 +158,7 @@
     return request(session, '/lab/edit/' + encodeURIComponent(String(key || '')), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ actor: String(role || ''), text: String(text || '') })
+      body: JSON.stringify({ actor: String(role || ''), text: role === 'educator' ? normalizeEducatorText(text) : String(text || '') })
     });
   }
 
@@ -377,6 +398,7 @@
     thread,
     chats,
     parents,
+    normalizeEducatorText,
     sendMessage,
     markRead,
     markUnread,

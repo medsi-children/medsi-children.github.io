@@ -345,7 +345,7 @@
     function clearFile(){pendingFile=null;imagePreview.classList.add('hidden');if(pendingUrl){URL.revokeObjectURL(pendingUrl);pendingUrl=''}imagePreview.querySelector('img').removeAttribute('src')}
     function setSending(v){sending=!!v;send.disabled=sending;attach.disabled=sending;editor.contentEditable=sending?'false':'true'}
     async function submit(){
-      if(!activeChat||sending)return;const value=editorText();if(!value&&!pendingFile)return;setSending(true);
+      if(!activeChat||sending)return;const value=transport.normalizeEducatorText(editorText());if(!value&&!pendingFile)return;setSending(true);
       const targetChat=activeChat;
       const targetPhone=phone10(targetChat.phone);
       const targetFile=pendingFile;
