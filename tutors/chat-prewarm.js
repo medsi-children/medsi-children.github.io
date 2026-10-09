@@ -22,13 +22,13 @@
   transport.chats=function(session,bucket,options){
     if(options&&options.fresh)return fetchList(session,bucket);
     const key=listKey(session,bucket),cached=listCache.get(key);
-    if(cached){if(now()-cached.at>3500)fetchList(session,bucket).catch(()=>{});return Promise.resolve(cached.value)}
+    if(cached&&now()-cached.at<=3500)return Promise.resolve(cached.value)
     return fetchList(session,bucket)
   };
   transport.thread=function(session,phone,before,limit,options){
     if(options&&options.fresh)return fetchThread(session,phone,before,limit);
     const key=threadKey(session,phone,before,limit),cached=threadCache.get(key);
-    if(cached){if(now()-cached.at>5000)warmThread(session,phone).catch(()=>{});return Promise.resolve(cached.value)}
+    if(cached&&now()-cached.at<=5000)return Promise.resolve(cached.value)
     return fetchThread(session,phone,before,limit)
   };
   function clearLists(session){const prefix=String(session&&session.token||'').slice(-18)+'|';[...listCache.keys()].forEach(k=>{if(k.startsWith(prefix))listCache.delete(k)})}

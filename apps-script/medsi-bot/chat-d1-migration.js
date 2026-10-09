@@ -645,6 +645,7 @@ function onReportsD1Edit(event) {
     }
     if (coversA1 && sheetName === SHEET_PSYCHOLOGY) {
       const text = String(event.range.getSheet().getRange(1, 1).getValue() || '');
+      saveRawReportPublication_('psychology', event.range.getSheet().getRange(1, 1), text, Date.now());
       recordReportHistoryPublication_('psychology', text);
       syncPsychologyNotificationState_(text);
       syncD1CurrentReportsToWorker_('psychology');
@@ -754,7 +755,8 @@ function flushReportsS3PurgeQueue_() {
         queue[phone] = entry;
         saveReportsS3PurgeQueue_(queue);
       }
-      timewebReportsSyncRequest_('/__sync/purge-s3', { keys: Array.isArray(entry.keys) ? entry.keys : [] });
+      const keys = Array.isArray(entry.keys) ? entry.keys : [];
+      if (keys.length) timewebReportsSyncRequest_('/__sync/purge-s3', { keys:keys });
       delete queue[phone];
       completed.push(phone);
     } catch (error) {
@@ -772,12 +774,9 @@ function flushReportsS3PurgeQueue_() {
 function deleteD1ProfileWithS3Purge_(phoneRaw) {
   const phone = last10_(phoneRaw);
   if (!phone) throw new Error('Не удалось определить номер родителя для D1.');
-  // Refuse to delete the D1 record until the separate Timeweb credential is
-  // present: media is then never silently abandoned.
-  const props = PropertiesService.getScriptProperties();
-  if (!props.getProperty('TIMEWEB_REPORTS_SYNC_URL') || !props.getProperty('REPORTS_SYNC_SECRET')) {
-    throw new Error('Защищённая очередь S3 ещё не настроена.');
-  }
+  // Revoke profile/chat access first. S3 cleanup is a separate retryable
+  // queue and must not leave a removed parent active when Timeweb is offline
+  // or its purge credentials have not been configured.
   const queue = reportsS3PurgeQueue_();
   if (!queue[phone]) {
     const listed = d1AdminRequest_('/admin/profile-s3-keys', 'post', { phone: phone });

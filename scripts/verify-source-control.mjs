@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,6 +40,14 @@ if (existsSync(configPath)) {
   if (/^(main|name|workers_dev|routes|crons|APP_SCRIPT_URL)\s*=/m.test(config)) {
     failures.push('D1 migration config must not contain Worker deployment or Apps Script settings.');
   }
+}
+
+// Apps Script publishes only the explicit allowlist. A new source file must
+// never pass repository checks while silently disappearing from deployment.
+const appsDirectory = rel('apps-script/medsi-bot');
+const claspRules = readFileSync(resolve(appsDirectory, '.claspignore'), 'utf8').split(/\r?\n/).map(line => line.trim());
+for (const file of readdirSync(appsDirectory).filter(file => file.endsWith('.js'))) {
+  if (!claspRules.includes('!' + file)) failures.push(`Apps Script source is excluded from publication: ${file}`);
 }
 
 if (failures.length) {

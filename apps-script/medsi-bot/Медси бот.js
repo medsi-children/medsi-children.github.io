@@ -1624,14 +1624,14 @@ function cleanupReportSubmissions_() {
   props.setProperty(markerKey, String(now));
 }
 
-function claimReportSubmission_(id, typeRaw, fingerprint) {
+function claimReportSubmission_(id, typeRaw, fingerprint, legacyFingerprint) {
   if (!id) return { claimed:true, state:null };
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     const existing = readReportSubmission_(id);
     if (existing) {
-      if (existing.type !== typeRaw || existing.fingerprint !== fingerprint) {
+      if (existing.type !== typeRaw || (existing.fingerprint !== fingerprint && existing.fingerprint !== legacyFingerprint)) {
         return { claimed:false, mismatch:true, state:existing };
       }
       // The Worker retries transient Apps Script errors. A failed claim must
@@ -1643,7 +1643,7 @@ function claimReportSubmission_(id, typeRaw, fingerprint) {
       if (existing.status === 'failed' || stale) {
         const state = {
           status:'processing', type:typeRaw, fingerprint:fingerprint,
-          startedAt:Date.now(), updatedAt:Date.now()
+          startedAt:Number(existing.startedAt) || Date.now(), updatedAt:Date.now()
         };
         writeReportSubmission_(id, state);
         return { claimed:true, state:state };
@@ -1677,6 +1677,23 @@ function getReportSubmissionStatus(submissionIdRaw, tutorTokenRaw) {
     result:state.result || null,
     message:String(state.message || '')
   };
+}
+
+// Report retries carry the original submission time. A retry of an old
+// queued request must not overwrite a newer website or manual publication.
+function saveRawReportPublication_(kind, cell, text, publicationAt, expectedRaw) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    if (expectedRaw !== undefined && String(cell.getValue() || '') !== expectedRaw) return false;
+    const properties = PropertiesService.getScriptProperties();
+    const key = 'RAW_REPORT_PUBLICATION_AT_' + kind;
+    const previousAt = Number(properties.getProperty(key) || 0);
+    if (Number(publicationAt) < previousAt) return false;
+    cell.setValue(text);
+    properties.setProperty(key, String(publicationAt));
+    return true;
+  } finally { lock.releaseLock(); }
 }
 
 function appendReport(param, tutorTokenRaw) {
@@ -1713,8 +1730,11 @@ function appendReport(param, tutorTokenRaw) {
     if (param && param.submissionId && !submissionId) {
       return { ok:false, message:'Некорректный идентификатор отправки.' };
     }
-    const fingerprint = reportFingerprint_(typeRaw + '\n' + text);
-    const claim = claimReportSubmission_(submissionId, typeRaw, fingerprint);
+    // Identity/header canonicalization may change between retry attempts.
+    // The submission identity belongs to the submitted text, not table names.
+    const fingerprint = reportFingerprint_(typeRaw + '\n' + cleanIncomingText_(raw));
+    const legacyFingerprint = reportFingerprint_(typeRaw + '\n' + text);
+    const claim = claimReportSubmission_(submissionId, typeRaw, fingerprint, legacyFingerprint);
     if (claim.mismatch) {
       return { ok:false, message:'Эта попытка отправки уже относится к другому отчёту.' };
     }
@@ -1726,10 +1746,18 @@ function appendReport(param, tutorTokenRaw) {
       return { ok:true, processing:true, submissionId:submissionId };
     }
 
-    sheet.getRange(1, 1).setValue(text);
+    const submittedAt = Number(param && param.submittedAt);
+    const publicationAt = Number.isFinite(submittedAt) && submittedAt > 0 && submittedAt <= Date.now() + 60000
+      ? submittedAt : (Number(claim.state && claim.state.startedAt) || Date.now());
+    if (!saveRawReportPublication_(typeRaw, sheet.getRange(1, 1), text, publicationAt)) {
+      const superseded = {ok:true, superseded:true, submissionId:submissionId, message:'Уже сохранён более свежий отчёт.'};
+      if (submissionId) writeReportSubmission_(submissionId, {status:'completed',type:typeRaw,fingerprint:fingerprint,result:superseded,updatedAt:Date.now()});
+      return superseded;
+    }
     if (submissionId) {
       writeReportSubmission_(submissionId, {
         status:'saved',
+        startedAt:publicationAt,
         type:typeRaw,
         fingerprint:fingerprint,
         updatedAt:Date.now()
@@ -1772,6 +1800,7 @@ function appendReport(param, tutorTokenRaw) {
       const previous = readReportSubmission_(submissionId) || {};
       writeReportSubmission_(submissionId, {
         status:'failed',
+        startedAt:Number(previous.startedAt) || Date.now(),
         type:String(previous.type || ''),
         fingerprint:String(previous.fingerprint || ''),
         message:'Ошибка: ' + (e.message || e),
@@ -6354,7 +6383,9 @@ function processRawReportSourceEdit_(kindRaw, sheet) {
     return prepared.validation;
   }
 
-  if (cell && String(cell.getValue() || '') !== prepared.text) cell.setValue(prepared.text);
+  if (!saveRawReportPublication_(kind, cell, prepared.text, Date.now(), raw)) {
+    return {ok:true, skipped:true, message:'Источник отчёта уже обновлён.'};
+  }
   distributeChildReports(kind);
   setRawReportSourceNote_(cell, rawReportValidationNote_(prepared.validation));
   return { ok:true, canonicalized:prepared.canonical.changed };

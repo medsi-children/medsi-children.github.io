@@ -1133,7 +1133,7 @@ async function drainReportQueue(env) {
   await env.CHAT_DB.prepare(`DELETE FROM report_submission_queue WHERE status IN ('completed','failed') AND updated_at < ?`).bind(cutoff).run();
   const staleProcessing = Date.now() - 10 * 60 * 1000;
   await env.CHAT_DB.prepare(`UPDATE report_submission_queue SET status='retry', last_error='Повтор после прерванной обработки', updated_at=? WHERE status='processing' AND updated_at < ?`).bind(Date.now(), staleProcessing).run();
-  const rows = await env.CHAT_DB.prepare(`SELECT submission_id, report_type, report_text, attempts FROM report_submission_queue WHERE status IN ('pending','retry') ORDER BY created_at, submission_id LIMIT 5`).all();
+  const rows = await env.CHAT_DB.prepare(`SELECT submission_id, report_type, report_text, attempts, created_at FROM report_submission_queue WHERE status IN ('pending','retry') ORDER BY created_at, submission_id LIMIT 5`).all();
   const results = [];
   for (const row of (rows.results || [])) {
     // A newer report must never overtake an earlier one. Concurrent drains
@@ -1158,7 +1158,7 @@ async function drainReportQueue(env) {
         method: 'POST',
         headers: { 'content-type': 'text/plain;charset=utf-8' },
         signal: AbortSignal.timeout(25000),
-        body: JSON.stringify({ action: 'reportQueueProcess', authorization: env.CHAT_ADMIN_TOKEN, param: { reportType: row.report_type, text: row.report_text, submissionId: row.submission_id } })
+        body: JSON.stringify({ action: 'reportQueueProcess', authorization: env.CHAT_ADMIN_TOKEN, param: { reportType: row.report_type, text: row.report_text, submissionId: row.submission_id, submittedAt: Number(row.created_at) } })
       });
       const payload = await response.json().catch(() => null);
       const result = payload && payload.result ? payload.result : payload;
@@ -1550,6 +1550,7 @@ async function getThread(env, rawPhone, beforeRaw, limitRaw) {
   const limit = Math.max(1, Math.min(150, Number(limitRaw) || 50));
   const beforeKey = String(beforeRaw || '').trim();
   const profile = await env.CHAT_DB.prepare('SELECT * FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
+  if (!profile) return json({ ok:false, message:'Контакт уже удалён.' }, 404);
   const result = await env.CHAT_DB.prepare(`
     WITH boundary AS (
       SELECT created_at, id

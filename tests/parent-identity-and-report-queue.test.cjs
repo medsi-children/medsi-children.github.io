@@ -186,3 +186,53 @@ test('missing initial is inferred only when exactly one distinct child remains',
     }
   }
 });
+test('older background submission cannot overwrite a newer manual publication',()=>{
+  const x=apps();let value='';const cell={setValue:text=>{value=text}};
+  assert.equal(x.saveRawReportPublication_('morning',cell,'New synthetic',200),true);
+  assert.equal(x.saveRawReportPublication_('morning',cell,'Old retry synthetic',100),false);
+  assert.equal(value,'New synthetic');
+  assert.equal(x.saveRawReportPublication_('morning',cell,'Current retry synthetic',200),true);
+  assert.equal(x.saveRawReportPublication_('evening',cell,'Independent evening synthetic',100),true);
+});
+test('parent deletion revokes D1 even if S3 purge credentials are missing',()=>{
+  const x=apps(),properties=new Map(),calls=[];
+  x.PropertiesService={getScriptProperties:()=>({getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value)})};
+  vm.runInContext(read('apps-script/medsi-bot/chat-d1-migration.js'),x);
+  x.getProfileByPhone_=()=>null;
+  x.d1AdminRequest_=(path)=>{calls.push(path);return path.endsWith('profile-s3-keys')?{s3Keys:['synthetic.jpg']}:{ok:true}};
+  const result=x.deleteD1ProfileWithS3Purge_('9990000001');
+  assert.equal(result.ok,true);
+  assert.ok(calls.includes('/admin/delete-profile-phone'));
+  assert.equal(result.purge.ok,false);
+  assert.equal(x.reportsS3PurgeQueue_()['9990000001'].phase,'d1-deleted');
+  x.timewebReportsSyncRequest_=()=>({ok:true});
+  assert.equal(x.flushReportsS3PurgeQueue_().ok,true);
+  assert.equal(calls.filter(p=>p==='/admin/delete-profile-phone').length,1);
+});
+test('deletion without S3 attachments does not require Timeweb cleanup',()=>{
+  const x=apps(),properties=new Map();
+  x.PropertiesService={getScriptProperties:()=>({getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value)})};
+  vm.runInContext(read('apps-script/medsi-bot/chat-d1-migration.js'),x);
+  x.getProfileByPhone_=()=>null;x.d1AdminRequest_=()=>({ok:true,s3Keys:[]});
+  assert.equal(x.deleteD1ProfileWithS3Purge_('9990000001').purge.ok,true);
+  assert.deepEqual(Object.keys(x.reportsS3PurgeQueue_()),[]);
+});
+test('a delayed manual edit does not replace a cell that was edited again',()=>{
+  const x=apps();let value='New manual synthetic';
+  const cell={getValue:()=>value,setValue:text=>{value=text}};
+  assert.equal(x.saveRawReportPublication_('morning',cell,'Old normalized synthetic',200,'Old manual synthetic'),false);
+  assert.equal(value,'New manual synthetic');
+});
+test('expired educator caches fetch the current list and cannot resurrect a removed chat',async()=>{
+  let now=0,calls=0;
+  const transport={chats:async()=>({chats:++calls===1?[{phone:'9990000001'}]:[]}),thread:async()=>({messages:[]})};
+  for(const key of ['sendMessage','markRead','markUnread','remove','pin'])transport[key]=async()=>({ok:true});
+  const context={window:{MedsiOverlayTransport:transport},localStorage:{getItem:()=>null,setItem(){}},navigator:{},document:{hidden:false,addEventListener(){}},Date:{now:()=>now},setTimeout:()=>0,setInterval:()=>0,clearInterval(){}};
+  vm.createContext(context);vm.runInContext(read('tutors/chat-prewarm.js'),context);
+  const session={token:'synthetic'};
+  assert.equal((await transport.chats(session,'read')).chats.length,1);
+  now=1000;assert.equal((await transport.chats(session,'read')).chats.length,1);
+  assert.equal(calls,1);
+  now=4000;assert.equal((await transport.chats(session,'read')).chats.length,0);
+  assert.equal(calls,2);
+});
