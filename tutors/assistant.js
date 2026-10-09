@@ -32,7 +32,7 @@
     for (const [pattern, key] of names) if (pattern.test(token)) return key;
     return token.length > 3 ? token.replace(/(?:ого|ому|овой|ову|ым|ом|ой|ей|а|я|у|ю|ы|и|е)$/, '') : token;
   }
-  const stop = /^(?:дай|дать|дайте|напиши|напишите|скажи|скажите|подскажи|подскажите|пришли|скинь|можешь|можете|могу|нужны|бы|хотел|хотелось|попросить|привет|здравствуйте|покажи|покажите|найди|найдите|найти|ищи|удали|удалить|удалите|убери|убрать|уберите|из|бота|системы|ребенок|ребенка|детей|родителя|родителей|родитель|мама|мамы|маме|маму|папа|папы|папе|папу|бабушка|бабушки|бабушке|бабушку|дедушка|дедушки|дедушке|дедушку|телефон|телефоны|номер|номера|контакт|контакты|для|у|по|с|мне|можно|пожалуйста|хочу|нужен|нужна|нужно|запись|про|как|позвонить|связаться|а)$/;
+  const stop = /^(?:дай|дать|дайте|напиши|напишите|скажи|скажите|подскажи|подскажите|пришли|скинь|можешь|можете|могу|нужны|бы|хотел|хотелось|попросить|привет|здравствуйте|покажи|покажите|найди|найдите|найти|ищи|удали|удалить|удалите|убери|убрать|уберите|из|бота|системы|ребенок|ребенка|детей|родителя|родителей|родитель|мама|мамы|маме|маму|папа|папы|папе|папу|бабушка|бабушки|бабушке|бабушку|дедушка|дедушки|дедушке|дедушку|тетя|тети|тете|тетю|дядя|дяди|дяде|дядю|опекун|опекуна|опекуну|телефон|телефоны|номер|номера|контакт|контакты|для|у|по|с|мне|можно|пожалуйста|хочу|нужен|нужна|нужно|запись|про|как|позвонить|связаться|а)$/;
   function queryTokens(text) { return normalize(text).replace(/^(?:добрый день|доброе утро|добрый вечер|привет[а-я]*|здравств[а-я]*)\s*/, '').split(' ').filter(word => word && !stop.test(word)); }
   function matches(row, tokens, field = 'childName') {
     const phone = tokens.find(token => /^\d{10,11}$/.test(token));
@@ -40,7 +40,17 @@
     const child = normalize(row[field]).split(' ');
     return tokens.length > 0 && tokens.every(token => child.some(word => token.length === 1 ? word.startsWith(token) : nameKey(word) === nameKey(token)));
   }
-  const rowLabel = row => `${row.childName || 'Без имени'} · ${row.parentName || 'Родитель'} · ${displayPhone(row.phone)}`;
+  function requestedRelationship(text) {
+    const words = normalize(text).split(' ');
+    const roles = [[/^мам(?:а|ы|е|у)$/, 'Мама'], [/^пап(?:а|ы|е|у)$/, 'Папа'], [/^бабушк(?:а|и|е|у)$/, 'Бабушка'], [/^дедушк(?:а|и|е|у)$/, 'Дедушка'], [/^тет(?:я|и|е|ю)$/, 'Тётя'], [/^дяд(?:я|и|е|ю)$/, 'Дядя'], [/^опекун(?:а|у)?$/, 'Опекун']];
+    return roles.find(([pattern]) => words.some(word => pattern.test(word)))?.[1] || '';
+  }
+  function matchingContacts(rows, text, tokens = queryTokens(text)) {
+    const role = requestedRelationship(text);
+    return rows.filter(row => (!role || row.relationship === role) &&
+      (matches(row, tokens) || (!/ребенк/.test(normalize(text)) && matches(row, tokens, 'parentName'))));
+  }
+  const rowLabel = row => `${row.childName || 'Без имени'} · ${row.relationship || 'Родитель'}: ${row.parentName || '—'} · ${displayPhone(row.phone)}`;
   const helpText = 'Помогу найти ребёнка и телефоны родителей, покажу непрочитанные чаты, открою нужный раздел или удалю выбранную запись после подтверждения.\n\nНапример: «дай телефон мамы Маши Д.», «есть новые сообщения?», «удали Машу Д.». Отчёты отправляю только после вашей проверки и подтверждения.';
   const fallbackTexts = [
     'Простите, я не очень понимаю, что от меня требуется. Попробуйте сформулировать задачу иначе.',
@@ -67,7 +77,7 @@
     function confirmDelete(row) {
       const ticket = version, expires = Date.now() + 120000;
       waiting = null;
-      return result(`Вы уверены, что хотите удалить эту запись из бота?\n\nРебёнок: ${row.childName}\nРодитель: ${row.parentName || 'Не указан'}\nТелефон: ${displayPhone(row.phone)}\n\nБудут удалены запись и история сообщений этого контакта — как при удалении через корзину.`, [
+      return result(`Вы уверены, что хотите удалить эту запись из бота?\n\nРебёнок: ${row.childName}\n${row.relationship || 'Родитель'}: ${row.parentName || 'Не указан'}\nТелефон: ${displayPhone(row.phone)}\n\nБудут удалены запись и история сообщений этого контакта — как при удалении через корзину.`, [
         {label:'Да, удалить', run: async () => {
           if (!check(ticket, expires)) return expired();
           version++;
@@ -87,20 +97,19 @@
       }
       waiting = null;
       const rows = await api.parents();
-      const found = rows.filter(row => matches(row, tokens) || (!/ребенк/.test(normalize(text)) && matches(row, tokens, 'parentName')));
+      const found = matchingContacts(rows, text, tokens);
       if (!found.length) return result('Не нашёл такую запись. Попробуйте полное имя, фамилию или номер телефона.', [nav('Открыть телефоны', 'phones')]);
       if (intent === 'delete') {
         if (found.length === 1) return confirmDelete(found[0]);
         const ticket = version, expires = Date.now() + 120000;
         return result('Есть несколько подходящих записей. Какую удалить? Каждый контакт удаляется отдельно.', found.slice(0, 10).map(row => ({label:rowLabel(row),run:async()=>check(ticket,expires)?confirmDelete(row):expired()})).concat(found.length > 10 ? [{label:'Уточнить имя',run:async()=>result('Напишите полное имя ребёнка или номер контакта.')}] : []));
       }
-      const roleRequested = /мам|пап|бабуш|дедуш/.test(normalize(text));
-      return page(found, roleRequested ? 'Вот сохранённые контакты. Родство в списке не указано, поэтому не могу точно выбрать маму, папу, бабушку или дедушку.' : 'Контакты:', rowLabel);
+      return page(found, 'Контакты:', rowLabel);
     }
     async function resolveMessageTarget(targetText, messageText = '') {
       const rows = await api.parents();
       const tokens = queryTokens(targetText);
-      const found = rows.filter(row => matches(row, tokens) || matches(row, tokens, 'parentName'));
+      const found = matchingContacts(rows, targetText, tokens);
       if (!found.length) return result('Не нашёл ребёнка или контакт. Напишите имя ребёнка, например «Артём Д.»');
       if (found.length > 1) {
         return result('Нашёл несколько подходящих записей. Выберите нужного ребёнка:', found.slice(0, 10).map(row => ({
@@ -114,9 +123,10 @@
       const words = String(body || '').trim().split(/\s+/).filter(Boolean);
       if (words.length < 2) return resolveMessageTarget(words.join(' '));
       const rows = await api.parents();
-      for (let length = 1; length <= Math.min(3, words.length - 1); length++) {
+      if (matchingContacts(rows, body).length) return resolveMessageTarget(body);
+      for (let length = Math.min(4, words.length - 1); length >= 1; length--) {
         const target = words.slice(0, length).join(' ');
-        const found = rows.filter(row => matches(row, queryTokens(target)) || matches(row, queryTokens(target), 'parentName'));
+        const found = matchingContacts(rows, target);
         if (found.length === 1) return composeParentMessage(found[0], words.slice(length).join(' '));
       }
       return result('Не понял, где заканчивается имя ребёнка. Напишите, например: «напиши маме Артёма: Артём хочет доставку».');
@@ -200,9 +210,9 @@
         waiting = {intent:'sendMessageTarget', expires:Date.now() + 240000};
         return result('Кому написать? Укажите имя ребёнка, например «Артём Д.»');
       }
-      const sendMatch = String(text).trim().match(/^(?:напиши|сообщи|передай|скажи)\s+(?:(?:маме|папе|бабушке|дедушке|родителю|родителям)\s+)?(.+?)(?:\s+(?:что|такое|текст)\s+)(.+)$/iu);
+      const sendMatch = String(text).trim().match(/^(?:напиши|сообщи|передай|скажи)\s+(.+?)(?:\s+(?:что|такое|текст)\s+)(.+)$/iu);
       if (sendMatch) return resolveMessageTarget(sendMatch[1], sendMatch[2]);
-      const sendWithoutText = String(text).trim().match(/^(?:напиши|сообщи|передай|скажи)\s+(?:(?:маме|папе|бабушке|дедушке|родителю|родителям)\s+)?(.+)$/iu);
+      const sendWithoutText = String(text).trim().match(/^(?:напиши|сообщи|передай|скажи)\s+(.+)$/iu);
       if (sendWithoutText && !/^(?:что|текст|такое)\b/i.test(sendWithoutText[1])) return resolveMessageWithoutSeparator(sendWithoutText[1]);
       const kind = reportKind(value);
       const standaloneType = /^(?:нет |а |лучше |не утренний а |не вечерний а )?(?:утренн\w*|вечерн\w*|утро|вечер|психотерап\w*|группов\w* терап\w*|терап\w*)(?: отчет)?$/.test(value);

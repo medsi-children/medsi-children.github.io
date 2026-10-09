@@ -19,7 +19,7 @@ function snapshotActiveProfilesForD1_() {
     const phone = last10_(profile.phone);
     if (phone) byPhone[phone] = { phone:phone, parentName:profile.parentName, childName:profile.childName };
   });
-  return Object.keys(byPhone).map(phone => byPhone[phone]);
+  return enrichProfilesWithRelationships_(Object.keys(byPhone).map(phone => byPhone[phone]));
 }
 
 function syncD1ProfilesFromReports_(full) {
@@ -322,8 +322,11 @@ function syncD1ProfileForPhone_(phoneRaw) {
   const phone = last10_(phoneRaw);
   const profile = getProfileByPhone_(phone);
   if (!phone || !profile) return { ok:false, message:'Parent is absent from REPORTS.' };
+  const enriched = enrichProfilesWithRelationships_([{
+    phone:phone, parentName:profile.parentName, childName:profile.childName
+  }]);
   return d1AdminRequest_('/admin/reconcile', 'post', {
-    profiles:[{ phone:phone, parentName:profile.parentName, childName:profile.childName }], full:false
+    profiles:enriched, full:false
   });
 }
 
@@ -357,6 +360,7 @@ function reportsD1ProfilesSnapshot_() {
       familyName: String(row[3] || '').trim()
     };
   });
+  enrichProfilesWithRelationships_(Object.keys(snapshot).map(function(phone) { return snapshot[phone]; }));
   return snapshot;
 }
 
@@ -647,6 +651,10 @@ function onReportsD1Edit(event) {
       return;
     }
     if (sheetName !== DATA_SHEET_NAME) return;
+    if (event.range.getColumn() === 7 && event.range.getNumColumns() === 1) {
+      syncD1ProfilesFromReports_(false);
+      return;
+    }
     reconcileReportsProfilesToD1_('edit');
   } catch (error) { Logger.log('REPORTS_D1_EDIT_SYNC_FAILED ' + (error && error.message || error)); }
 }

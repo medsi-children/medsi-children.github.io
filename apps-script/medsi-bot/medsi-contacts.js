@@ -61,7 +61,7 @@ function getMedsiContactProfiles_() {
   const sh = getDataSheet_();
   const count = sh ? Math.max(sh.getLastRow() - 1, 0) : 0;
   if (!count) return {};
-  const rows = sh.getRange(2, 1, count, 4).getValues();
+  const rows = sh.getRange(2, 1, count, 7).getValues();
   const byPhone = {};
   rows.forEach(row => {
     const phone10 = last10_(row[0]);
@@ -70,7 +70,8 @@ function getMedsiContactProfiles_() {
       phone: normalizePhone_(row[0]),
       parentFirst: String(row[1] || '').trim().split(/\s+/)[0] || '',
       childRaw: String(row[2] || '').trim(),
-      childFamily: String(row[3] || '').trim()
+      childFamily: String(row[3] || '').trim(),
+      relationship: String(row[6] || '').trim() ? parentRelationshipLabel_(row[6]) : defaultParentRelationship_(row[1])
     };
   });
   return byPhone;
@@ -146,8 +147,7 @@ function buildMedsiContactLabel_(profile) {
   const parent = medsiContactCap_(profile.parentFirst) || 'Родитель';
   const childBase = canonizeChildName_(stripInitialFromName_(profile.childRaw)) || stripInitialFromName_(profile.childRaw);
   const childGender = medsiContactGender_(childBase);
-  const parentGender = medsiContactGender_(parent);
-  const role = parentGender === 'female' ? 'Мама' : (parentGender === 'male' ? 'Папа' : 'Родитель');
+  const role = profile.relationship || defaultParentRelationship_(parent);
   const childName = childGender ? medsiContactGenitiveName_(childBase, childGender) : medsiContactCap_(childBase);
   const familyGender = childGender === 'ambiguous' ? medsiContactFamilyGenderHint_(profile.childFamily) : childGender;
   const family = familyGender ? medsiContactGenitiveFamily_(profile.childFamily, familyGender) : medsiContactCap_(profile.childFamily);
