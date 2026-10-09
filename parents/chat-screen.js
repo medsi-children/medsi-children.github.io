@@ -24,7 +24,7 @@
     if(!label)label=new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'long',...(n&&p.year===n.year?{}:{year:'numeric'})}).format(new Date(Number(value)));
     return{key:p.key,label};
   }
-  let state=null,rows=[],busy=false,dead=false,chatClosed=false,chatPending=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false,initialMessagesRendered=false;
+  let state=null,rows=[],busy=false,dead=false,chatClosed=false,chatPending=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false,initialMessagesRendered=false,retryDraft=null;
 
   function mediaUrl(m){
     const id=String(m&&m.fileId||'');if(!id)return'';
@@ -56,6 +56,7 @@
   function clearError(){const e=$('parentChatError');if(!e)return;e.textContent='';e.classList.add('hidden')}
   function setBusy(v){busy=!!v;const disabled=busy||chatClosed||chatPending;$('parentChatInput').disabled=disabled;$('parentChatSend').disabled=disabled;$('parentChatAttach').disabled=disabled}
   function messageText(value){return String(value||'').replace(/\r\n?/g,'\n').trim()}
+  function newMessageId(){return typeof crypto!=='undefined'&&typeof crypto.randomUUID==='function'?crypto.randomUUID():'msg-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)}
   function focusComposer(){
     const input=$('parentChatInput'),screen=$('screenChat');
     if(!state||dead||chatClosed||!input||input.disabled||!screen||screen.classList.contains('hidden')||document.body.dataset.screen!=='screenChat')return;
@@ -235,7 +236,7 @@
     stopLive();dead=false;chatClosed=false;chatPending=false;state={...next,phone:p10(next&&next.phone)};rows=[];initialMessagesRendered=false;clearError();closeReactionMenu();setBusy(false);if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
     $('parentChatChild').textContent=state.childName||state.parentName||'Ребёнок';
     $('parentChatPhone').textContent=state.phone?'8'+state.phone:'';
-    $('parentChatInput').value='';
+    $('parentChatInput').value=retryDraft&&retryDraft.phone===state.phone?retryDraft.text:'';
     const active=state;
     const cached=window.MedsiParentPrewarm?MedsiParentPrewarm.peek(state.phone):null;
     const hasCached=!!(cached&&Array.isArray(cached.messages));
@@ -264,11 +265,28 @@
   $('parentChatBack').onclick=()=>{if(state&&typeof state.onBack==='function')state.onBack()};
   $('parentChatCompose').onsubmit=async e=>{
     e.preventDefault();if(!state||busy||chatClosed)return;const text=messageText($('parentChatInput').value);if(!text)return;
+    const active=state,clientMessageId=retryDraft&&retryDraft.phone===active.phone&&retryDraft.text===text?retryDraft.clientMessageId:newMessageId();
+    retryDraft={phone:active.phone,text,clientMessageId};
     setBusy(true);const optimistic={side:'parent',type:'text',text,timestamp:Date.now(),messageKey:'pending-'+Date.now().toString(36)};
     render(rows.concat(optimistic),{stick:true});$('parentChatInput').value='';
-    try{await t.sendMessage(await currentSession(),'parent',state.phone,{type:'text',text});await refresh({stick:true,fresh:true})}
-    catch(err){if(isChatClosedError(err))showClosedChat();else{showError(err&&err.message||'Не удалось отправить сообщение.');await refresh({stick:true,fresh:true}).catch(()=>{})}}
-    finally{setBusy(false);focusComposer()}
+    try{
+      const sent=await t.sendMessage(await currentSession(),'parent',active.phone,{type:'text',text,clientMessageId});
+      if(retryDraft&&retryDraft.clientMessageId===clientMessageId)retryDraft=null;
+      if(state!==active||dead)return;
+      clearError();
+      const confirmed=sent&&sent.message,next=rows.filter(m=>messageKey(m)!==optimistic.messageKey);
+      if(confirmed&&confirmed.messageKey&&!next.some(m=>messageKey(m)===confirmed.messageKey))next.push(confirmed);
+      render(next,{stick:true});
+      refresh({stick:true,fresh:true}).catch(()=>{if(state===active&&!dead)scheduleLive(1200)});
+    }catch(err){
+      if(state!==active||dead)return;
+      if(isChatClosedError(err))showClosedChat();
+      else{
+        render(rows.filter(m=>messageKey(m)!==optimistic.messageKey),{stick:true});
+        if(!$('parentChatInput').value.trim())$('parentChatInput').value=text;
+        showError((err&&err.message||'Не удалось подтвердить отправку.')+' Текст сохранён; попробуйте ещё раз.');
+      }
+    }finally{if(state===active&&!dead){setBusy(false);focusComposer()}}
   };
   $('parentChatAttach').onclick=()=>{if(!chatClosed)$('parentChatFile').click()};
   $('parentChatFile').onchange=async()=>{
@@ -276,8 +294,8 @@
     if(!/^image\//i.test(f.type)&&!/^video\//i.test(f.type)){showError('Можно прикреплять только фото или видео.');return}
     const maxBytes=Number(t.maxUploadBytes||100*1024*1024);if(f.size>maxBytes){showError('Размер файла не должен превышать 100 МБ.');return}
     setBusy(true);clearError();
-    try{const up=await t.upload(await currentSession(),state.phone,f);await t.sendMessage(await currentSession(),'parent',state.phone,{type:up.type||(f.type.startsWith('video/')?'video':'image'),text:'',fileId:up.fileId});await refresh({stick:true,fresh:true})}
-    catch(err){if(isChatClosedError(err))showClosedChat();else showError(err&&err.message||'Не удалось отправить файл.')}
+    try{const up=await t.upload(await currentSession(),state.phone,f);const sent=await t.sendMessage(await currentSession(),'parent',state.phone,{type:up.type||(f.type.startsWith('video/')?'video':'image'),text:'',fileId:up.fileId});clearError();const confirmed=sent&&sent.message;if(confirmed&&confirmed.messageKey&&!rows.some(m=>messageKey(m)===confirmed.messageKey))render(rows.concat(confirmed),{stick:true});refresh({stick:true,fresh:true}).catch(()=>scheduleLive(1200))}
+    catch(err){if(isChatClosedError(err))showClosedChat();else showError((err&&err.message||'Не удалось подтвердить отправку файла.')+' Проверьте чат перед повтором.')}
     finally{setBusy(false)}
   };
 

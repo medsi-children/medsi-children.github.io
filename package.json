@@ -8,8 +8,9 @@
     "start": "node -r ./lib/session-preload.js server.js",
     "verify:server": "node --check server.js && node --check lib/session-preload.js",
     "verify:source-control": "node scripts/verify-source-control.mjs",
+    "verify:chat": "node --test tests/chat-send-retry.test.cjs tests/parent-chat-send-retry.test.cjs",
     "verify:bot": "node scripts/verify-smart-bot.mjs && node --check parents/bot-chat-runtime.js",
-    "verify": "npm run verify:server && npm run verify:source-control && npm run verify:bot && npm run verify:reports && npm run verify:identity",
+    "verify": "npm run verify:server && npm run verify:source-control && npm run verify:chat && npm run verify:bot && npm run verify:reports && npm run verify:identity",
     "verify:identity": "node --test tests/parent-identity-and-report-queue.test.cjs",
     "verify:reports": "node --test tests/raw-report-cleanup.test.cjs tests/raw-report-canonicalization.test.cjs tests/report-history-refresh.test.cjs"
   },

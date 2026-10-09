@@ -100,7 +100,7 @@
   window.MedsiLoadParentChat=function(){
     if(window.MedsiParentChatScreen)return Promise.resolve();
     if(chatPending)return chatPending;
-    chatPending=series(['/chat-overlay/transport.js?v=20260916-parent-recovery','/parents/prewarm.js?v=20260916-parent-recovery','/parents/chat-screen.js?v=20260924-message-input-1']).finally(function(){chatPending=null;});
+    chatPending=series(['/chat-overlay/transport.js?v=20261009-send-retry-1','/parents/prewarm.js?v=20260916-parent-recovery','/parents/chat-screen.js?v=20261009-send-retry-1']).finally(function(){chatPending=null;});
     return chatPending;
   };
   var status=document.getElementById('parentBootStatus');

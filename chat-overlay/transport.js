@@ -31,11 +31,11 @@
     return id.startsWith('s3:') ? original + '?variant=preview' : original;
   }
 
-  async function request(session, path, options) {
+  async function request(session, path, options, retryTransientWrite) {
     const auth = requireSession(session);
     const method = String((options && options.method) || 'GET').toUpperCase();
     const isWrite = method !== 'GET' && method !== 'HEAD';
-    const attempts = isWrite ? 1 : READ_RETRIES + 1;
+    const attempts = isWrite ? (retryTransientWrite ? 2 : 1) : READ_RETRIES + 1;
     let lastError = null;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       const controller = typeof AbortController === 'function' ? new AbortController() : null;
@@ -54,6 +54,7 @@
         catch (_) {
           const error = new Error('Сервер чата вернул некорректный ответ.');
           error.code = 'BAD_RESPONSE';
+          error.status = response.status;
           throw error;
         }
         if (!response.ok || !payload || !payload.ok) {
@@ -76,8 +77,10 @@
       } finally {
         if (timer) clearTimeout(timer);
       }
-      if(lastError.status&&lastError.status<500&&![408,425,429].includes(lastError.status))throw lastError;
-      if (attempt + 1 < attempts) await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+      if(lastError.status>=400&&lastError.status<500&&![408,425,429].includes(lastError.status))throw lastError;
+      if(isWrite&&retryTransientWrite&&!['NETWORK','TIMEOUT','BAD_RESPONSE'].includes(lastError.code)&&
+          ![408,425,429].includes(lastError.status)&&!(lastError.status>=500))throw lastError;
+      if (attempt + 1 < attempts) await new Promise(resolve => setTimeout(resolve, (isWrite ? 700 : 350) * (attempt + 1)));
     }
     throw lastError || Object.assign(new Error('Не удалось связаться с сервером чата.'), {code:'NETWORK'});
   }
@@ -108,7 +111,7 @@
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ...payload, phone: String(phone || ''), side: String(role || '') })
-    });
+    }, true);
   }
 
   function markRead(session, role, phone) {
