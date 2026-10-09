@@ -243,7 +243,7 @@
       const el=document.createElement('div');el.className='msg '+(m.side==='educator'?'educator':'parent');el.dataset.medsiMessageKey=messageKey(m);el.dataset.medsiMessageSignature=messageSig(m);if(quiet)el.dataset.medsiAnimated='1';
       const author=document.createElement('div');author.className='msg-author';
       author.textContent=m.side==='parent'
-        ?(activeChat&&activeChat.relationship||'Родитель')+(activeChat&&activeChat.parentName?': '+activeChat.parentName:'')
+        ?(activeChat&&activeChat.relationship||'Родитель')+(activeChat&&activeChat.parentName?' '+activeChat.parentName:'')
         :'Детское Отделение Медси';
       el.appendChild(author);
       if(m.reply){const q=document.createElement('div');q.className='msg-reply-quote';q.textContent=replyLabel(m.reply);el.appendChild(q)}
