@@ -52,6 +52,32 @@ test('canonicalizer normalizes initial punctuation and delimiter without touchin
   });
 });
 
+test('room number before a child header is removed without consuming the name separator', () => {
+  const x = api();
+  const lisa = child(x, 'Лиза', 'Федорова', '89990000001');
+  const raw = [
+    '501: Лиза Ф.: Была на встрече в 17:00.',
+    '502 Маша — Играла в настольные игры.',
+    '503\nЛиза Ф. — Отдыхала.',
+    '№ 504:\nМаша: Читала книгу.'
+  ].join('\n');
+
+  assert.equal(
+    x.stripInlineRoomPrefixBeforeChild_(raw),
+    'Лиза Ф.: Была на встрече в 17:00.\nМаша — Играла в настольные игры.\nЛиза Ф. — Отдыхала.\nМаша: Читала книгу.'
+  );
+  const result = x.canonicalizeRawChildReport_(raw, { children:[lisa] });
+  assert.equal(
+    result.text,
+    'Лиза Ф. — Была на встрече в 17:00.\nМаша — Играла в настольные игры.\nЛиза Ф. — Отдыхала.\nМаша — Читала книгу.'
+  );
+  assert.equal(result.changed, true);
+  assert.equal(
+    x.stripInlineRoomPrefixBeforeChild_('Лиза Ф.: В 17:00 обсуждали комнату 501: всё спокойно.'),
+    'Лиза Ф.: В 17:00 обсуждали комнату 501: всё спокойно.'
+  );
+});
+
 test('unregistered child keeps a bare name, while an explicit initial gets a dot', () => {
   const x = api();
   assert.equal(

@@ -5312,10 +5312,19 @@ function cleanReportTextForParsing_(text) {
     ''
   );
 
-  return clean
+  return stripInlineRoomPrefixBeforeChild_(clean)
     .replace(/(\b\d{1,2})\s*:\s*(\d{2})(\b)/g, '$1:$2$3')
     .replace(/(\b\d{1,2})\s*:\s*(\d{2})\s*:\s*(\d{2})(\b)/g, '$1:$2:$3$4')
     .trim();
+}
+
+function stripInlineRoomPrefixBeforeChild_(text) {
+  // Only remove a room label at the start of a child block.  The separator
+  // after the child's name remains available to the report parser.
+  return String(text || '').replace(
+    /(^|\n)[ \t]*(?:№[ \t]*)?(?:50[1-9]|51[0-2])[ \t]*:?[ \t]*(?:\n[ \t]*)?(?=[А-ЯЁ][а-яё]+(?:[ \t]+[А-ЯЁ][а-яё.]{0,20})?[ \t]*[:\-–—])/g,
+    '$1'
+  );
 }
 
 function normalizeSuffixKey_(suffixRaw) {
@@ -6208,7 +6217,8 @@ function rawReportBlockWasPreviouslyDistributed_(kindRaw, block, previousTargets
 
 function canonicalizeRawChildReport_(textRaw, optionsRaw) {
   const options = optionsRaw || {};
-  const text = cleanIncomingText_(textRaw);
+  const source = cleanIncomingText_(textRaw);
+  const text = stripInlineRoomPrefixBeforeChild_(source);
   if (!text) return { text:'', changed:false, rewritten:0, recovered:0, unresolved:[] };
 
   const currentChildren = options.children || buildReportValidationChildren_();
@@ -6345,7 +6355,7 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
 
   return {
     text:next,
-    changed:next !== text,
+    changed:next !== source,
     rewritten:replacements.length,
     recovered:recovered,
     preambleRemoved:preambleRemoved,
