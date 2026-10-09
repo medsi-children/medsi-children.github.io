@@ -1,3 +1,123 @@
+// Identity grammar matches Apps Script medsi-contacts.js and parent-relationships.js.
+function normRu(value) { return String(value || '').trim().toLowerCase().replace(/ё/g, 'е'); }
+function capWord(value) { const word=String(value || ''); return word.charAt(0).toUpperCase()+word.slice(1).toLowerCase(); }
+const MEDSI_CONTACT_FEMALE_NAMES_ = new Set([
+  'агния','авелина','александра','алина','алиса','алла','алёна','алена','анастасия','ангелина','анна','анфиса','аня','арина','асья','ася',
+  'валентина','валерия','валя','варвара','варя','василиса','вера','вероника','вика','виктория','галя','галина','дарина','дарья','даша',
+  'диана','евгения','ева','екатерина','елена','елизавета','жанна','женя','зариат','зарият','злата','инна','ира','ирина','карина','катя','кира',
+  'ксения','ксеня','ксюша','лариса','лена','лера','лида','лидия','лиза','лилия','лия','люба','любовь','люда','людмила','маргарита','марго','марина',
+  'мария','маша','мила','милана','милена','мира','мирослава','надежда','надя','настя','наталия','наталья','наташа','оксана','олеся','оля','ольга',
+  'поля','полина','рита','рузалия','света','светлана','софия','софья','софа','соня','стефания','стефани','стеша','тая','таисия','тася','таня','татьяна',
+  'саша','ульяна','хадижа','хадиджа','юлия','юля','яна','ярослава','яся'
+]);
+const MEDSI_CONTACT_MALE_NAMES_ = new Set([
+  'александр','алексей','алёша','алеша','андрей','анатолий','антон','артем','артём','борис','боря','вадим','валерий','василий','вася',
+  'ваня','виталий','витя','виктор','влад','владимир','владислав','володя','вова','всеволод','вячеслав','гамзат','герман','глеб','григорий','гриша',
+  'данил','даниил','данила','данилла','даня','денис','дима','дмитрий','егор','евгений','елисей','иван','игорь','илья','иля','кирилл','коля','константин','костя',
+  'лев','лева','лёва','леонид','лёня','леня','леша','лёша','лука','макар','макс','максим','марк','матвей','михаил','миша','мирон','никита','николай',
+  'олег','павел','паша','роман','рома','руслан','саадула','савелий','саша','сема','семен','семён','сергей','сережа','серёжа','слава','станислав','стас','степа','стёпа','степан',
+  'сева','тимофей','тимур','тёма','тема','федор','фёдор','федя','ян','яков','ярик','ярослав'
+]);
+
+const MEDSI_CONTACT_GENITIVE_EXCEPTIONS_ = {
+  'любовь': 'Любы', 'лев': 'Льва', 'илья': 'Ильи', 'никита': 'Никиты', 'лука': 'Луки', 'фома': 'Фомы',
+  'кузьма': 'Кузьмы', 'паша': 'Паши', 'саша': 'Саши', 'женя': 'Жени', 'даня': 'Дани',
+  'ваня': 'Вани', 'валя': 'Вали', 'миша': 'Миши', 'костя': 'Кости', 'слава': 'Славы', 'федя': 'Феди', 'ярик': 'Ярика'
+};
+
+function medsiContactGender_(nameRaw) {
+  const name = normRu(nameRaw).split(/\s+/)[0];
+  const female = MEDSI_CONTACT_FEMALE_NAMES_.has(name);
+  const male = MEDSI_CONTACT_MALE_NAMES_.has(name);
+  if (female && male) return 'ambiguous';
+  if (female) return 'female';
+  if (male) return 'male';
+  return '';
+}
+
+function medsiContactFamilyGenderHint_(familyRaw) {
+  const family = normRu(familyRaw);
+  if (/((ова|ева|ёва|ина|ына|ская|цкая|ая|яя))$/u.test(family)) return 'female';
+  if (/((ов|ев|ёв|ин|ын|ский|цкий|ый|ий))$/u.test(family)) return 'male';
+  return '';
+}
+
+function medsiContactCap_(value) {
+  return String(value || '').split(/\s+/).filter(Boolean).map(capWord).join(' ');
+}
+
+function medsiContactGenitiveName_(nameRaw, gender) {
+  const name = medsiContactCap_(nameRaw);
+  const norm = normRu(name);
+  if (!name || !gender) return name;
+  if (MEDSI_CONTACT_GENITIVE_EXCEPTIONS_[norm]) return MEDSI_CONTACT_GENITIVE_EXCEPTIONS_[norm];
+  if (gender === 'female') {
+    if (/ия$/u.test(name)) return name.slice(0, -1) + 'и';
+    if (/ья$/u.test(name)) return name.slice(0, -1) + 'и';
+    if (/я$/u.test(name)) return name.slice(0, -1) + 'и';
+    if (/ь$/u.test(name)) return name + 'и';
+    if (/а$/u.test(name)) return name.slice(0, -1) + (/[гкхжчшщ]а$/iu.test(name) ? 'и' : 'ы');
+    return name;
+  }
+  if (gender === 'ambiguous') return name;
+  if (/й$/u.test(name) || /ь$/u.test(name)) return name.slice(0, -1) + 'я';
+  if (/я$/u.test(name)) return name.slice(0, -1) + 'и';
+  if (/а$/u.test(name)) return name.slice(0, -1) + 'ы';
+  return name + 'а';
+}
+
+function medsiContactGenitiveFamily_(familyRaw, gender) {
+  const family = medsiContactCap_(familyRaw);
+  if (!family || !gender) return family;
+  if (gender === 'female') {
+    // Меняем именно окончание, а не отрезаем фиксированное число букв:
+    // «Жураховская» → «Жураховской», «Устьянцева» → «Устьянцевой».
+    if (/цкая$/iu.test(family) || /ская$/iu.test(family)) return family.replace(/ая$/iu, 'ой');
+    if (/ова$/iu.test(family) || /ева$/iu.test(family) || /ёва$/iu.test(family) || /ина$/iu.test(family) || /ына$/iu.test(family)) return family.replace(/а$/iu, 'ой');
+    if (/ая$/iu.test(family)) return family.replace(/ая$/iu, 'ой');
+    if (/яя$/iu.test(family)) return family.replace(/яя$/iu, 'ей');
+    return family;
+  }
+  if (/цкий$/iu.test(family)) return family.slice(0, -2) + 'ого';
+  if (/ский$/iu.test(family)) return family.slice(0, -2) + 'ого';
+  if (/ов$/iu.test(family) || /ев$/iu.test(family) || /ёв$/iu.test(family) || /ин$/iu.test(family) || /ын$/iu.test(family)) return family + 'а';
+  if (/ый$/iu.test(family)) return family.slice(0, -2) + 'ого';
+  if (/ий$/iu.test(family)) return family.slice(0, -2) + 'его';
+  return family;
+}
+
+function defaultParentRelationship_(parentName) {
+  const gender = medsiContactGender_(String(parentName || '').trim().split(/\s+/)[0]);
+  return gender === 'female' ? 'Мама' : (gender === 'male' ? 'Папа' : 'Родитель');
+}
+
+function parentChildGenitive_(childName) {
+  const words = String(childName || '').trim().split(/\s+/);
+  const first = words.shift();
+  let gender = medsiContactGender_(first);
+  if (!first || !gender) return '';
+  const family = words.join(' ');
+  if (gender === 'ambiguous') gender = medsiContactFamilyGenderHint_(family) || 'ambiguous';
+  return [medsiContactGenitiveName_(first, gender), medsiContactGenitiveFamily_(family, gender)].filter(Boolean).join(' ');
+}
+
+// Only used when an older registration form omitted the child's surname.
+// Explicitly entered child surnames are never changed by this helper.
+function inheritedChildFamily_(childFirst, parentFamily) {
+  const family = String(parentFamily || '').trim();
+  const gender = medsiContactGender_(childFirst);
+  if (gender === 'male') {
+    if (/(?:ова|ева|ёва|ина|ына)$/iu.test(family)) return family.slice(0, -1);
+    if (/(?:ская|цкая)$/iu.test(family)) return family.slice(0, -2) + 'ий';
+  }
+  if (gender === 'female') {
+    if (/(?:ов|ев|ёв|ин|ын)$/iu.test(family)) return family + 'а';
+    if (/(?:ский|цкий)$/iu.test(family)) return family.slice(0, -2) + 'ая';
+  }
+  return family;
+}
+
+
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -103,7 +223,10 @@ async function registerParent(request, env) {
   const payload = await body(request) || {};
   const phone = phone10(payload.phone);
   const parentName = String(payload.parentName || '').trim().slice(0, 160);
-  const childName = String(payload.childName || '').trim().slice(0, 160);
+  const rawChildName = String(payload.childName || '').trim().slice(0, 160);
+  const childWords = rawChildName.split(/\s+/);
+  const inheritedFamily = childWords.length === 1 ? inheritedChildFamily_(childWords[0], parentName.split(/\s+/).slice(1).join(' ')) : '';
+  const childName = inheritedFamily ? rawChildName + ' ' + inheritedFamily : rawChildName;
   const attemptId = registrationId(payload.attemptId);
   if (!phone || !parentName || !childName || !attemptId) {
     return json({ ok: false, message: 'Заполните имя родителя, имя ребёнка и корректный телефон.' }, 400);
@@ -114,7 +237,7 @@ async function registerParent(request, env) {
     'SELECT phone10, parent_name, child_name FROM parent_registration_attempts WHERE attempt_id = ?'
   ).bind(attemptId).first();
   if (priorAttempt) {
-    if (priorAttempt.phone10 !== phone || priorAttempt.parent_name !== parentName || priorAttempt.child_name !== childName) {
+    if (priorAttempt.phone10 !== phone || priorAttempt.parent_name !== parentName || (priorAttempt.child_name !== childName && priorAttempt.child_name !== rawChildName)) {
       return json({ ok: false, message: 'Эта попытка регистрации относится к другим данным. Вернитесь назад и повторите ввод.' }, 409);
     }
     const active = await env.CHAT_DB.prepare('SELECT phone10 FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
@@ -134,8 +257,8 @@ async function registerParent(request, env) {
     env.CHAT_DB.prepare(`INSERT INTO parent_registration_attempts
       (attempt_id, phone10, parent_name, child_name, status, created_at) VALUES (?, ?, ?, ?, 'COMPLETED', ?)
       ON CONFLICT(attempt_id) DO NOTHING`).bind(attemptId, phone, parentName, childName, createdAt),
-    env.CHAT_DB.prepare(`INSERT INTO chat_profiles (phone10, parent_name, child_name)
-      VALUES (?, ?, ?) ON CONFLICT(phone10) DO NOTHING`).bind(phone, parentName, childName),
+    env.CHAT_DB.prepare(`INSERT INTO chat_profiles (phone10, parent_name, child_name, relationship, child_genitive)
+      VALUES (?, ?, ?, ?, ?) ON CONFLICT(phone10) DO NOTHING`).bind(phone, parentName, childName, defaultParentRelationship_(parentName), parentChildGenitive_(childName)),
     env.CHAT_DB.prepare(`INSERT INTO parent_registration_outbox (attempt_id, phone10, parent_name, child_name, created_at)
       SELECT ?, phone10, parent_name, child_name, ? FROM chat_profiles
       WHERE phone10 = ? AND parent_name = ? AND child_name = ?
@@ -146,7 +269,7 @@ async function registerParent(request, env) {
     'SELECT phone10, parent_name, child_name FROM parent_registration_attempts WHERE attempt_id = ?'
   ).bind(attemptId).first();
   const savedProfile = await env.CHAT_DB.prepare(
-    'SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?'
+    'SELECT phone10, parent_name, child_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ?'
   ).bind(phone).first();
   if (!saved || saved.phone10 !== phone || saved.parent_name !== parentName || saved.child_name !== childName ||
       !savedProfile || savedProfile.parent_name !== parentName || savedProfile.child_name !== childName) {
@@ -203,11 +326,18 @@ async function failParentRegistrationOutbox(request, env) {
   return json({ ok: true });
 }
 
-async function notifyEducatorParentAccessBestEffort(env, profile, requestId) {
-  if (!env.PUSH_WORKER || !env.MEDSI_CHAT_PUSH_SECRET) return;
+function parentActorLabel(profile = {}) {
+  const relationship = String(profile.relationship || 'Родитель').trim();
+  const genitive = String(profile.child_genitive || '').trim();
+  if (genitive) return `${relationship} ${genitive}`;
   const parent = String(profile.parent_name || '').trim();
   const child = String(profile.child_name || '').trim();
-  const actor = parent ? (child ? `${parent} (ребёнок: ${child})` : parent) : 'Родитель';
+  return `${relationship}${parent ? `: ${parent}` : ''}${child ? ` · ребёнок: ${child}` : ''}`;
+}
+
+async function notifyEducatorParentAccessBestEffort(env, profile, requestId) {
+  if (!env.PUSH_WORKER || !env.MEDSI_CHAT_PUSH_SECRET) return;
+  const actor = parentActorLabel(profile);
   const response = await env.PUSH_WORKER.fetch('https://medsi-push-worker.internal/notify', {
     method: 'POST',
     headers: {
@@ -232,7 +362,7 @@ async function requestParentAccess(request, env, ctx) {
   const phone = phone10(payload.phone);
   const requestId = parentAccessRequestId(payload.requestId);
   if (!phone || !requestId) return json({ ok: false, message: 'Проверьте номер телефона.' }, 400);
-  const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
+  const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
   if (!profile) return json({ ok: false, code: 'NOT_FOUND', message: 'Этот номер не найден среди активных родителей.' }, 404);
 
   const automatic = await automaticParentAccess(env, phone, profile, requestId, Date.now());
@@ -281,7 +411,7 @@ async function getParentAccessStatus(request, env) {
   const url = new URL(request.url), phone = phone10(url.searchParams.get('phone'));
   const requestId = parentAccessRequestId(url.searchParams.get('requestId'));
   if (!phone || !requestId) return json({ ok: true, status: 'NOT_FOUND' });
-  const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
+  const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
   if (!profile) return json({ ok: true, status: 'NOT_FOUND' });
   const automatic = await automaticParentAccess(env, phone, profile, requestId, Date.now());
   if (automatic) return automatic;
@@ -310,16 +440,14 @@ async function listParentAccessRequests(env) {
   const now = Date.now();
   await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE status='PENDING' AND expires_at<=?").bind(now, now).run();
   const result = await env.CHAT_DB.prepare(`SELECT a.request_id, a.phone10, a.code, a.status, a.created_at, a.expires_at,
-      p.parent_name, p.child_name
+      p.parent_name, p.child_name, p.relationship, p.child_genitive
     FROM parent_access_requests AS a LEFT JOIN chat_profiles AS p ON p.phone10 = a.phone10
     WHERE a.status='PENDING' ORDER BY a.created_at ASC LIMIT 100`).all();
   return json({ ok: true, requests: (result.results || []).map(row => ({
     requestId: row.request_id, phone: '8' + row.phone10, code: row.code,
     status: row.status, createdAt: new Date(Number(row.created_at)).toISOString(),
     expiresAt: new Date(Number(row.expires_at)).toISOString(),
-    actor: row.parent_name
-      ? `${row.parent_name}${row.child_name ? ` (ребёнок: ${row.child_name})` : ''}`
-      : 'Родитель'
+    actor: parentActorLabel(row)
   })) });
 }
 
@@ -939,7 +1067,7 @@ async function getParentCurrentReports(env, auth) {
 }
 
 async function getOwnProfile(env, auth) {
-  const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?').bind(auth.phone10).first();
+  const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ?').bind(auth.phone10).first();
   if (!profile) return json({ ok: false, code: 'CHAT_CLOSED', message: 'Чат недоступен' }, 410);
   return json({ ok: true, phone: profile.phone10, parentName: profile.parent_name || '', childName: profile.child_name || '' });
 }
@@ -1005,11 +1133,26 @@ async function drainReportQueue(env) {
   await env.CHAT_DB.prepare(`DELETE FROM report_submission_queue WHERE status IN ('completed','failed') AND updated_at < ?`).bind(cutoff).run();
   const staleProcessing = Date.now() - 10 * 60 * 1000;
   await env.CHAT_DB.prepare(`UPDATE report_submission_queue SET status='retry', last_error='Повтор после прерванной обработки', updated_at=? WHERE status='processing' AND updated_at < ?`).bind(Date.now(), staleProcessing).run();
-  const rows = await env.CHAT_DB.prepare(`SELECT submission_id, report_type, report_text, attempts FROM report_submission_queue WHERE status IN ('pending','retry') ORDER BY created_at LIMIT 5`).all();
+  const rows = await env.CHAT_DB.prepare(`SELECT submission_id, report_type, report_text, attempts FROM report_submission_queue WHERE status IN ('pending','retry') ORDER BY created_at, submission_id LIMIT 5`).all();
   const results = [];
   for (const row of (rows.results || [])) {
-    const claimed = await env.CHAT_DB.prepare(`UPDATE report_submission_queue SET status='processing', attempts=attempts+1, updated_at=? WHERE submission_id=? AND status IN ('pending','retry')`).bind(Date.now(), row.submission_id).run();
-    if (!claimed.meta || !claimed.meta.changes) continue;
+    // A newer report must never overtake an earlier one. Concurrent drains
+    // may run after separate submissions or on a scheduled invocation.
+    const claimed = await env.CHAT_DB.prepare(`
+      UPDATE report_submission_queue SET status='processing', attempts=attempts+1, updated_at=?
+      WHERE submission_id=? AND status IN ('pending','retry')
+        AND NOT EXISTS (
+          SELECT 1 FROM report_submission_queue AS earlier
+          WHERE earlier.status IN ('pending','retry','processing')
+            AND (earlier.created_at < report_submission_queue.created_at
+              OR (earlier.created_at = report_submission_queue.created_at
+                AND earlier.submission_id < report_submission_queue.submission_id))
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM report_submission_queue AS active WHERE active.status='processing'
+        )
+    `).bind(Date.now(), row.submission_id).run();
+    if (!claimed.meta || !claimed.meta.changes) break;
     try {
       const response = await fetch(env.APP_SCRIPT_URL, {
         method: 'POST',
@@ -1019,7 +1162,17 @@ async function drainReportQueue(env) {
       });
       const payload = await response.json().catch(() => null);
       const result = payload && payload.result ? payload.result : payload;
-      if (!response.ok || !result || result.ok === false) throw new Error(result && result.message || `Apps Script HTTP ${response.status}`);
+      if (response.ok && result && result.ok === true && result.processing === true) {
+        // A timed-out request can still be running in Apps Script. Wait for
+        // its idempotent result without spending the transient-error budget.
+        await env.CHAT_DB.prepare(`UPDATE report_submission_queue SET status='retry', attempts=MAX(attempts-1,0), last_error='Apps Script is still processing', updated_at=? WHERE submission_id=?`).bind(Date.now(), row.submission_id).run();
+        results.push({ submissionId:row.submission_id, status:'retry' });
+        break;
+      }
+      if (!response.ok || !result || result.ok !== true || result.processing ||
+          (result.submissionId && result.submissionId !== row.submission_id)) {
+        throw new Error(result && result.message || `Apps Script did not confirm report save (HTTP ${response.status})`);
+      }
       await env.CHAT_DB.prepare(`UPDATE report_submission_queue SET status='completed', result_json=?, last_error='', updated_at=? WHERE submission_id=?`).bind(JSON.stringify(result), Date.now(), row.submission_id).run();
       results.push({ submissionId: row.submission_id, status: 'completed' });
     } catch (error) {
@@ -1027,6 +1180,7 @@ async function drainReportQueue(env) {
       const next = attempts >= 8 ? 'failed' : 'retry';
       await env.CHAT_DB.prepare(`UPDATE report_submission_queue SET status=?, last_error=?, updated_at=? WHERE submission_id=?`).bind(next, String(error && error.message || error).slice(0, 500), Date.now(), row.submission_id).run();
       results.push({ submissionId: row.submission_id, status: next });
+      break;
     }
   }
   return { ok: true, results };
@@ -1046,7 +1200,9 @@ async function reconcileProfiles(request, env) {
     if (!phone) return;
     active.set(phone, {
       parentName: String(item.parentName || '').trim().slice(0, 300),
-      childName: String(item.childName || '').trim().slice(0, 300)
+      childName: String(item.childName || '').trim().slice(0, 300),
+      relationship: String(item.relationship || 'Родитель').trim().slice(0, 30),
+      childGenitive: String(item.childGenitive || '').trim().slice(0, 100)
     });
   });
 
@@ -1063,9 +1219,12 @@ async function reconcileProfiles(request, env) {
         )
     `).bind(phone, phone, profile.parentName, profile.childName));
     statements.push(env.CHAT_DB.prepare(`
-      INSERT INTO chat_profiles (phone10, parent_name, child_name) VALUES (?, ?, ?)
-      ON CONFLICT(phone10) DO UPDATE SET parent_name = excluded.parent_name, child_name = excluded.child_name
-    `).bind(phone, profile.parentName, profile.childName));
+      INSERT INTO chat_profiles (phone10, parent_name, child_name, relationship, child_genitive)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(phone10) DO UPDATE SET parent_name = excluded.parent_name,
+        child_name = excluded.child_name, relationship = excluded.relationship,
+        child_genitive = excluded.child_genitive
+    `).bind(phone, profile.parentName, profile.childName, profile.relationship, profile.childGenitive));
   });
   if (statements.length) await env.CHAT_DB.batch(statements);
 
@@ -1102,7 +1261,7 @@ async function getProfileForAdmin(env, phoneRaw) {
   const phone = phone10(phoneRaw);
   if (!phone) return json({ ok: false, message: 'A valid phone is required.' }, 400);
   const profile = await env.CHAT_DB.prepare(
-    'SELECT phone10, parent_name, child_name FROM chat_profiles WHERE phone10 = ?'
+    'SELECT phone10, parent_name, child_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ?'
   ).bind(phone).first();
   return json({ ok: true, profile: profile ? {
     phone: '8' + profile.phone10,
@@ -1205,12 +1364,18 @@ async function notifyChatMessageBestEffort(env, phone, side, type, text) {
   const targetRole = side === 'parent' ? 'educator' : 'parent';
 
   let childName = '';
+  let parentName = '';
+  let relationship = 'Родитель';
+  let childGenitive = '';
   if (side === 'parent') {
     try {
       const profile = await env.CHAT_DB.prepare(
-        'SELECT child_name FROM chat_profiles WHERE phone10 = ? LIMIT 1'
+        'SELECT child_name, parent_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ? LIMIT 1'
       ).bind(phone).first();
       childName = String(profile && profile.child_name || '').trim();
+      parentName = String(profile && profile.parent_name || '').trim();
+      relationship = String(profile && profile.relationship || 'Родитель').trim();
+      childGenitive = String(profile && profile.child_genitive || '').trim();
     } catch (error) {
       console.error('CHAT_PUSH_PROFILE_LOOKUP_FAILED', error);
     }
@@ -1224,7 +1389,9 @@ async function notifyChatMessageBestEffort(env, phone, side, type, text) {
 
   const notification = {
     title: side === 'parent'
-      ? (childName || 'Новое сообщение от родителя')
+      ? (childGenitive
+          ? `${relationship} ${childGenitive}`
+          : `${relationship}${parentName ? `: ${parentName}` : ''}${childName ? ` · ребёнок: ${childName}` : ''}`)
       : 'Детское Отделение Медси',
     body: bodyText,
     url: targetRole === 'educator' ? '/tutors' : '/',
@@ -1309,7 +1476,7 @@ async function addMessage(request, env, auth, ctx) {
 
 async function listParents(env) {
   const result = await env.CHAT_DB.prepare(`
-    SELECT phone10, parent_name, child_name
+    SELECT phone10, parent_name, child_name, relationship
     FROM chat_profiles
     ORDER BY child_name COLLATE NOCASE ASC, parent_name COLLATE NOCASE ASC, phone10 ASC
   `).all();
@@ -1317,7 +1484,8 @@ async function listParents(env) {
   const parents = (result.results || []).map(row => ({
     phone: row.phone10,
     parentName: row.parent_name || '',
-    childName: row.child_name || ''
+    childName: row.child_name || '',
+    relationship: row.relationship || 'Родитель'
   }));
 
   return json({ ok: true, parents });
@@ -1352,7 +1520,7 @@ async function listChats(env, bucket) {
       FROM chat_messages WHERE status = 'active'
       GROUP BY phone10
     )
-    SELECT m.phone10, p.parent_name, p.child_name, m.side AS last_side, m.type AS last_type, m.text AS last_text,
+    SELECT m.phone10, p.parent_name, p.child_name, p.relationship, m.side AS last_side, m.type AS last_type, m.text AS last_text,
       m.created_at, unread.has_unread, pins.bucket AS pinned_bucket
     FROM latest
     JOIN chat_messages m ON m.id = latest.last_id
@@ -1366,6 +1534,7 @@ async function listChats(env, bucket) {
     phone: row.phone10,
     parentName: row.parent_name,
     childName: row.child_name,
+    relationship: row.relationship || 'Родитель',
     lastSide: row.last_side,
     lastType: row.last_type || 'text',
     lastText: row.last_text,
@@ -1425,7 +1594,7 @@ async function getThread(env, rawPhone, beforeRaw, limitRaw) {
     if (target) message.reply = { messageKey:target.messageKey, side:target.side, type:target.type, text:target.text, fileId:target.fileId };
   });
   return json({ ok: true, phone, parentName: profile.parent_name, childName: profile.child_name,
-    messages, hasMore });
+    relationship: profile.relationship || 'Родитель', messages, hasMore });
 }
 
 async function markEducatorRead(env, rawPhone) {
@@ -1496,7 +1665,7 @@ async function mutateMessage(request, env, kind, rawKey, auth) {
 
 export default {
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(captureScheduledReportHistory(env));
+    if (controller.cron !== '* * * * *') ctx.waitUntil(captureScheduledReportHistory(env));
     ctx.waitUntil(drainReportQueue(env));
   },
   async fetch(request, env, ctx) {

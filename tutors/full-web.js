@@ -24,7 +24,7 @@
   function clearAuth(){tutorToken='';d1Session=null;d1RefreshPromise=null;if(d1WarmTimer){clearTimeout(d1WarmTimer);d1WarmTimer=null}if(authRetryTimer){clearTimeout(authRetryTimer);authRetryTimer=null}safeRemove(TUTOR_KEY);safeRemove(D1_KEY);if(window.MedsiAccessRequests)MedsiAccessRequests.stop()}
   function phone10(v){return String(v||'').replace(/\D+/g,'').slice(-10)}
   function displayPhone(v){const p=phone10(v);return p?'8'+p:''}
-  function parentSig(rows){return (rows||[]).map(r=>[phone10(r.phone),r.parentName||'',r.childName||''].join('|')).sort().join('~')}
+  function parentSig(rows){return (rows||[]).map(r=>[phone10(r.phone),r.parentName||'',r.childName||'',r.relationship||''].join('|')).sort().join('~')}
 
   function timeoutPromise(ms){return new Promise((_,reject)=>setTimeout(()=>reject(new Error('TIMEOUT')),ms))}
   function reportSubmissionId(){
@@ -260,7 +260,7 @@
         if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось загрузить родителей.');
         rows=Array.isArray(res.rows)?res.rows:[];
       }
-      parentsCache=rows.map(r=>({phone:r.phone||r.phone10||'',parentName:r.parentName||r.parent_name||'',childName:r.childName||r.child_name||''}));
+      parentsCache=rows.map(r=>({phone:r.phone||r.phone10||'',parentName:r.parentName||r.parent_name||'',childName:r.childName||r.child_name||'',relationship:r.relationship||'Родитель'}));
       parentsSignature=parentSig(parentsCache);return parentsCache;
     }catch(e){throw e}
   }
@@ -276,7 +276,7 @@
       const card=document.createElement('div');card.className='phone-card card-enter';card.style.animationDelay=Math.min(index*24,160)+'ms';
       const title=document.createElement('div');title.className='phone-card-title';title.textContent=r.childName||'Без имени ребёнка';
       const meta=document.createElement('div');meta.className='phone-card-meta';
-      const parentLine=document.createElement('div');parentLine.textContent='Родитель: '+(r.parentName||'—');
+      const parentLine=document.createElement('div');parentLine.textContent=(r.relationship||'Родитель')+': '+(r.parentName||'—');
       const phoneLine=document.createElement('div');phoneLine.append('Номер телефона: ');const strong=document.createElement('span');strong.className='phone-number-strong';strong.textContent=displayPhone(r.phone)||'—';phoneLine.appendChild(strong);meta.append(parentLine,phoneLine);
       const actions=document.createElement('div');actions.className='phone-card-actions';
       const copy=document.createElement('button');copy.type='button';copy.className='btn btn-teal phone-action-btn';copy.textContent='Скопировать';copy.onclick=()=>copyPhone(displayPhone(r.phone),copy);

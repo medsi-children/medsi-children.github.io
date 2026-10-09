@@ -886,7 +886,9 @@ function smartRegisterFromInboxCore(phoneRaw, parentNameRaw, childNameRaw, defer
   const phone10 = last10_(phone);
   if (data.some(p => last10_(p) === phone10)) return;
 
-  const familyForStore = childLast || parentLast || '';
+  // New forms require a child's surname. Older cached clients can omit it:
+  // infer the grammatical form from the child's first name in that case only.
+  const familyForStore = childLast || inheritedChildFamily_(childFirst, parentLast);
 
   sh.appendRow([
     phone,
@@ -1471,10 +1473,7 @@ function validateChildReportFormat_(reportType, text) {
     const ambiguous = candidates.filter(item => item.resolution && item.resolution.status === 'ambiguous');
     if (ambiguous.length) {
       const names = uniqueStrings_(ambiguous.map(item => item.rawName)).slice(0, 8);
-      return makeReportFormatError_(
-        reportAmbiguousNameMessage_(names),
-        { ambiguousNames: names }
-      );
+      return { ok:true, reportType:reportType, checkedBlocks:0, skippedBlocks:candidates.length, ambiguousNames:names };
     }
 
     if (candidates.length > 0) {
@@ -1504,13 +1503,7 @@ function validateChildReportFormat_(reportType, text) {
   const ambiguous = preMainAmbiguous.concat(
     mainCandidates.filter(item => item.resolution && item.resolution.status === 'ambiguous')
   );
-  if (ambiguous.length) {
-    const names = uniqueStrings_(ambiguous.map(item => item.rawName)).slice(0, 8);
-    return makeReportFormatError_(
-      reportAmbiguousNameMessage_(names),
-      { ambiguousNames: names }
-    );
-  }
+  const ambiguousNames = uniqueStrings_(ambiguous.map(item => item.rawName));
 
   // Один и тот же ребёнок не должен иметь два отдельных блока отчёта.
   // При этом дети с одинаковым именем и разными инициалами считаются
@@ -1565,7 +1558,9 @@ function validateChildReportFormat_(reportType, text) {
   return {
     ok: true,
     reportType,
-    checkedBlocks: okCandidates.length
+    checkedBlocks: okCandidates.length,
+    skippedBlocks: ambiguous.length,
+    ambiguousNames: ambiguousNames
   };
 }
 
@@ -1632,6 +1627,20 @@ function claimReportSubmission_(id, typeRaw, fingerprint) {
       if (existing.type !== typeRaw || existing.fingerprint !== fingerprint) {
         return { claimed:false, mismatch:true, state:existing };
       }
+      // The Worker retries transient Apps Script errors. A failed claim must
+      // be reclaimable, otherwise every retry returns the same cached error.
+      // An abandoned processing/saved claim is reclaimed only after the
+      // maximum Apps Script execution window has passed.
+      const stale = ['processing', 'saved'].indexOf(existing.status) >= 0 &&
+        Date.now() - Number(existing.updatedAt || existing.startedAt || 0) > 10 * 60 * 1000;
+      if (existing.status === 'failed' || stale) {
+        const state = {
+          status:'processing', type:typeRaw, fingerprint:fingerprint,
+          startedAt:Date.now(), updatedAt:Date.now()
+        };
+        writeReportSubmission_(id, state);
+        return { claimed:true, state:state };
+      }
       return { claimed:false, state:existing };
     }
     const state = {
@@ -1685,10 +1694,12 @@ function appendReport(param, tutorTokenRaw) {
 
     if (!text) return { ok: false, message: 'Пустой текст отчёта.' };
 
+    let reportValidation = null;
     if (targetSheetName !== SHEET_PSYCHOLOGY) {
       const prepared = prepareRawReportSourceText_(typeRaw, text);
       if (!prepared.ok) return prepared.validation;
       text = prepared.text;
+      reportValidation = prepared.validation;
     }
 
     submissionId = normalizeReportSubmissionId_(param && param.submissionId);
@@ -1729,6 +1740,7 @@ function appendReport(param, tutorTokenRaw) {
     } else {
       distributeChildReports(typeRaw);
     }
+    setRawReportSourceNote_(sheet.getRange(1, 1), rawReportValidationNote_(reportValidation));
 
     const result = {
       ok: true,
@@ -4892,7 +4904,7 @@ function listAvailableParentsForChat(tutorTokenRaw) {
       }
     });
 
-    const rows = Object.values(byPhone).sort((a, b) => {
+    const rows = enrichProfilesWithRelationships_(Object.values(byPhone)).sort((a, b) => {
       const aChild = String(a.childName || '').toLowerCase();
       const bChild = String(b.childName || '').toLowerCase();
       return aChild.localeCompare(bChild, 'ru');
@@ -5086,13 +5098,9 @@ function nowTs_() {
 
 function getLatestReport(sheet, colIndex = 1) {
   if (!sheet) return "";
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 1) return "";
-  const data = sheet.getRange(1, colIndex, lastRow, 1).getValues().flat();
-  for (let i = data.length - 1; i >= 0; i--) {
-    if (data[i] && String(data[i]).trim() !== "") return data[i];
-  }
-  return "";
+  // Both the website and manual edits publish the current raw report in A1.
+  // Historical or incidental cells below it must never override that source.
+  return sheet.getRange(1, colIndex).getValue() || "";
 }
 
 function splitBlocksByChildren(text, childrenVariants) {
@@ -6247,11 +6255,6 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
 function getLatestReportCell_(sheet, colIndex) {
   const col = Number(colIndex || 1);
   if (!sheet) return null;
-  const lastRow = Math.max(sheet.getLastRow(), 1);
-  const values = sheet.getRange(1, col, lastRow, 1).getValues().flat();
-  for (let i = values.length - 1; i >= 0; i -= 1) {
-    if (String(values[i] || '').trim()) return sheet.getRange(i + 1, col);
-  }
   return sheet.getRange(1, col);
 }
 
@@ -6260,6 +6263,11 @@ function setRawReportSourceNote_(cell, messageRaw) {
   const message = String(messageRaw || '').trim();
   if (message) cell.setNote(message);
   else cell.clearNote();
+}
+
+function rawReportValidationNote_(validation) {
+  const names = validation && validation.ambiguousNames || [];
+  return names.length ? 'Остальные блоки распределены. Неоднозначные блоки пропущены: «' + names.join('», «') + '». Уточните инициал или фамилию.' : '';
 }
 
 function prepareRawReportSourceText_(kindRaw, textRaw) {
@@ -6300,8 +6308,8 @@ function processRawReportSourceEdit_(kindRaw, sheet) {
   }
 
   if (cell && String(cell.getValue() || '') !== prepared.text) cell.setValue(prepared.text);
-  setRawReportSourceNote_(cell, '');
   distributeChildReports(kind);
+  setRawReportSourceNote_(cell, rawReportValidationNote_(prepared.validation));
   return { ok:true, canonicalized:prepared.canonical.changed };
 }
 
@@ -6397,12 +6405,13 @@ function maintainRawReportsAfterProfilesChangeCore_(previousSnapshotRaw, reasonR
         syncReportHistorySourceFingerprintSilently_(kind, canonical.text);
       }
     }
-    setRawReportSourceNote_(cell, '');
-
     result.rewritten += Number(canonical.rewritten || 0);
     result.recovered += Number(canonical.recovered || 0);
     const distributed = redistributeChildReportKindMaintenanceCore_(kind);
-    if (distributed && distributed.ok) result.redistributed += 1;
+    if (distributed && distributed.ok) {
+      result.redistributed += 1;
+      setRawReportSourceNote_(cell, rawReportValidationNote_(validation));
+    }
   });
 
   if (result.redistributed) {

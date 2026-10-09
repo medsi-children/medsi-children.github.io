@@ -251,14 +251,11 @@ function parentReauthorizationActor_(phoneRaw) {
   const profile = getMedsiContactProfiles_()[phone10];
   if (!profile) return 'Родитель';
   const parent = medsiContactCap_(profile.parentFirst);
-  const parentGender = medsiContactGender_(parent);
-  const role = parentGender === 'female' ? 'Мама' : (parentGender === 'male' ? 'Папа' : 'Родитель');
+  const role = profile.relationship || defaultParentRelationship_(parent);
   const childBase = canonizeChildName_(stripInitialFromName_(profile.childRaw)) || stripInitialFromName_(profile.childRaw);
-  const childGender = medsiContactGender_(childBase);
-  const childName = childGender ? medsiContactGenitiveName_(childBase, childGender) : medsiContactCap_(childBase);
-  const familyGender = childGender === 'ambiguous' ? medsiContactFamilyGenderHint_(profile.childFamily) : childGender;
-  const family = familyGender ? medsiContactGenitiveFamily_(profile.childFamily, familyGender) : medsiContactCap_(profile.childFamily);
-  return [role, childName, family].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim() || 'Родитель';
+  const childFull = [childBase, profile.childFamily].filter(Boolean).join(' ');
+  const childGenitive = parentChildGenitive_(childFull);
+  return childGenitive ? role + ' ' + childGenitive : role + ': ' + parent + ' (ребёнок: ' + childFull + ')';
 }
 
 function requestParentReauthorization(phoneRaw, requestIdRaw) {

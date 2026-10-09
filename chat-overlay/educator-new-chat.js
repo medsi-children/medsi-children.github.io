@@ -7,7 +7,7 @@
   const phone10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
   const displayPhone=v=>{const p=phone10(v);return p?'8'+p:''};
   const deleteIcon=()=>'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
-  const rowsSignature=rows=>(Array.isArray(rows)?rows:[]).map(r=>[phone10(r&&r.phone),String(r&&r.parentName||''),String(r&&r.childName||'')].join('|')).sort().join('||');
+  const rowsSignature=rows=>(Array.isArray(rows)?rows:[]).map(r=>[phone10(r&&r.phone),String(r&&r.parentName||''),String(r&&r.childName||''),String(r&&r.relationship||'')].join('|')).sort().join('||');
 
   if(!transport.__medsiForcedParentWrapped){
     transport.__medsiForcedParentWrapped=true;
@@ -20,6 +20,7 @@
           phone:phone10(forced.phone),
           parentName:forced.parentName||'',
           childName:forced.childName||'',
+          relationship:forced.relationship||'Родитель',
           lastSide:'',lastType:'text',lastText:'Нет сообщений',hasUnread:false,pinnedBucket:''
         });
       }
@@ -74,7 +75,7 @@
         const card=document.createElement('button');card.className='chat-card';card.type='button';card.dataset.phone=r.phone||'';
         const name=document.createElement('div');name.className='chat-card-title';name.textContent=r.childName||'Без имени ребёнка';
         const del=document.createElement('span');del.className='chat-delete-toggle solo';del.setAttribute('role','button');del.setAttribute('tabindex','0');del.setAttribute('aria-label','Удалить ребёнка');del.title='Удалить ребёнка';del.innerHTML=deleteIcon();
-        const info=document.createElement('div');info.className='chat-card-meta';info.textContent='Родитель: '+(r.parentName||'—')+'\nНомер телефона: '+(r.phone?displayPhone(r.phone):'—');
+        const info=document.createElement('div');info.className='chat-card-meta';info.textContent=(r.relationship||'Родитель')+': '+(r.parentName||'—')+'\nНомер телефона: '+(r.phone?displayPhone(r.phone):'—');
         del.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();bridgeToCard(r,'delete')});
         card.append(name,del,info);
         card.addEventListener('click',e=>{if(e.target.closest('.chat-delete-toggle'))return;bridgeToCard(r,'open')});
