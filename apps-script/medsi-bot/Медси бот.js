@@ -1305,6 +1305,9 @@ function getReportHeaderCandidatesForValidation_(text, knownBaseKeys, contextByB
     candidates.push({
       rawName: header.raw,
       baseKey: header.baseKey,
+      hasSuffix: header.hasSuffix,
+      suffix: header.suffix,
+      suffixKey: header.suffixKey,
       separator,
       start: match.index,
       headerEnd: headerRe.lastIndex,
@@ -1313,6 +1316,10 @@ function getReportHeaderCandidatesForValidation_(text, knownBaseKeys, contextByB
     });
   }
 
+  const resolved = resolveReportBlocksByExclusion_(candidates.map(function(item) {
+    return Object.assign({}, item, { forcedResolution:item.resolution });
+  }), contextByBase);
+  candidates.forEach(function(item, index) { item.resolution = resolved[index]; });
   return { clean, candidates };
 }
 
@@ -5856,11 +5863,46 @@ function reportDisplayNameForChild_(child) {
   return stripInitialFromName_(fullName) || String(child.baseName || '').trim() || fullName;
 }
 
+// A missing initial is recoverable only when every other same-named child
+// has exactly one explicit, unambiguous block in this report. Parent rows
+// for the same child count as one identity. Never infer two bare blocks.
+function resolveReportBlocksByExclusion_(blocks, contextByBase) {
+  const resolutions = blocks.map(function(block) { return resolveReportBlock_(block, contextByBase); });
+  const groups = {};
+  blocks.forEach(function(block, index) {
+    if (!groups[block.baseKey]) groups[block.baseKey] = [];
+    groups[block.baseKey].push(index);
+  });
+  Object.keys(groups).forEach(function(baseKey) {
+    const indices = groups[baseKey];
+    const bare = indices.filter(function(index) { return !blocks[index].hasSuffix; });
+    if (bare.length !== 1 || resolutions[bare[0]].status !== 'ambiguous') return;
+    const explicit = indices.filter(function(index) { return blocks[index].hasSuffix; });
+    if (!explicit.length || explicit.some(function(index) { return resolutions[index].status !== 'ok'; })) return;
+    const used = {};
+    let duplicate = false;
+    explicit.forEach(function(index) {
+      const keys = uniqueReportChildrenByIdentity_(reportResolutionTargets_(resolutions[index]));
+      if (keys.length !== 1) { duplicate = true; return; }
+      const key = reportChildIdentityKey_(keys[0]);
+      if (used[key]) duplicate = true;
+      used[key] = true;
+    });
+    if (duplicate) return;
+    const registered = contextByBase[baseKey] && contextByBase[baseKey].registered || [];
+    const remaining = registered.filter(function(child) { return !used[reportChildIdentityKey_(child)]; });
+    if (uniqueReportChildrenByIdentity_(remaining).length !== 1) return;
+    resolutions[bare[0]] = okReportChildren_(remaining, 'Единственный оставшийся ребёнок после явных заголовков отчёта.');
+  });
+  return resolutions;
+}
+
 function buildSafeDistribution_(reportType, parsed, contextByBase) {
   const byRow = {};
 
-  parsed.blocks.forEach(block => {
-    const res = resolveReportBlock_(block, contextByBase);
+  const resolutions = resolveReportBlocksByExclusion_(parsed.blocks, contextByBase);
+  parsed.blocks.forEach((block, index) => {
+    const res = resolutions[index];
     const targets = (res.children && res.children.length) ? res.children : (res.child ? [res.child] : []);
     const child = targets[0] || null;
     const reportName = child ? reportDisplayNameForChild_(child) : (block.rawName || '');
@@ -6158,6 +6200,11 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
       bodyStart:headerRe.lastIndex
     });
   }
+
+  const inferred = resolveReportBlocksByExclusion_(candidates.map(function(item) {
+    return Object.assign({}, item.header, { forcedResolution:item.currentClass.resolution });
+  }), currentContext);
+  candidates.forEach(function(item, index) { item.currentClass.resolution = inferred[index]; });
 
   const replacements = [];
   const unresolved = [];

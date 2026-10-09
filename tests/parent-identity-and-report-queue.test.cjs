@@ -88,7 +88,7 @@ test('Worker does not mark an in-progress Apps Script response as completed',asy
 });
 test('an ambiguous child block is skipped while explicit and unrelated children distribute',()=>{
   const x=apps();
-  const children=x.buildReportChildren_(['Артем К.','Артем И.','Лиза П.'],['Крылов','Иванов','Петрова']);
+  const children=x.buildReportChildren_(['Артем К.','Артем И.','Лиза П.','Артем С.'],['Крылов','Иванов','Петрова','Смирнов']);
   x.buildReportValidationChildren_=()=>children;
   const text='Артем: Неоднозначный синтетический блок.\nАртем И.: Точный синтетический блок.\nЛиза: Другой синтетический блок.';
   const prepared=x.prepareRawReportSourceText_('morning',text);
@@ -157,4 +157,32 @@ test('surname and relationship corrections preserve the chat and legacy login id
     assert.equal(db.prepare('SELECT count(*) AS n FROM chat_messages').get().n,1);
     assert.equal(db.prepare('SELECT relationship FROM chat_profiles').get().relationship,'Бабушка');
   }finally{db.close();}
+});
+test('missing initial is inferred only when exactly one distinct child remains',()=>{
+  const cases=[
+    {names:['Артем К.','Артем И.'],families:['Крылов','Иванов'],text:'Артем: Bare synthetic.\nАртем И.: Explicit synthetic.',infer:true},
+    {names:['Артем К.','Артем И.','Артем К.'],families:['Крылов','Иванов','Крылов'],text:'Артем И.: Explicit synthetic.\nАртем: Bare synthetic.',infer:true},
+    {names:['Артем К.','Артем И.','Артем С.'],families:['Крылов','Иванов','Смирнов'],text:'Артем: Bare synthetic.\nАртем И.: Explicit synthetic.',infer:false},
+    {names:['Артем К.','Артем И.'],families:['Крылов','Иванов'],text:'Артем: Bare synthetic.\nАртем: Another bare.\nАртем И.: Explicit synthetic.',infer:false},
+    {names:['Артем К.','Артем И.'],families:['Крылов','Иванов'],text:'Артем: Bare synthetic.\nАртем И.: Explicit synthetic.\nАртем И.: Duplicate.',infer:false},
+    {names:['Артем К.','Артем И.'],families:['Крылов','Иванов'],text:'Артем: Bare synthetic.\nАртем И.: Explicit synthetic.\nАртем П.: Unknown initial.',infer:false},
+    {names:['Артем К.','Артем И.','Артем С.','Артем П.','Артем Б.'],families:['Крылов','Иванов','Смирнов','Петров','Белов'],text:'Артем: Bare synthetic.\nАртем И.: Synthetic.\nАртем С.: Synthetic.\nАртем П.: Synthetic.\nАртем Б.: Synthetic.',infer:true}
+  ];
+  for(const item of cases){
+    const x=apps(),children=x.buildReportChildren_(item.names,item.families);
+    x.buildReportValidationChildren_=()=>children;
+    const ctx=x.buildDistributionContext_(children,[]);
+    const parsed=x.parseReportBlocks_(item.text,x.buildKnownBaseKeys_(children),ctx);
+    const resolutions=x.resolveReportBlocksByExclusion_(parsed.blocks,ctx);
+    const bare=resolutions[parsed.blocks.findIndex(b=>!b.hasSuffix)];
+    assert.equal(bare.status==='ok',item.infer,item.text);
+    const canonical=x.canonicalizeRawChildReport_(item.text);
+    assert.equal(canonical.text.includes('Артем К. — Bare synthetic.'),item.infer,item.text);
+    const distribution=x.buildSafeDistribution_('morning',parsed,ctx);
+    assert.equal(Boolean(distribution.byRow[0]),item.infer,item.text);
+    if(item.infer){
+      assert.equal(x.validateChildReportFormat_('morning',item.text).ok,true);
+      assert.equal(x.validateChildReportFormat_('morning',item.text).ambiguousNames.length,0);
+    }
+  }
 });
