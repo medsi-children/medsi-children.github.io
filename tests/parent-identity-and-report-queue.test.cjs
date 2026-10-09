@@ -141,3 +141,20 @@ test('website acknowledges Cloudflare acceptance without waiting for Apps Script
   vm.createContext(context);vm.runInContext(fn,context);
   assert.equal((await context.submitReportPayload('morning','Synthetic','report_synthetic')).accepted,true);
 });
+test('surname and relationship corrections preserve the chat and legacy login identity',async()=>{
+  const {DatabaseSync}=require('node:sqlite'),db=new DatabaseSync(':memory:');
+  db.exec("CREATE TABLE chat_profiles(phone10 TEXT PRIMARY KEY,parent_name TEXT,child_name TEXT,relationship TEXT,child_genitive TEXT); CREATE TABLE legacy_parent_access(phone10 TEXT PRIMARY KEY); CREATE TABLE chat_messages(phone10 TEXT,message TEXT);");
+  db.prepare('INSERT INTO chat_profiles VALUES(?,?,?,?,?)').run('9990000001','Анна','Никита Иванова','Мама','');
+  db.prepare('INSERT INTO legacy_parent_access VALUES(?)').run('9990000001');
+  db.prepare('INSERT INTO chat_messages VALUES(?,?)').run('9990000001','Synthetic history');
+  const wrap=sql=>({args:[],bind(...args){this.args=args;return this},run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}});
+  const context={Response,console};vm.createContext(context);vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {','const worker = {'),context);
+  try{
+    const env={CHAT_DB:{prepare:wrap,batch:async statements=>Promise.all(statements.map(s=>s.run()))}};
+    const response=await context.reconcileProfiles(new Request('https://example.invalid',{method:'POST',body:JSON.stringify({profiles:[{phone:'9990000001',parentName:'Анна',childName:'Никита Иванов',relationship:'Бабушка',childGenitive:'Никиты Иванова'}],full:false})}),env);
+    assert.equal((await response.json()).ok,true);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM legacy_parent_access').get().n,1);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM chat_messages').get().n,1);
+    assert.equal(db.prepare('SELECT relationship FROM chat_profiles').get().relationship,'Бабушка');
+  }finally{db.close();}
+});
