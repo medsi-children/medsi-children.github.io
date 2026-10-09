@@ -5905,6 +5905,16 @@ function resolveReportBlocksByExclusion_(blocks, contextByBase) {
   Object.keys(groups).forEach(function(baseKey) {
     const indices = groups[baseKey];
     const bare = indices.filter(function(index) { return !blocks[index].hasSuffix; });
+    // Report headers themselves are identity evidence. Removing a same-named
+    // child from REPORTS must never make their bare block belong to the survivor.
+    if (indices.length > 1) {
+      bare.forEach(function(index) {
+        if (resolutions[index].status === 'ok') {
+          resolutions[index] = { status:'ambiguous', child:null,
+            reason:'В отчёте несколько блоков с этим именем; неподписанный блок требует отдельного безопасного сопоставления.' };
+        }
+      });
+    }
     if (bare.length !== 1 || resolutions[bare[0]].status !== 'ambiguous') return;
     const explicit = indices.filter(function(index) { return blocks[index].hasSuffix; });
     if (!explicit.length || explicit.some(function(index) { return resolutions[index].status !== 'ok'; })) return;
@@ -5930,6 +5940,13 @@ function buildSafeDistribution_(reportType, parsed, contextByBase) {
   const byRow = {};
 
   const resolutions = resolveReportBlocksByExclusion_(parsed.blocks, contextByBase);
+  const assignments = {};
+  resolutions.forEach(function(resolution) {
+    if (resolution.status !== 'ok') return;
+    reportResolutionTargets_(resolution).forEach(function(target) {
+      assignments[target.index] = Number(assignments[target.index] || 0) + 1;
+    });
+  });
   parsed.blocks.forEach((block, index) => {
     const res = resolutions[index];
     const targets = (res.children && res.children.length) ? res.children : (res.child ? [res.child] : []);
@@ -5939,9 +5956,8 @@ function buildSafeDistribution_(reportType, parsed, contextByBase) {
 
     if (res.status === 'ok' && finalText) {
       targets.forEach(target => {
-        byRow[target.index] = byRow[target.index]
-          ? `${byRow[target.index]}\n\n${finalText}`
-          : finalText;
+        if (assignments[target.index] !== 1) return;
+        byRow[target.index] = finalText;
       });
     }
   });
@@ -6272,6 +6288,15 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
       );
       if (
         mappedTargets.length &&
+        !candidates.some(function(other) {
+          if (other === item || !other.header.hasSuffix) return false;
+          const occupied = reportResolutionTargets_(other.currentClass.resolution);
+          return occupied.some(function(child) {
+            return mappedTargets.some(function(target) {
+              return reportChildIdentityKey_(child) === reportChildIdentityKey_(target);
+            });
+          });
+        }) &&
         confirmPreviousAssignment({
           block:block,
           previousTargets:previousTargets,

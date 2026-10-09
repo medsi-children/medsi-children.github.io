@@ -251,3 +251,22 @@ test('stale D1 profile cannot veto deletion after its REPORTS row was removed',(
   const source=read('apps-script/medsi-bot/chat-d1-migration.js');
   assert.ok(source.includes('if (reportsProfileDeletionProtected_(phone)) return;'));
 });
+test('deleting a namesake never merges their bare block into the explicit survivor',()=>{
+  const x=apps(),children=x.buildReportChildren_(['Артем И.'],['Иванов']);
+  x.buildReportValidationChildren_=()=>children;
+  const context=x.buildDistributionContext_(children,[]);
+  for(const text of [
+    'Артем: Discharged synthetic.\nАртём И.: Survivor synthetic.',
+    'Артём И.: Survivor synthetic.\nАртем: Discharged synthetic.'
+  ]) {
+    const canonical=x.canonicalizeRawChildReport_(text);
+    assert.ok(!canonical.text.includes('Артем И. — Discharged synthetic.'));
+    const parsed=x.parseReportBlocks_(canonical.text,x.buildKnownBaseKeys_(children),context);
+    const result=x.buildSafeDistribution_('morning',parsed,context);
+    assert.equal(result.byRow[0],'Артем: Survivor synthetic.');
+  }
+  const bare=x.parseReportBlocks_('Артем: First synthetic.\nАртем: Second synthetic.',x.buildKnownBaseKeys_(children),context);
+  assert.equal(x.buildSafeDistribution_('morning',bare,context).byRow[0],undefined);
+  const duplicate=x.parseReportBlocks_('Артем И.: First synthetic.\nАртем И.: Second synthetic.',x.buildKnownBaseKeys_(children),context);
+  assert.equal(x.buildSafeDistribution_('morning',duplicate,context).byRow[0],undefined);
+});
