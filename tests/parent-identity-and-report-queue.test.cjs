@@ -236,3 +236,18 @@ test('expired educator caches fetch the current list and cannot resurrect a remo
   now=4000;assert.equal((await transport.chats(session,'read')).chats.length,0);
   assert.equal(calls,2);
 });
+
+test('stale D1 profile cannot veto deletion after its REPORTS row was removed',()=>{
+  const x=apps();vm.runInContext(read('apps-script/medsi-bot/chat-d1-migration.js'),x);
+  x.getProfileByPhone_=()=>{throw new Error('Generic D1 fallback must not be used');};
+  x.reportsD1ProfilesSnapshot_=()=>({});
+  x.d1AdminRequest_=()=>({registrations:[]});
+  assert.equal(x.reportsProfileDeletionProtected_('9990000001'),false);
+  x.reportsD1ProfilesSnapshot_=()=>({'9990000001':{}});
+  assert.equal(x.reportsProfileDeletionProtected_('9990000001'),true);
+  x.reportsD1ProfilesSnapshot_=()=>({});
+  x.d1AdminRequest_=()=>({registrations:[{phone10:'9990000001'}]});
+  assert.equal(x.reportsProfileDeletionProtected_('9990000001'),true);
+  const source=read('apps-script/medsi-bot/chat-d1-migration.js');
+  assert.ok(source.includes('if (reportsProfileDeletionProtected_(phone)) return;'));
+});

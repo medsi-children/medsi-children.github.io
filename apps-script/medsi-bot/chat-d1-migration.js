@@ -448,6 +448,16 @@ function reconcileReportsProfilesToD1NonDestructive_(reason) {
   return result;
 }
 
+function reportsProfileDeletionProtected_(phoneRaw) {
+  const phone = last10_(phoneRaw);
+  if (!phone) return true;
+  if (reportsD1ProfilesSnapshot_()[phone]) return true;
+  const pending = d1AdminRequest_('/admin/parent-registration-outbox', 'get');
+  return (pending.registrations || []).some(function(item) {
+    return last10_(item.phone10) === phone;
+  });
+}
+
 function reconcileReportsProfilesToD1_(reason) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) return { ok:true, skipped:true, message:'Profile sync is already running.' };
@@ -521,8 +531,9 @@ function reconcileReportsProfilesToD1_(reason) {
     // Limit one pass so an unexpectedly empty sheet cannot erase every chat.
     stale.slice(0, 3).forEach(function(phone) {
       try {
-        // A parent may have been registered again while the D1 inventory was read.
-        if (getProfileByPhone_(phone)) return;
+        // Recheck only REPORTS and unmirrored registrations. A generic profile
+        // lookup falls back to D1 and would protect the stale record itself.
+        if (reportsProfileDeletionProtected_(phone)) return;
         const result = deleteD1ProfileWithS3Purge_(phone);
         deleted.push({
           phone:phone,
