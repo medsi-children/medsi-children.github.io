@@ -1,12 +1,6 @@
 name: Apply Cloudflare D1 migrations
 
 on:
-  push:
-    branches:
-      - timeweb-next
-    paths:
-      - services/cloudflare/chat-worker/migrations/0012_parent_deletion_queue.sql
-      - .github/workflows/deploy-cloudflare.yml
   workflow_dispatch:
     inputs:
       confirm_d1_migrations:
@@ -30,7 +24,7 @@ jobs:
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CONFIRM_D1_MIGRATIONS: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[apply-d1-0012]') || inputs.confirm_d1_migrations }}
+      CONFIRM_D1_MIGRATIONS: ${{ inputs.confirm_d1_migrations }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

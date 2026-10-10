@@ -425,7 +425,7 @@ function doPost(e) {
 
     // One narrowly scoped server-to-server migration control. It is protected
     // by the existing private server secret and can never be called by UI code.
-    if (action === 'reportHistoryCapture' || action === 'd1ReportCurrentSync' || action === 'd1ProfileReconcile' || action === 'd1ProfileAudit' || action === 'reportQueueProcess') {
+    if (action === 'reportHistoryCapture' || action === 'd1ReportCurrentSync' || action === 'd1ProfileReconcile' || action === 'd1ProfileAudit' || action === 'reportQueueProcess' || action === 'parentDeletionQueueProcess') {
       if (String(payload.authorization || '') !== getWorkerSharedSecret_()) {
         return ContentService.createTextOutput(JSON.stringify({ ok:false, message:'Unauthorized' }))
           .setMimeType(ContentService.MimeType.JSON);
@@ -435,6 +435,7 @@ function doPost(e) {
       else if (action === 'd1ProfileReconcile') result = syncD1ProfilesFromReports();
       else if (action === 'd1ProfileAudit') result = auditReportsD1Profiles();
       else if (action === 'reportQueueProcess') result = appendReportFromWorker_(payload.param || {});
+      else if (action === 'parentDeletionQueueProcess') result = processParentDeletionFromCloudflare_(payload.param || {});
       else {
         result = captureScheduledReportHistory();
       }
@@ -3147,24 +3148,46 @@ function acknowledgeReportInactivityReminder(phoneRaw, tierRaw, tutorTokenRaw) {
   } catch (e) { return { ok: false, message: 'Не удалось отметить напоминание: ' + (e.message || e) }; }
 }
 
-function deleteReportChildByPhone(phoneRaw, tutorTokenRaw) {
+function deletionProfileMatchesExpected_(row, expectedRaw) {
+  const expected = expectedRaw || {};
+  const expectedParent = String(expected.parentName || '').trim().toLocaleLowerCase('ru');
+  const expectedChild = String(expected.childName || '').trim().toLocaleLowerCase('ru');
+  if (!expectedParent && !expectedChild) return true;
+  const profile = buildProfileFromReportRow_(row || []);
+  const parent = String(profile.parentName || '').trim().toLocaleLowerCase('ru');
+  const child = String(profile.childName || '').trim().toLocaleLowerCase('ru');
+  return (!expectedParent || parent === expectedParent) && (!expectedChild || child === expectedChild);
+}
+
+function deleteReportChildByPhoneCore_(phoneRaw, expectedProfileRaw) {
   try {
-    requireTutorSession_(tutorTokenRaw);
     const phone10 = last10_(phoneRaw);
-    if (!phone10) return { ok: false, message: 'Не удалось определить номер родителя.' };
+    if (!phone10) return { ok:false, message:'Не удалось определить номер родителя.' };
 
     return withChatWriteLock_(function() {
       const sh = getDataSheet_();
       const lastRow = sh ? sh.getLastRow() : 0;
-
       const values = lastRow >= 2
         ? sh.getRange(2, 1, lastRow - 1, 4).getValues()
         : [];
       const rowNumbers = [];
 
-      values.forEach((row, index) => {
+      values.forEach(function(row, index) {
         if (last10_(row[0]) === phone10) rowNumbers.push(index + 2);
       });
+
+      if (rowNumbers.length && expectedProfileRaw) {
+        const identityStillMatches = rowNumbers.some(function(rowNumber) {
+          return deletionProfileMatchesExpected_(values[rowNumber - 2], expectedProfileRaw);
+        });
+        if (!identityStillMatches) {
+          return {
+            ok:false,
+            code:'RECORD_CHANGED',
+            message:'Данные ребёнка изменились после запроса удаления; автоматическое удаление остановлено.'
+          };
+        }
+      }
 
       const rawDeletedTargets = rowNumbers
         .map(function(rowNumber) { return rawReportChildTargetFromReportRow_(values[rowNumber - 2]); })
@@ -3182,32 +3205,23 @@ function deleteReportChildByPhone(phoneRaw, tutorTokenRaw) {
       let rawCleanup = null;
       const cleanupErrors = [];
 
-      // First close the production chat. If Cloudflare is temporarily
-      // unavailable, keep REPORTS intact so the whole operation can be retried.
       try {
         d1Cleanup = deleteD1ProfileWithS3Purge_(phone10);
       } catch (e) {
         return {
-          ok: false,
-          message: 'Не удалось закрыть чат родителя. Попробуйте удалить ещё раз: ' + String(e && e.message || e)
+          ok:false,
+          message:'Не удалось закрыть чат родителя. Удаление будет повторено: ' + String(e && e.message || e)
         };
       }
 
-      // The D1 profile is closed before REPORTS is changed, but raw report
-      // edits are prepared from the still-authoritative row above.  This keeps
-      // deletion from accidentally selecting a same-named child by first name.
       try {
         rawCleanup = applyRawReportCleanup_(rawCleanupPlan);
       } catch (e) {
-        // Do not leave a parent half-deleted after their production thread was
-        // closed.  Deleting REPORTS below will make the installed onChange
-        // trigger retry this exact cleanup from the saved pre-delete snapshot.
         const message = String(e && e.message || e);
         cleanupErrors.push('raw reports: ' + message);
         Logger.log('Raw report cleanup will retry after REPORTS deletion for ' + phone10 + ': ' + message);
       }
 
-      // REPORTS remains the access authority. D1 access is already closed.
       for (let i = rowNumbers.length - 1; i >= 0; i -= 1) {
         sh.deleteRow(rowNumbers[i]);
       }
@@ -3218,62 +3232,70 @@ function deleteReportChildByPhone(phoneRaw, tutorTokenRaw) {
         } catch (e) {
           const message = String(e && e.message || e);
           cleanupErrors.push(label + ': ' + message);
-          Logger.log(
-            'Cleanup after parent deletion failed [' +
-            label + '] for ' + phone10 + ': ' + message
-          );
+          Logger.log('Cleanup after parent deletion failed [' + label + '] for ' + phone10 + ': ' + message);
           return null;
         }
       }
 
-      // Legacy Sheets chat.
-      cleanup = bestEffortDeleteCleanup_(
-        'legacy chat',
-        function() { return purgeLegacyChatMessagesForPhone_(phone10); }
-      );
-
-      bestEffortDeleteCleanup_(
-        'report inactivity state',
-        function() { return removeReportInactivityState_(phone10); }
-      );
-
-      bestEffortDeleteCleanup_(
-        'educator pin',
-        function() { return removeEducatorChatPin_(phone10); }
-      );
-
-      // purgeInactiveChatMessages_ already rebuilds the legacy index when
-      // it deletes rows. This extra rebuild is only a safety cleanup and
-      // must never turn a successful profile deletion into a failure.
-      bestEffortDeleteCleanup_(
-        'chat index',
-        function() { return rebuildChatIndex_(); }
-      );
-
-      bestEffortDeleteCleanup_(
-        'chat cache',
-        function() { return clearGetChatMessagesCache(); }
-      );
-
-      bestEffortDeleteCleanup_(
-        'parent contact',
-        function() { return removeMedsiParentContactBestEffort_(phone10); }
-      );
+      cleanup = bestEffortDeleteCleanup_('legacy chat', function() {
+        return purgeLegacyChatMessagesForPhone_(phone10);
+      });
+      bestEffortDeleteCleanup_('report inactivity state', function() {
+        return removeReportInactivityState_(phone10);
+      });
+      bestEffortDeleteCleanup_('educator pin', function() {
+        return removeEducatorChatPin_(phone10);
+      });
+      bestEffortDeleteCleanup_('chat index', function() {
+        return rebuildChatIndex_();
+      });
+      bestEffortDeleteCleanup_('chat cache', function() {
+        return clearGetChatMessagesCache();
+      });
+      bestEffortDeleteCleanup_('parent contact', function() {
+        return removeMedsiParentContactBestEffort_(phone10);
+      });
 
       return {
-        ok: true,
-        alreadyDeleted: rowNumbers.length === 0,
-        deletedReportRows: rowNumbers.length,
-        deletedRawReportBlocks: Number(rawCleanup && rawCleanup.removedBlocks || 0),
-        deletedChatRows: Number(cleanup && cleanup.deletedRows || 0),
-        deletedD1Profiles: Number(d1Cleanup && d1Cleanup.deleted && 1 || 0),
-        cleanupComplete: cleanupErrors.length === 0,
-        cleanupErrors: cleanupErrors
+        ok:true,
+        alreadyDeleted:rowNumbers.length === 0,
+        deletedReportRows:rowNumbers.length,
+        deletedRawReportBlocks:Number(rawCleanup && rawCleanup.removedBlocks || 0),
+        deletedChatRows:Number(cleanup && cleanup.deletedRows || 0),
+        deletedD1Profiles:Number(d1Cleanup && d1Cleanup.deleted && 1 || 0),
+        cleanupComplete:cleanupErrors.length === 0,
+        cleanupErrors:cleanupErrors
       };
     });
   } catch (e) {
-    return { ok: false, message: 'Не удалось удалить ребёнка: ' + (e.message || e) };
+    return { ok:false, message:'Не удалось удалить ребёнка: ' + (e.message || e) };
   }
+}
+
+function deleteReportChildByPhone(phoneRaw, tutorTokenRaw) {
+  try {
+    requireTutorSession_(tutorTokenRaw);
+  } catch (e) {
+    return { ok:false, message:'Не удалось удалить ребёнка: ' + (e.message || e) };
+  }
+  return deleteReportChildByPhoneCore_(phoneRaw, null);
+}
+
+function processParentDeletionFromCloudflare_(paramRaw) {
+  const param = paramRaw || {};
+  const operationId = String(param.operationId || '').trim();
+  if (!/^delete_[A-Za-z0-9_-]{12,115}$/.test(operationId)) {
+    return { ok:false, message:'Некорректный идентификатор удаления.' };
+  }
+  const result = deleteReportChildByPhoneCore_(param.phone, {
+    parentName:String(param.parentName || '').trim(),
+    childName:String(param.childName || '').trim()
+  });
+  if (!result || result.ok !== true) return result || { ok:false, message:'Удаление не завершено.' };
+  return Object.assign({}, result, {
+    operationId:operationId,
+    processing:false
+  });
 }
 
 /**

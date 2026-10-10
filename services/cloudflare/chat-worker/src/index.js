@@ -179,6 +179,11 @@ function registrationId(value) {
   return /^reg_[A-Za-z0-9_-]{16,115}$/.test(id) ? id : '';
 }
 
+function parentDeletionId(value) {
+  const id = String(value || '').trim();
+  return /^delete_[A-Za-z0-9_-]{12,115}$/.test(id) ? id : '';
+}
+
 function parentAccessRequestId(value) {
   const id = String(value || '').trim();
   return /^auth_[A-Za-z0-9_-]{16,115}$/.test(id) ? id : '';
@@ -232,6 +237,20 @@ async function registerParent(request, env) {
     return json({ ok: false, message: 'Заполните имя родителя, имя ребёнка и корректный телефон.' }, 400);
   }
   if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис регистрации временно недоступен.' }, 503);
+
+  const pendingDeletion = await env.CHAT_DB.prepare(`
+    SELECT operation_id
+    FROM parent_deletion_queue
+    WHERE phone10 = ? AND status IN ('pending','retry','processing')
+    LIMIT 1
+  `).bind(phone).first();
+  if (pendingDeletion) {
+    return json({
+      ok:false,
+      code:'DELETION_PENDING',
+      message:'Предыдущее удаление этого профиля ещё завершается. Попробуйте зарегистрироваться чуть позже.'
+    }, 409);
+  }
 
   const priorAttempt = await env.CHAT_DB.prepare(
     'SELECT phone10, parent_name, child_name FROM parent_registration_attempts WHERE attempt_id = ?'
@@ -1097,6 +1116,179 @@ async function captureScheduledReportHistory(env) {
   return payload;
 }
 
+async function enqueueParentDeletion(request, env, auth, ctx) {
+  if (auth.role !== 'educator') return json({ ok:false, message:'Forbidden' }, 403);
+  const payload = await body(request) || {};
+  const phone = phone10(payload.phone);
+  const operationId = parentDeletionId(payload.operationId);
+  if (!phone || !operationId) {
+    return json({ ok:false, message:'Некорректные данные удаления.' }, 400);
+  }
+
+  const byOperation = await env.CHAT_DB.prepare(`
+    SELECT operation_id, phone10, status
+    FROM parent_deletion_queue
+    WHERE operation_id = ?
+  `).bind(operationId).first();
+  if (byOperation) {
+    if (String(byOperation.phone10) !== phone) {
+      return json({ ok:false, message:'Этот идентификатор удаления уже использован для другого профиля.' }, 409);
+    }
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(drainParentDeletionQueue(env));
+    return json({ ok:true, accepted:true, operationId, status:byOperation.status, duplicate:true });
+  }
+
+  const alreadyDeleting = await env.CHAT_DB.prepare(`
+    SELECT operation_id, status
+    FROM parent_deletion_queue
+    WHERE phone10 = ? AND status IN ('pending','retry','processing')
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(phone).first();
+  if (alreadyDeleting) {
+    return json({
+      ok:true,
+      accepted:true,
+      operationId:alreadyDeleting.operation_id,
+      status:alreadyDeleting.status,
+      duplicate:true
+    });
+  }
+
+  const profile = await env.CHAT_DB.prepare(`
+    SELECT phone10, parent_name, child_name
+    FROM chat_profiles
+    WHERE phone10 = ?
+  `).bind(phone).first();
+  if (!profile) {
+    return json({ ok:false, code:'PROFILE_NOT_FOUND', message:'Ребёнок уже удалён.' }, 404);
+  }
+
+  const now = Date.now();
+  await env.CHAT_DB.batch([
+    env.CHAT_DB.prepare(`
+      INSERT INTO parent_deletion_queue
+        (operation_id, phone10, parent_name, child_name, status, attempts, last_error, result_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'pending', 0, '', '', ?, ?)
+    `).bind(operationId, phone, String(profile.parent_name || ''), String(profile.child_name || ''), now, now),
+    // Removing chat_profiles is the logical delete. Parent access and educator
+    // lists close immediately, while messages stay until background cleanup.
+    env.CHAT_DB.prepare('DELETE FROM chat_profiles WHERE phone10 = ?').bind(phone),
+    env.CHAT_DB.prepare('DELETE FROM chat_pins WHERE phone10 = ?').bind(phone),
+    env.CHAT_DB.prepare('DELETE FROM report_current WHERE phone10 = ?').bind(phone),
+    env.CHAT_DB.prepare('DELETE FROM legacy_parent_access WHERE phone10 = ?').bind(phone),
+    env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(phone),
+    env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone),
+    env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(now, phone)
+  ]);
+
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(drainParentDeletionQueue(env));
+  return json({ ok:true, accepted:true, operationId, status:'pending' });
+}
+
+async function getParentDeletionStatus(env, auth, operationIdRaw) {
+  if (auth.role !== 'educator') return json({ ok:false, message:'Forbidden' }, 403);
+  const operationId = parentDeletionId(operationIdRaw);
+  if (!operationId) return json({ ok:false, message:'Некорректный идентификатор удаления.' }, 400);
+  const row = await env.CHAT_DB.prepare(`
+    SELECT operation_id, phone10, status, attempts, last_error, result_json, updated_at
+    FROM parent_deletion_queue
+    WHERE operation_id = ?
+  `).bind(operationId).first();
+  if (!row) return json({ ok:true, status:'not_found', operationId });
+  let result = null;
+  try { result = row.result_json ? JSON.parse(row.result_json) : null; } catch (_) {}
+  return json({
+    ok:true,
+    operationId:row.operation_id,
+    phone:row.phone10,
+    status:row.status,
+    attempts:Number(row.attempts || 0),
+    message:row.last_error || '',
+    result,
+    updatedAt:Number(row.updated_at || 0)
+  });
+}
+
+async function drainParentDeletionQueue(env) {
+  if (!env.APP_SCRIPT_URL || !env.CHAT_ADMIN_TOKEN) {
+    return { ok:false, message:'Parent deletion queue is not configured' };
+  }
+
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  await env.CHAT_DB.prepare(`
+    DELETE FROM parent_deletion_queue
+    WHERE status = 'completed' AND updated_at < ?
+  `).bind(cutoff).run();
+
+  const staleProcessing = Date.now() - 10 * 60 * 1000;
+  await env.CHAT_DB.prepare(`
+    UPDATE parent_deletion_queue
+    SET status='retry', last_error='Повтор после прерванной обработки', updated_at=?
+    WHERE status='processing' AND updated_at < ?
+  `).bind(Date.now(), staleProcessing).run();
+
+  const rows = await env.CHAT_DB.prepare(`
+    SELECT operation_id, phone10, parent_name, child_name, attempts, created_at
+    FROM parent_deletion_queue
+    WHERE status IN ('pending','retry')
+    ORDER BY created_at, operation_id
+    LIMIT 3
+  `).all();
+
+  const results = [];
+  for (const row of (rows.results || [])) {
+    const claimed = await env.CHAT_DB.prepare(`
+      UPDATE parent_deletion_queue
+      SET status='processing', attempts=attempts+1, updated_at=?
+      WHERE operation_id=? AND status IN ('pending','retry')
+    `).bind(Date.now(), row.operation_id).run();
+    if (!claimed.meta || !claimed.meta.changes) continue;
+
+    try {
+      const response = await fetch(env.APP_SCRIPT_URL, {
+        method:'POST',
+        headers:{'content-type':'text/plain;charset=utf-8'},
+        signal:AbortSignal.timeout(25000),
+        body:JSON.stringify({
+          action:'parentDeletionQueueProcess',
+          authorization:env.CHAT_ADMIN_TOKEN,
+          param:{
+            operationId:row.operation_id,
+            phone:row.phone10,
+            parentName:row.parent_name,
+            childName:row.child_name,
+            submittedAt:Number(row.created_at || 0)
+          }
+        })
+      });
+      const payload = await response.json().catch(() => null);
+      const result = payload && payload.result ? payload.result : payload;
+      if (!response.ok || !result || result.ok !== true ||
+          (result.operationId && result.operationId !== row.operation_id)) {
+        throw new Error(result && result.message || `Apps Script did not confirm parent deletion (HTTP ${response.status})`);
+      }
+      await env.CHAT_DB.prepare(`
+        UPDATE parent_deletion_queue
+        SET status='completed', result_json=?, last_error='', updated_at=?
+        WHERE operation_id=?
+      `).bind(JSON.stringify(result), Date.now(), row.operation_id).run();
+      results.push({ operationId:row.operation_id, status:'completed' });
+    } catch (error) {
+      const attempts = Number(row.attempts || 0) + 1;
+      const next = attempts >= 12 ? 'failed' : 'retry';
+      await env.CHAT_DB.prepare(`
+        UPDATE parent_deletion_queue
+        SET status=?, last_error=?, updated_at=?
+        WHERE operation_id=?
+      `).bind(next, String(error && error.message || error).slice(0, 500), Date.now(), row.operation_id).run();
+      results.push({ operationId:row.operation_id, status:next });
+      break;
+    }
+  }
+  return { ok:true, results };
+}
+
 async function enqueueReportSubmission(request, env, auth, ctx) {
   if (auth.role !== 'educator') return json({ ok: false, message: 'Forbidden' }, 403);
   const payload = await body(request) || {};
@@ -1197,10 +1389,16 @@ async function reconcileProfiles(request, env) {
   const payload = await body(request) || {};
   const profiles = Array.isArray(payload.profiles) ? payload.profiles.slice(0, 500) : [];
   const full = payload.full === true;
+  const deletingRows = await env.CHAT_DB.prepare(`
+    SELECT phone10
+    FROM parent_deletion_queue
+    WHERE status IN ('pending','retry','processing')
+  `).all();
+  const deleting = new Set((deletingRows.results || []).map(row => String(row.phone10 || '')).filter(Boolean));
   const active = new Map();
   profiles.forEach(item => {
     const phone = phone10(item && item.phone);
-    if (!phone) return;
+    if (!phone || deleting.has(phone)) return;
     active.set(phone, {
       parentName: String(item.parentName || '').trim().slice(0, 300),
       childName: String(item.childName || '').trim().slice(0, 300),
@@ -1671,6 +1869,7 @@ export default {
   async scheduled(controller, env, ctx) {
     if (controller.cron !== '* * * * *') ctx.waitUntil(captureScheduledReportHistory(env));
     ctx.waitUntil(drainReportQueue(env));
+    ctx.waitUntil(drainParentDeletionQueue(env));
   },
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return json({ ok: true });
@@ -1761,6 +1960,12 @@ export default {
     }
     if (request.method === 'GET' && url.pathname === '/lab/report-submit/status') {
       return getReportSubmissionQueueStatus(env, auth, url.searchParams.get('submissionId'));
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-delete') {
+      return enqueueParentDeletion(request, env, auth, ctx);
+    }
+    if (request.method === 'GET' && url.pathname === '/lab/parent-delete/status') {
+      return getParentDeletionStatus(env, auth, url.searchParams.get('operationId'));
     }
     if (request.method === 'GET' && url.pathname === '/lab/profile') {
       return getOwnProfile(env, auth);

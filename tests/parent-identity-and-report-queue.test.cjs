@@ -155,7 +155,7 @@ test('surname and relationship corrections preserve the chat and legacy login id
   db.prepare('INSERT INTO chat_profiles VALUES(?,?,?,?,?)').run('9990000001','Анна','Никита Иванова','Мама','');
   db.prepare('INSERT INTO legacy_parent_access VALUES(?)').run('9990000001');
   db.prepare('INSERT INTO chat_messages VALUES(?,?)').run('9990000001','Synthetic history');
-  const wrap=sql=>({args:[],bind(...args){this.args=args;return this},run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}});
+  const wrap=sql=>({args:[],bind(...args){this.args=args;return this},all:async()=>({results:[]}),run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}});
   const context={Response,console};vm.createContext(context);vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {','const worker = {'),context);
   try{
     const env={CHAT_DB:{prepare:wrap,batch:async statements=>Promise.all(statements.map(s=>s.run()))}};
@@ -322,4 +322,80 @@ test('persisted receipt survives browser closure and independent server retries'
     assert.equal(oversized.status,400);
     assert.equal(db.prepare('SELECT count(*) AS n FROM report_submission_queue').get().n,1);
   }finally{db.close();}
+});
+
+
+test('Cloudflare-first deletion closes the profile immediately and persists a durable tombstone', async () => {
+  const {DatabaseSync}=require('node:sqlite');
+  const db=new DatabaseSync(':memory:');
+  db.exec(read('services/cloudflare/chat-worker/migrations/0001_schema.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0002_chat_feature_parity.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0003_report_snapshots.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0004_current_reports.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0005_report_submission_queue.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0006_message_idempotency.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0007_parent_registration.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0008_legacy_parent_access.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0009_report_push_dedup.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0010_report_snapshot_psychology.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0011_parent_relationship.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0012_parent_deletion_queue.sql'));
+  db.prepare('INSERT INTO chat_profiles(phone10,parent_name,child_name,relationship,child_genitive) VALUES(?,?,?,?,?)')
+    .run('9990000001','Анна','Никита Иванов','Мама','Никиты Иванова');
+  db.prepare("INSERT INTO chat_messages(message_key,phone10,side,type,text,created_at,status,read_by_parent,read_by_educator) VALUES(?,?,?,?,?,?,?,?,?)")
+    .run('m1','9990000001','parent','text','Synthetic',1,'active',1,0);
+
+  const wrap=sql=>({args:[],bind(...args){this.args=args;return this},
+    first:async function(){return db.prepare(sql).get(...this.args)},
+    all:async function(){return {results:db.prepare(sql).all(...this.args)}},
+    run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}});
+  const context={Request,Response,AbortSignal,console,fetch:async()=>{throw new Error('Apps Script must not delay receipt')}};
+  vm.createContext(context);
+  vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {','const worker = {'),context);
+  const env={CHAT_DB:{prepare:wrap,batch:async statements=>Promise.all(statements.map(s=>s.run()))}};
+  try{
+    const request=new Request('https://example.invalid/lab/parent-delete',{method:'POST',body:JSON.stringify({
+      phone:'89990000001',operationId:'delete_synthetic123456'
+    })});
+    const receipt=await (await context.enqueueParentDeletion(request,env,{role:'educator'},null)).json();
+    assert.equal(receipt.accepted,true);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM chat_profiles').get().n,0);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM chat_messages').get().n,1);
+    assert.equal(db.prepare("SELECT status FROM parent_deletion_queue WHERE phone10='9990000001'").get().status,'pending');
+  }finally{db.close();}
+});
+
+test('REPORTS reconcile cannot resurrect a profile while deletion is pending', async () => {
+  const {DatabaseSync}=require('node:sqlite');
+  const db=new DatabaseSync(':memory:');
+  db.exec('CREATE TABLE chat_profiles(phone10 TEXT PRIMARY KEY,parent_name TEXT,child_name TEXT,relationship TEXT,child_genitive TEXT);');
+  db.exec('CREATE TABLE legacy_parent_access(phone10 TEXT PRIMARY KEY,parent_name TEXT,child_name TEXT,captured_at INTEGER);');
+  db.exec('CREATE TABLE chat_messages(phone10 TEXT); CREATE TABLE chat_pins(phone10 TEXT); CREATE TABLE report_snapshots(phone10 TEXT); CREATE TABLE report_current(phone10 TEXT); CREATE TABLE parent_access_requests(phone10 TEXT,status TEXT,decision TEXT,updated_at INTEGER); CREATE TABLE parent_registration_outbox(phone10 TEXT); CREATE TABLE parent_registration_attempts(phone10 TEXT);');
+  db.exec(read('services/cloudflare/chat-worker/migrations/0012_parent_deletion_queue.sql'));
+  db.prepare("INSERT INTO parent_deletion_queue(operation_id,phone10,parent_name,child_name,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)")
+    .run('delete_synthetic123456','9990000001','Анна','Никита Иванов','pending',1,1);
+  const wrap=sql=>({args:[],bind(...args){this.args=args;return this},
+    first:async function(){return db.prepare(sql).get(...this.args)},
+    all:async function(){return {results:db.prepare(sql).all(...this.args)}},
+    run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}});
+  const context={Request,Response,console};
+  vm.createContext(context);vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {','const worker = {'),context);
+  try{
+    const env={CHAT_DB:{prepare:wrap,batch:async statements=>Promise.all(statements.map(s=>s.run()))}};
+    const response=await context.reconcileProfiles(new Request('https://example.invalid',{method:'POST',body:JSON.stringify({
+      profiles:[{phone:'9990000001',parentName:'Анна',childName:'Никита Иванов'}],full:false
+    })}),env);
+    assert.equal((await response.json()).ok,true);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM chat_profiles').get().n,0);
+  }finally{db.close();}
+});
+
+test('educator frontend no longer waits for Apps Script to delete a child', () => {
+  const source=read('tutors/full-web.js');
+  const start=source.indexOf('  async function deleteParent(row,card)');
+  const end=source.indexOf('  async function openPhones()',start);
+  const fn=source.slice(start,end);
+  assert.match(fn,/MedsiOverlayTransport\.parentDelete/);
+  assert.doesNotMatch(fn,/deleteReportChildByPhone/);
+  assert.ok(fn.indexOf('removePhoneCardOptimistically') < fn.indexOf('await ensureD1Fresh'));
 });
