@@ -14,6 +14,7 @@
   let authBusy=false;
   let authVerifyInFlight=false;
   let authRetryTimer=null;
+  let reportAttempt=null;
 
   function safeGet(key){try{return localStorage.getItem(key)||''}catch(_){return''}}
   function safeSet(key,val){try{localStorage.setItem(key,val)}catch(_){}}
@@ -159,89 +160,33 @@
     $('title').textContent=title||'Медси Бот';$('meta').textContent=meta||'Что хотите сделать?';animateScreen($(name));window.scrollTo(0,0)
   }
   function showMenu(){setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge();scheduleD1Warm();if(window.MedsiAccessRequests)MedsiAccessRequests.refresh()}
-  function openReport(type){$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Психотерапия','Вставьте отчёт по психотерапии.'];setScreen('screenForm',spec[0],spec[1])}
-  async function submitReportPayload(type,text,submissionId,onProgress=()=>{}) {
+  function openReport(type){scheduleD1Warm();$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Психотерапия','Вставьте отчёт по психотерапии.'];setScreen('screenForm',spec[0],spec[1])}
+  async function submitReportPayload(type,text,submissionId) {
     if (!tutorToken || !['morning','evening','psychology'].includes(type) || !String(text).trim()) throw new Error('Некорректный отчёт.');
-      const validator=window.MedsiReportValidation;
-      if(!validator)throw new Error('Не загрузилась проверка отчёта. Обновите страницу и попробуйте ещё раз.');
-      const validation=validator.validate(type,text);
-      if(!validation.ok)throw Object.assign(new Error(validation.message),{code:validation.code});
-      // Local format checks finish before any write. The outbox confirms
-      // receipt without waiting for Apps Script cleanup and distribution.
-      if(d1Session&&window.MedsiOverlayTransport&&MedsiOverlayTransport.reportSubmit){
-        try{
-          const queued=await MedsiOverlayTransport.reportSubmit(d1Session,{reportType:type,text,submissionId});
-          if(queued&&queued.accepted){return {accepted:true}}
-        }catch(_){ /* fallback to the existing idempotent Apps Script route */ }
-      }
-      let acceptanceStopped=false;
-      const request=callApi('appendReport',[{reportType:type,text,submissionId},tutorToken],30000)
-        .then(value=>({source:'request',value}),error=>({source:'request',error}));
-      const acceptance=waitForReportAcceptance(submissionId,()=>acceptanceStopped)
-        .then(value=>({source:'acceptance',value}),error=>({source:'acceptance',error}));
-      const first=await Promise.race([request,acceptance]);
-      if(first.source==='acceptance'&&first.value){return {accepted:true}}
-      let res=null;
-      if(first.source==='request'){
-        acceptanceStopped=true;
-        if(first.error&&String(first.error&&first.error.message||first.error)!=='TIMEOUT')throw first.error;
-        res=first.value||null;
-      }else{
-        const completedRequest=await request;
-        if(completedRequest.error&&String(completedRequest.error&&completedRequest.error.message||completedRequest.error)!=='TIMEOUT')throw completedRequest.error;
-        res=completedRequest.value||null;
-      }
-      if(res&&res.ok&&!res.processing){return {accepted:true}}
-      if(res&&!res.ok)throw new Error(res.message||'Не удалось отправить отчёт.');
-      onProgress('Проверяем результат…');
-      res=await recoverReportSubmission(type,text,submissionId);
-      if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось подтвердить отправку отчёта.');
-      return {accepted:true};
+    const validator=window.MedsiReportValidation;
+    if(!validator)throw new Error('Не загрузилась проверка отчёта. Обновите страницу и попробуйте ещё раз.');
+    const validation=validator.validate(type,text);
+    if(!validation.ok)throw Object.assign(new Error(validation.message),{code:validation.code});
+    if(!window.MedsiOverlayTransport||!MedsiOverlayTransport.reportSubmit)throw new Error('Не загрузилась отправка отчёта. Обновите страницу и попробуйте ещё раз.');
+    const session=await ensureD1Fresh();
+    // A receipt confirms durable server storage. Apps Script runs independently
+    // through the Worker and its scheduled retries after the browser closes.
+    const queued=await MedsiOverlayTransport.reportSubmit(session,{reportType:type,text,submissionId});
+    if(!queued||queued.ok!==true||queued.accepted!==true||queued.submissionId!==submissionId)throw new Error('Не удалось подтвердить сохранение отчёта. Попробуйте отправить ещё раз.');
+    return {accepted:true,submissionId};
   }
   async function sendReport(){
     const type=$('btnSend').dataset.type,text=$('text').value,btn=$('btnSend');
+    if(btn.disabled)return;
     $('reportError').classList.add('hidden');if(!text.trim()){showReportError('Пустой текст отчёта.');return}
+    // An uncertain network result must reuse the same ID on another attempt.
+    if(!reportAttempt||reportAttempt.type!==type||reportAttempt.text!==text)reportAttempt={type,text,id:reportSubmissionId()};
     btn.disabled=true;btn.textContent='Отправляем…';
-    try { await submitReportPayload(type,text,reportSubmissionId(),message=>{btn.textContent=message}); showReportSent(); }
-    catch(e){const message=String(e&&e.message||e);showReportError(message==='TIMEOUT'?'Сервер отвечает дольше обычного. Отчёт не нужно отправлять повторно — откройте эту форму через минуту и проверьте результат.':message)}
+    try { await submitReportPayload(type,text,reportAttempt.id); reportAttempt=null;showReportSent(); }
+    catch(e){const message=String(e&&e.message||e);showReportError(['TIMEOUT','NETWORK','BAD_RESPONSE'].includes(e&&e.code)?'Связь прервалась. Нажмите «Отправить» ещё раз — тот же отчёт не продублируется.':message)}
     finally{btn.disabled=false;btn.textContent='Отправить'}
   }
-  function showReportSent(){$('doneText').textContent='Готово.';setScreen('screenDone','Готово','Отчёт отправлен.')}
-  function reportRecoveryDelay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
-  async function waitForReportAcceptance(submissionId,shouldStop){
-    const deadline=Date.now()+20000;
-    await reportRecoveryDelay(700);
-    while(Date.now()<deadline&&!(shouldStop&&shouldStop())){
-      try{
-        const status=await callApi('getReportSubmissionStatus',[submissionId,tutorToken],7000);
-        if(status&&(status.status==='saved'||status.status==='completed'))return status;
-        if(status&&status.status==='failed')throw new Error(status.message||'Не удалось отправить отчёт.');
-      }catch(e){if(String(e&&e.message||e)!=='TIMEOUT')throw e}
-      await reportRecoveryDelay(700);
-    }
-    return null;
-  }
-  async function recoverReportSubmission(type,text,submissionId){
-    const deadline=Date.now()+120000;let retried=false;let notFoundCount=0;
-    while(Date.now()<deadline){
-      await reportRecoveryDelay(2200);
-      let status=null;
-      try{status=await callApi('getReportSubmissionStatus',[submissionId,tutorToken],12000)}catch(e){if(String(e&&e.message||e)!=='TIMEOUT')throw e;continue}
-      if(status&&(status.status==='saved'||status.status==='completed'))return status.result||{ok:true};
-      if(status&&status.status==='failed')throw new Error(status.message||'Не удалось отправить отчёт.');
-      if(status&&status.status==='not_found'){
-        notFoundCount++;
-        if(notFoundCount>=2&&!retried){
-          retried=true;
-          let retry=null;
-          try{retry=await callApi('appendReport',[{reportType:type,text,submissionId},tutorToken],30000)}catch(e){if(String(e&&e.message||e)!=='TIMEOUT')throw e}
-          if(retry&&retry.ok&&!retry.processing)return retry;
-          if(retry&&!retry.ok)throw new Error(retry.message||'Не удалось отправить отчёт.');
-        }
-      }
-    }
-    throw new Error('Сервер отвечает дольше обычного. Отчёт продолжает обрабатываться; не отправляйте его повторно.');
-  }
+  function showReportSent(){$('doneText').textContent='Готово.';setScreen('screenDone','Готово','Отчёт сохранён. Можно закрыть приложение.')}
   function showReportError(text){const el=$('reportError');el.textContent=text;el.classList.remove('hidden')}
 
   async function prewarmParents(){

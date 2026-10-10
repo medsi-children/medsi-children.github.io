@@ -1102,17 +1102,20 @@ async function enqueueReportSubmission(request, env, auth, ctx) {
   const payload = await body(request) || {};
   const submissionId = String(payload.submissionId || '').trim().slice(0, 120);
   const reportType = String(payload.reportType || '').trim().toLowerCase();
-  const reportText = String(payload.text || '').trim().slice(0, 50000);
+  const reportText = String(payload.text || '').trim();
+  if (reportText.length > 50000) return json({ ok: false, message: 'Отчёт слишком большой: максимум 50 000 символов.' }, 400);
   if (!/^report_[A-Za-z0-9_-]{8,120}$/.test(submissionId)) return json({ ok: false, message: 'Некорректный идентификатор отправки.' }, 400);
   if (!['morning', 'evening', 'psychology'].includes(reportType) || !reportText) return json({ ok: false, message: 'Некорректные данные отчёта.' }, 400);
   const now = Date.now();
   await env.CHAT_DB.prepare(`
     INSERT INTO report_submission_queue (submission_id, report_type, report_text, status, attempts, last_error, result_json, created_at, updated_at)
     VALUES (?, ?, ?, 'pending', 0, '', '', ?, ?)
-    ON CONFLICT(submission_id) DO UPDATE SET updated_at = excluded.updated_at
+    ON CONFLICT(submission_id) DO NOTHING
   `).bind(submissionId, reportType, reportText, now, now).run();
+  const saved = await env.CHAT_DB.prepare('SELECT report_type, report_text, status FROM report_submission_queue WHERE submission_id = ?').bind(submissionId).first();
+  if (!saved || saved.report_type !== reportType || saved.report_text !== reportText) return json({ ok: false, message: 'Этот идентификатор уже использован для другого отчёта.' }, 409);
   if (ctx) ctx.waitUntil(drainReportQueue(env));
-  return json({ ok: true, accepted: true, submissionId, status: 'pending' });
+  return json({ ok: true, accepted: true, submissionId, status: saved.status });
 }
 
 async function getReportSubmissionQueueStatus(env, auth, submissionId) {

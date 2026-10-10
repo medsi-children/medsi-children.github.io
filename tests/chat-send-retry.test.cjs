@@ -94,3 +94,17 @@ test('other writes remain single-attempt operations', async () => {
   await assert.rejects(chat.markRead({ token: 'session' }, 'parent', '9991112233'));
   assert.equal(calls, 1);
 });
+
+test('a lost report receipt retries the identical report and submission id', async () => {
+  const requests=[];
+  const chat=transport(async(_url,options)=>{
+    const payload=JSON.parse(options.body);requests.push(payload);
+    if(requests.length===1)throw new TypeError('VPN disconnected after save');
+    return {ok:true,status:200,json:async()=>({ok:true,accepted:true,submissionId:payload.submissionId})};
+  });
+  const payload={reportType:'morning',text:'Лена — Синтетический текст.',submissionId:'report_synthetic_retry'};
+  const receipt=await chat.reportSubmit({token:'session'},payload);
+  assert.equal(receipt.submissionId,payload.submissionId);
+  assert.equal(requests.length,2);
+  assert.deepEqual(requests[0],requests[1]);
+});

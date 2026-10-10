@@ -138,7 +138,7 @@ test('report checks run locally before queue acceptance and preserve the submitt
   const source=read('tutors/full-web.js');
   const fn=source.slice(source.indexOf('  async function submitReportPayload('),source.indexOf('  async function sendReport('));
   const queued=[];
-  const context={tutorToken:'synthetic',d1Session:{token:'synthetic'},window:{MedsiOverlayTransport:true,MedsiReportValidation:require('../tutors/report-validation.js')},MedsiOverlayTransport:{reportSubmit:async(_session,payload)=>{queued.push(payload);return {accepted:true}}},callApi:()=>{throw new Error('Must not wait for Apps Script')},waitForReportAcceptance:()=>{throw new Error('Must not poll Apps Script')}};
+  const context={ensureD1Fresh:async()=>({token:'synthetic'}),tutorToken:'synthetic',d1Session:{token:'synthetic'},window:{MedsiOverlayTransport:true,MedsiReportValidation:require('../tutors/report-validation.js')},MedsiOverlayTransport:{reportSubmit:async(_session,payload)=>{queued.push(payload);return {ok:true,accepted:true,submissionId:payload.submissionId}}},callApi:()=>{throw new Error('Must not wait for Apps Script')},waitForReportAcceptance:()=>{throw new Error('Must not poll Apps Script')}};
   vm.createContext(context);vm.runInContext(fn,context);
   await assert.rejects(context.submitReportPayload('morning','Для врачей:\nЛена — Синтетический текст.','report_synthetic'),/уберите раздел/i);
   await assert.rejects(context.submitReportPayload('morning','Лена — Первый текст.\nЛена — Второй текст.','report_synthetic'),/повторяется/);
@@ -277,4 +277,49 @@ test('deleting a namesake never merges their bare block into the explicit surviv
   assert.equal(x.buildSafeDistribution_('morning',bare,context).byRow[0],undefined);
   const duplicate=x.parseReportBlocks_('Артем И.: First synthetic.\nАртем И.: Second synthetic.',x.buildKnownBaseKeys_(children),context);
   assert.equal(x.buildSafeDistribution_('morning',duplicate,context).byRow[0],undefined);
+});
+
+test('persisted receipt survives browser closure and independent server retries',async()=>{
+  const {DatabaseSync}=require('node:sqlite');
+  const db=new DatabaseSync(':memory:');
+  db.exec(read('services/cloudflare/chat-worker/migrations/0005_report_submission_queue.sql'));
+  const env={CHAT_DB:{prepare:sql=>({args:[],bind(...args){this.args=args;return this},
+    first:async function(){return db.prepare(sql).get(...this.args)},
+    all:async function(){return {results:db.prepare(sql).all(...this.args)}},
+    run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}
+  })}};
+  const workerContext=fetch=>{
+    const context={Request,Response,AbortSignal,console,fetch};
+    vm.createContext(context);vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {','const worker = {'),context);
+    return context;
+  };
+  const payload={submissionId:'report_durable_synthetic',reportType:'morning',text:'Лена — Синтетический текст.'};
+  const request=param=>new Request('https://example.invalid/lab/report-submit',{method:'POST',body:JSON.stringify(param)});
+  try{
+    const firstWorker=workerContext(()=>{throw new Error('Apps Script must not delay storage');});
+    const receipt=await (await firstWorker.enqueueReportSubmission(request(payload),env,{role:'educator'},null)).json();
+    assert.equal(receipt.accepted,true);
+    assert.equal(db.prepare('SELECT report_text FROM report_submission_queue').get().report_text,payload.text);
+    // No frontend survives beyond this point. A new Worker sees persisted data.
+    env.APP_SCRIPT_URL='https://example.invalid/apps';env.CHAT_ADMIN_TOKEN='synthetic';
+    const attempts=[];
+    const restartedWorker=workerContext(async(_url,options)=>{
+      const param=JSON.parse(options.body).param;attempts.push(param);
+      if(attempts.length===1)throw new Error('Temporary outage');
+      return new Response(JSON.stringify({ok:true,submissionId:param.submissionId}));
+    });
+    await restartedWorker.drainReportQueue(env);
+    assert.equal(db.prepare('SELECT status FROM report_submission_queue').get().status,'retry');
+    await restartedWorker.drainReportQueue(env);
+    assert.equal(db.prepare('SELECT status FROM report_submission_queue').get().status,'completed');
+    assert.equal(attempts.length,2);
+    assert.ok(attempts.every(p=>p.submissionId===payload.submissionId&&p.text===payload.text));
+    await firstWorker.enqueueReportSubmission(request(payload),env,{role:'educator'},null);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM report_submission_queue').get().n,1);
+    const conflict=await firstWorker.enqueueReportSubmission(request({...payload,text:'Other text'}),env,{role:'educator'},null);
+    assert.equal(conflict.status,409);
+    const oversized=await firstWorker.enqueueReportSubmission(request({...payload,submissionId:'report_oversized_synthetic',text:'x'.repeat(50001)}),env,{role:'educator'},null);
+    assert.equal(oversized.status,400);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM report_submission_queue').get().n,1);
+  }finally{db.close();}
 });

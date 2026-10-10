@@ -114,7 +114,7 @@ test('report form keeps invalid text and shows success only after queue receipt'
   const received = new Promise(resolve => {release = resolve;});
   const queued = [];
   const transport = {chats:async()=>({chats:[]}), reportSubmit:async(_session,payload)=>{
-    queued.push(payload); await received; return {accepted:true};
+    queued.push(payload); await received; return {ok:true,accepted:true,submissionId:payload.submissionId};
   }};
   const storage = {
     medsi_tutor_session_v1:'synthetic-token',
@@ -143,36 +143,41 @@ test('report form keeps invalid text and shows success only after queue receipt'
   const sending = element('btnSend').handlers.click();
   assert.equal(context.document.body.dataset.screen, 'report-morning');
   assert.equal(element('btnSend').disabled, true);
+  await Promise.resolve();
   assert.equal(queued[0].text, valid);
   release(); await sending;
   assert.equal(context.document.body.dataset.screen, 'screenDone');
   assert.equal(element('btnSend').disabled, false);
 });
 
-test('an aborted Apps Script fallback checks the same submission instead of showing AbortError', async () => {
+test('queue failure never falls back to Apps Script or returns a success receipt', async () => {
   const source = fs.readFileSync(path.join(__dirname, '../tutors/full-web.js'), 'utf8');
-  const callApi = source.slice(source.indexOf('  async function callApi('), source.indexOf('  function setAuthError('));
   const submit = source.slice(source.indexOf('  async function submitReportPayload('), source.indexOf('  async function sendReport('));
-  let requests = 0;
-  const recovered = [];
+  const transport={reportSubmit:async()=>{throw Object.assign(new Error('Connection lost'),{code:'NETWORK'});}};
   const context = {
-    APP_BASE_URL:'https://example.invalid', tutorToken:'synthetic', d1Session:null,
-    window:{MedsiReportValidation:{validate}}, AbortController,
-    setTimeout:callback=>setTimeout(callback, 1), clearTimeout,
-    fetch:async(_url, options)=>{
-      requests++;
-      return new Promise((_resolve,reject)=>options.signal.addEventListener('abort',()=>{
-        reject(Object.assign(new Error('This operation was aborted'),{name:'AbortError'}));
-      }));
-    },
-    waitForReportAcceptance:async()=>null,
-    recoverReportSubmission:async(kind,text,id)=>{recovered.push({kind,text,id});return {ok:true};}
+    tutorToken:'synthetic', window:{MedsiReportValidation:{validate},MedsiOverlayTransport:transport},
+    MedsiOverlayTransport:transport, ensureD1Fresh:async()=>({token:'synthetic'}),
+    callApi:()=>{throw new Error('Unexpected Apps Script request');}
   };
-  vm.createContext(context);
-  vm.runInContext(callApi + submit, context);
-  const text = 'Лена — Основной текст.';
-  const result = await context.submitReportPayload('morning',text,'report_synthetic_timeout');
-  assert.equal(result.accepted, true);
-  assert.equal(requests, 1);
-  assert.deepEqual(recovered,[{kind:'morning',text,id:'report_synthetic_timeout'}]);
+  vm.createContext(context); vm.runInContext(submit, context);
+  await assert.rejects(context.submitReportPayload('morning','Лена — Основной текст.','report_synthetic_timeout'),/Connection lost/);
+  transport.reportSubmit=async()=>({ok:true,accepted:true,submissionId:'report_other'});
+  await assert.rejects(context.submitReportPayload('morning','Лена — Основной текст.','report_synthetic_timeout'),/подтвердить сохранение/);
+});
+
+test('manual retry reuses an uncertain submission id and preserves form text', async () => {
+  const source=fs.readFileSync(path.join(__dirname,'../tutors/full-web.js'),'utf8');
+  const send=source.slice(source.indexOf('  async function sendReport('),source.indexOf('  function showReportSent('));
+  const elements={btnSend:{dataset:{type:'morning'},disabled:false},text:{value:'Лена — Основной текст.'},reportError:{classList:{add(){}}}};
+  const ids=[];let errors=0,successes=0,nextId=0;
+  const context={$:id=>elements[id],reportAttempt:null,reportSubmissionId:()=>`report_synthetic_${++nextId}`,
+    submitReportPayload:async(_kind,_text,id)=>{ids.push(id);if(ids.length===1)throw Object.assign(new Error('Network failed'),{code:'NETWORK'});},
+    showReportError:()=>{errors++;},showReportSent:()=>{successes++;}};
+  vm.createContext(context);vm.runInContext(send,context);
+  await context.sendReport();
+  assert.equal(errors,1);assert.equal(successes,0);assert.equal(elements.text.value,'Лена — Основной текст.');
+  await context.sendReport();
+  assert.equal(ids[0],ids[1]);assert.equal(successes,1);
+  await context.sendReport();
+  assert.notEqual(ids[1],ids[2]);
 });
