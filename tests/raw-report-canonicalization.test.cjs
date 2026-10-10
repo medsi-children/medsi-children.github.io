@@ -22,6 +22,7 @@ function api() {
     }
   };
   vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../apps-script/medsi-bot/report-rules.js'), 'utf8'), context);
   vm.runInContext(source, context);
   return context;
 }
@@ -74,7 +75,7 @@ test('room number before a child header is removed without consuming the name se
   assert.equal(result.changed, true);
   assert.equal(
     x.stripRoomNumbers_('Лиза Ф.: В 17:00 обсуждали комнату 501: всё спокойно.'),
-    'Лиза Ф.: В 17:00 обсуждали комнату всё спокойно.'
+    'Лиза Ф.: В 17:00 обсуждали комнату 501: всё спокойно.'
   );
 });
 
@@ -118,7 +119,7 @@ test('a doctors section is rejected before child report cleanup, with or without
     ].join('\n');
     const prepared = x.prepareRawReportSourceText_('evening', raw);
     assert.equal(prepared.ok, false);
-    assert.match(prepared.message, /Уберите раздел «Для врачей»/);
+    assert.match(prepared.message, /уберите раздел «Для врачей»/i);
     assert.equal(prepared.text, raw);
   }
 });
@@ -130,7 +131,7 @@ test('two blocks for one child are rejected even with a bare name and no rooms',
   const prepared = x.prepareRawReportSourceText_('evening',
     'Лена — Первая запись.\nЛена — Вторая запись.');
   assert.equal(prepared.ok, false);
-  assert.match(prepared.message, /найдено два блока/);
+  assert.match(prepared.message, /повторяется/);
 });
 
 test('admissions are preamble when the doctors section has been removed', () => {
@@ -143,11 +144,11 @@ test('admissions are preamble when the doctors section has been removed', () => 
   assert.equal(prepared.text, 'Лена Т. — Основной текст.');
 });
 
-test('room numbers are removed wherever they appear without changing other numbers', () => {
+test('room numbers inside a child body are preserved', () => {
   const x = api();
   const raw = 'Лена — Комната 501: свободна. В 17:00 переход в 502 палату. Номер 1501 и число 3.501 остаются.';
   assert.equal(x.stripRoomNumbers_(raw),
-    'Лена — Комната свободна. В 17:00 переход в палату. Номер 1501 и число 3.501 остаются.');
+    raw);
   assert.equal(x.stripRoomNumbers_('503:\n  Лена — Текст.\nМаша — Текст.'),
     'Лена — Текст.\nМаша — Текст.');
 });
@@ -292,4 +293,71 @@ test('preamble trimming never starts from a bare child-name mention without a de
 
   const result = x.canonicalizeRawChildReport_(raw, { children:[lisa] });
   assert.equal(result.text, 'Лиза Ф. — Настоящий блок отчёта.');
+});
+
+test('room cleanup preserves multiline child content and removes only separate labels', () => {
+  const x=api();
+  const raw=[
+    '10.10.2026 Утро',
+    'Поступление: 508 Новый ребёнок, 16 лет',
+    '501: Лена — Обсуждала комнату 502: всё спокойно.',
+    'В игре получила 503 балла; записала 17:00 и 1,5.',
+    '504',
+    'Это число относится к предыдущему предложению.',
+    'Палата № 505:',
+    '',
+    '506 Маша: Упомянула палату 507. Число 508 осталось в тексте.',
+    '509'
+  ].join('\n');
+  const clean=x.stripRoomNumbers_(raw);
+  assert.match(clean,/Лена — Обсуждала комнату 502: всё спокойно/);
+  assert.match(clean,/503 балла; записала 17:00 и 1,5/);
+  assert.match(clean,/\n504\nЭто число/);
+  assert.doesNotMatch(clean,/Палата № 505/);
+  assert.match(clean,/Маша: Упомянула палату 507. Число 508 осталось/);
+  assert.match(clean,/\n509$/);
+  assert.doesNotMatch(clean,/501: Лена|506 Маша/);
+  const children=[child(x,'Лена','Тестовая'),child(x,'Маша','Учебная')];
+  x.buildReportValidationChildren_=()=>children;
+  const prepared=x.prepareRawReportSourceText_('morning',raw);
+  assert.equal(prepared.ok,true);
+  const parsed=x.parseReportBlocks_(prepared.text,x.buildKnownBaseKeys_(children),x.buildDistributionContext_(children,[]));
+  assert.match(parsed.blocks[0].body,/комнату 502:/);
+  assert.match(parsed.blocks[0].body,/504 Это число/);
+  assert.match(parsed.blocks[1].body,/палату 507/);
+  assert.match(parsed.blocks[1].body,/509$/);
+});
+
+test('web and manual sheet edits share structural rules and allow correctable formatting', () => {
+  const x=api();
+  const web=require('../tutors/report-validation.js');
+  const children=[child(x,'Лена','Тестовая'),child(x,'Маша','Учебная')];
+  x.buildReportValidationChildren_=()=>children;
+  const examples=[
+    ['Лена — Единственный ребёнок без инициала.',true],
+    ['501: Лена Т : Текст .\nМаша У— Ещё текст ,без пробела.',true],
+    ['Палата № 501\n  Лена Т. – В 17:00 съела 1,5 порции.',true],
+    ['Лена — Первый блок.\nЛена Т. — Второй блок.',false],
+    ['Лена — Первый блок.\nЛена — Второй блок.',false],
+    ['Вова — Первый блок.\nВладимир — Второй блок.',false],
+    ['📋 Общие комментарии： текст\nЛена — Основной блок.',false],
+    ['**Для врача** — заметка\nЛена — Основной блок.',false]
+  ];
+  for(const [raw,expected] of examples){
+    const frontend=web.validate('morning',raw);
+    const sheet=x.prepareRawReportSourceText_('morning',raw);
+    assert.equal(frontend.ok,expected,raw);
+    assert.equal(sheet.ok,expected,raw);
+    if(!expected)assert.equal(sheet.message,frontend.message);
+  }
+  let note='';
+  const raw='Лена — Первый блок.\nЛена — Второй блок.';
+  const cell={getValue:()=>raw,setNote:value=>{note=value;}};
+  x.getLatestReportCell_=()=>cell;
+  x.saveRawReportPublication_=()=>{throw new Error('Invalid source must not be saved or distributed');};
+  x.distributeChildReports=()=>{throw new Error('Invalid source must not distribute');};
+  const result=x.processRawReportSourceEdit_('morning',{});
+  assert.equal(result.ok,false);
+  assert.match(note,/повторяется/);
+  assert.equal(cell.getValue(),raw);
 });

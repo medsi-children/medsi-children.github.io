@@ -50,6 +50,14 @@ for (const file of readdirSync(appsDirectory).filter(file => file.endsWith('.js'
   if (!claspRules.includes('!' + file)) failures.push(`Apps Script source is excluded from publication: ${file}`);
 }
 
+// Both runtimes must execute the same rules, including manual sheet edits.
+const webRules = rel('tutors/report-validation.js');
+const appsRules = rel('apps-script/medsi-bot/report-rules.js');
+if (requireFile(webRules) && requireFile(appsRules) &&
+    readFileSync(webRules, 'utf8') !== readFileSync(appsRules, 'utf8')) {
+  failures.push('Report rules differ: run npm run sync:report-rules before publication.');
+}
+
 if (failures.length) {
   console.error(failures.map((failure) => `✖ ${failure}`).join('\n'));
   process.exit(1);

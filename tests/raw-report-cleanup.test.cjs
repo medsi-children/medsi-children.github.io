@@ -22,6 +22,7 @@ function rawReportTools() {
     }
   };
   vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../apps-script/medsi-bot/report-rules.js'), 'utf8'), context);
   vm.runInContext(source, context);
   return context;
 }

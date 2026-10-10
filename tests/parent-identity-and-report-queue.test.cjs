@@ -12,7 +12,7 @@ function apps() {
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value)})},
     LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}};
   vm.createContext(context);
-  ['Медси бот.js','medsi-contacts.js','parent-relationships.js'].forEach(file=>vm.runInContext(read('apps-script/medsi-bot/'+file),context));
+  ['report-rules.js','Медси бот.js','medsi-contacts.js','parent-relationships.js'].forEach(file=>vm.runInContext(read('apps-script/medsi-bot/'+file),context));
   return context;
 }
 test('full child name uses child gender and produces a full genitive label',()=>{
@@ -86,18 +86,18 @@ test('Worker does not mark an in-progress Apps Script response as completed',asy
   assert.deepEqual(updates,['retry']);
   assert.equal(context.parentActorLabel({relationship:'Мама',child_genitive:'Никиты Иванова'}),'Мама Никиты Иванова');
 });
-test('an ambiguous child block is skipped while explicit and unrelated children distribute',()=>{
+test('a single bare ambiguous name is skipped while unrelated children distribute',()=>{
   const x=apps();
   const children=x.buildReportChildren_(['Артем К.','Артем И.','Лиза П.','Артем С.'],['Крылов','Иванов','Петрова','Смирнов']);
   x.buildReportValidationChildren_=()=>children;
-  const text='Артем: Неоднозначный синтетический блок.\nАртем И.: Точный синтетический блок.\nЛиза: Другой синтетический блок.';
+  const text='Артем: Неоднозначный синтетический блок.\nЛиза: Другой синтетический блок.';
   const prepared=x.prepareRawReportSourceText_('morning',text);
   assert.equal(prepared.ok,true);
   assert.deepEqual(Array.from(prepared.validation.ambiguousNames),['Артем']);
   const ctx=x.buildDistributionContext_(children,[]);
   const distribution=x.buildSafeDistribution_('morning',x.parseReportBlocks_(prepared.text,x.buildKnownBaseKeys_(children),ctx),ctx);
   assert.equal(distribution.byRow[0],undefined);
-  assert.match(distribution.byRow[1],/Точный синтетический блок/);
+  assert.equal(distribution.byRow[1],undefined);
   assert.match(distribution.byRow[2],/Другой синтетический блок/);
   assert.doesNotMatch(Object.values(distribution.byRow).join(' '),/Неоднозначный синтетический блок/);
 });

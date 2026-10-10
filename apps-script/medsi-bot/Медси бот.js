@@ -5299,14 +5299,7 @@ function cleanReportTextForParsing_(text) {
 }
 
 function stripRoomNumbers_(text) {
-  return String(text || '')
-    // Remove a room-only line together with its line break.
-    .replace(/(^|\n)[ \t]*(?:№[ \t]*)?(?:50[1-9]|51[0-2])[ \t]*:?[ \t]*(?:\n|$)/g, '$1')
-    // Remove the whole room label before a child, leaving the name separator.
-    .replace(/(^|\n)[ \t]*(?:палата[ \t]+)?(?:№[ \t]*)?(?:50[1-9]|51[0-2])[ \t]*(?:[:.,;\/\-–—][ \t]*)?(?=[А-ЯЁ][а-яё]+(?:[ \t]+[А-ЯЁ][а-яё.]{0,20})?[ \t]*[:\-–—])/gi, '$1')
-    // Room numbers anywhere else, with an attached colon when present.
-    .replace(/(^|[^0-9A-Za-zА-ЯЁа-яё.])[ \t]*(?:№[ \t]*)?(?:50[1-9]|51[0-2])(?![0-9A-Za-zА-ЯЁа-яё])[ \t]*:?[ \t]*/g, '$1')
-    .replace(/(^|\n)[ \t]+(?=[А-ЯЁ])/g, '$1');
+  return MedsiReportValidation.stripRoomNumbers(text);
 }
 
 function normalizeSuffixKey_(suffixRaw) {
@@ -6366,12 +6359,11 @@ function rawReportValidationNote_(validation) {
 
 function prepareRawReportSourceText_(kindRaw, textRaw) {
   const kind = String(kindRaw || '').toLowerCase();
-  if (/(^|\n)[ \t]*[❗‼!]*[ \t]*(?:для[ \t]+врачей|врачам)[ \t]*(?=[:\n]|$)/i.test(cleanIncomingText_(textRaw))) {
-    const validation = makeReportFormatError_(
-      'Ошибка отправки отчёта. Уберите раздел «Для врачей» перед отправкой детского отчёта.',
-      { reason:'doctor_section' }
-    );
-    return { ok:false, text:String(textRaw || ''), validation:validation, message:validation.message };
+  // Web submissions and manual cell edits use the same structural rules.
+  // Table-dependent NAME_VARIANTS resolution remains the additional stage.
+  const basic = MedsiReportValidation.validate(kind, textRaw);
+  if (!basic.ok) {
+    return { ok:false, text:String(textRaw || ''), validation:basic, message:basic.message };
   }
   const canonical = canonicalizeRawChildReport_(textRaw);
   const validation = validateChildReportFormat_(kind, canonical.text);
