@@ -78,6 +78,29 @@ test('room number before a child header is removed without consuming the name se
   );
 });
 
+test('room label after report boilerplate does not remove the first child', () => {
+  const x = api();
+  const lena = child(x, 'Лена', 'Тестовая', '89990000001');
+  const masha = child(x, 'Маша', 'Учебная', '89990000002');
+  lena.index = 0;
+  masha.index = 1;
+  const raw = [
+    'Вечерний отчёт',
+    'Игры и общение',
+    '',
+    '501: Лена — Первое вымышленное предложение.',
+    'Маша — Второе вымышленное предложение.'
+  ].join('\n');
+  const result = x.canonicalizeRawChildReport_(raw, { children:[lena, masha] });
+  assert.equal(result.text,
+    'Лена Т. — Первое вымышленное предложение.\nМаша У. — Второе вымышленное предложение.');
+  const context = x.buildDistributionContext_([lena, masha], []);
+  const parsed = x.parseReportBlocks_(result.text, x.buildKnownBaseKeys_([lena, masha]), context);
+  const distributed = x.buildSafeDistribution_('evening', parsed, context);
+  assert.match(distributed.byRow[0], /^Лена: Первое вымышленное предложение\.$/);
+  assert.match(distributed.byRow[1], /^Маша: Второе вымышленное предложение\.$/);
+});
+
 test('unregistered child keeps a bare name, while an explicit initial gets a dot', () => {
   const x = api();
   assert.equal(
