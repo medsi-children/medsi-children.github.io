@@ -173,7 +173,10 @@
             const sent = await api.submitReport(payload.kind,payload.text,payload.id);
             draft = null;
             return result(sent.accepted ? 'Отчёт принят к отправке. Повторно отправлять его не нужно.' : 'Отчёт отправлен.',[], 'happy');
-          } catch (_) {
+          } catch (error) {
+            if(error&&error.code==='REPORT_FORMAT_ERROR')return result(error.message,[
+              {label:'Изменить текст',run:async()=>{if(!alive||draft!==payload)return expired();version++;draft=null;return requestReport(payload.kind);}}
+            ],'sad');
             return result('Не удалось подтвердить отправку. Не создавайте новый отчёт повторно: можно проверить и повторить этот же запрос с защитой от дублей.',[
               {label:'Проверить этот запрос',run:async()=>alive&&draft===payload?reviewReport(payload):expired()}
             ],'sad');

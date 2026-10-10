@@ -134,17 +134,20 @@ test('new Cloudflare identity grammar matches Apps Script before sheet synchroni
   for(const name of ['Анна','Андрей','Саша','Неизвестное']) assert.equal(context.defaultParentRelationship_(name),x.defaultParentRelationship_(name));
   assert.equal(context.inheritedChildFamily_('Никита','Иванова'),'Иванов');
 });
-test('child report shows Apps Script validation errors before success; psychology may use the queue',async()=>{
+test('report checks run locally before queue acceptance and preserve the submitted text',async()=>{
   const source=read('tutors/full-web.js');
   const fn=source.slice(source.indexOf('  async function submitReportPayload('),source.indexOf('  async function sendReport('));
-  let queued=0, validated=0;
-  const context={tutorToken:'synthetic',d1Session:{token:'synthetic'},window:{MedsiOverlayTransport:true},MedsiOverlayTransport:{reportSubmit:async()=>{queued++;return {accepted:true}}},callApi:async()=>{validated++;return {ok:false,message:'Уберите раздел «Для врачей»'}},waitForReportAcceptance:async()=>null};
+  const queued=[];
+  const context={tutorToken:'synthetic',d1Session:{token:'synthetic'},window:{MedsiOverlayTransport:true,MedsiReportValidation:require('../tutors/report-validation.js')},MedsiOverlayTransport:{reportSubmit:async(_session,payload)=>{queued.push(payload);return {accepted:true}}},callApi:()=>{throw new Error('Must not wait for Apps Script')},waitForReportAcceptance:()=>{throw new Error('Must not poll Apps Script')}};
   vm.createContext(context);vm.runInContext(fn,context);
-  await assert.rejects(context.submitReportPayload('morning','Synthetic','report_synthetic'),/Уберите раздел «Для врачей»/);
-  assert.equal(queued,0);
-  assert.equal(validated,1);
+  await assert.rejects(context.submitReportPayload('morning','Для врачей:\nЛена — Синтетический текст.','report_synthetic'),/уберите раздел/i);
+  await assert.rejects(context.submitReportPayload('morning','Лена — Первый текст.\nЛена — Второй текст.','report_synthetic'),/повторяется/);
+  assert.equal(queued.length,0);
+  const text='501: Лена — Основной текст.\nМаша — Второй текст.';
+  assert.equal((await context.submitReportPayload('morning',text,'report_synthetic')).accepted,true);
+  assert.equal(queued[0].text,text);
   assert.equal((await context.submitReportPayload('psychology','Synthetic','report_synthetic2')).accepted,true);
-  assert.equal(queued,1);
+  assert.equal(queued.length,2);
 });
 test('surname and relationship corrections preserve the chat and legacy login identity',async()=>{
   const {DatabaseSync}=require('node:sqlite'),db=new DatabaseSync(':memory:');
