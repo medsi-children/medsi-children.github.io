@@ -269,6 +269,18 @@
     return request(session, '/lab/report-submit/status?submissionId=' + encodeURIComponent(String(submissionId || '')));
   }
 
+  function parentDelete(session, payload) {
+    return request(session, '/lab/parent-delete', {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify(payload || {})
+    }, true);
+  }
+
+  function parentDeleteStatus(session, operationId) {
+    return request(session, '/lab/parent-delete/status?operationId=' + encodeURIComponent(String(operationId || '')));
+  }
+
   function injectVideoStyles() {
     if (document.getElementById('medsi-video-ui-style')) return;
     const style = document.createElement('style');
@@ -409,7 +421,9 @@
     pin,
     upload,
     reportSubmit,
-    reportStatus
+    reportStatus,
+    parentDelete,
+    parentDeleteStatus
   };
 
   installMediaUi();

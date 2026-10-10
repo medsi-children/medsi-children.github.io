@@ -32,6 +32,10 @@
     if(window.crypto&&typeof window.crypto.randomUUID==='function')return 'report_'+window.crypto.randomUUID().replace(/-/g,'');
     return 'report_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,12);
   }
+  function parentDeletionId(){
+    if(window.crypto&&typeof window.crypto.randomUUID==='function')return 'delete_'+window.crypto.randomUUID().replace(/-/g,'');
+    return 'delete_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,12);
+  }
   async function callApi(method,args,timeoutMs){
     const readOnly=/^(get|list|verify|check)/i.test(String(method||''));
     const attempts=readOnly?2:1;
@@ -248,9 +252,16 @@
   async function deleteParent(row,card){
     const child=String(row.childName||'ребёнка').trim();
     if(!confirm('Удалить ребёнка '+child+' из бота?\n\nВся история сообщений будет удалена.'))return;
-    const request=callApi('deleteReportChildByPhone',[row.phone,tutorToken],30000);
     const snapshot=removePhoneCardOptimistically(row,card);
-    try{const res=await request;if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось удалить.')}catch(e){restorePhoneAfterFailedDelete(snapshot,e&&e.message||e)}
+    try{
+      if(!window.MedsiOverlayTransport||!MedsiOverlayTransport.parentDelete)throw new Error('Не загрузилось быстрое удаление. Обновите страницу и попробуйте ещё раз.');
+      const session=await ensureD1Fresh();
+      const operationId=parentDeletionId();
+      const res=await MedsiOverlayTransport.parentDelete(session,{phone:row.phone,operationId});
+      if(!res||res.ok!==true||res.accepted!==true)throw new Error((res&&res.message)||'Не удалось подтвердить удаление.');
+      window.MedsiEducatorPrewarm?.clear();
+      refreshUnreadBadge();
+    }catch(e){restorePhoneAfterFailedDelete(snapshot,e&&e.message||e)}
   }
   async function openPhones(){
     setScreen('screenPhones','Телефоны родителей','Здесь можно быстро скопировать номер или позвонить.');
@@ -299,10 +310,12 @@
       const rows = await refreshPhones();
       const current = rows.find(row => phone10(row.phone) === phone10(target.phone) && row.childName === target.childName && row.parentName === target.parentName);
       if (!current) throw new Error('RECORD_CHANGED');
-      const result = await callApi('deleteReportChildByPhone', [current.phone, tutorToken], 30000);
-      if (!result || !result.ok) throw new Error('DELETE_FAILED');
-      parentsCache = parentsCache.filter(row => phone10(row.phone) !== phone10(current.phone));
-      parentsSignature = parentSig(parentsCache);
+      if(!window.MedsiOverlayTransport||!MedsiOverlayTransport.parentDelete)throw new Error('DELETE_UNAVAILABLE');
+      const session=await ensureD1Fresh();
+      const result=await MedsiOverlayTransport.parentDelete(session,{phone:current.phone,operationId:parentDeletionId()});
+      if(!result||result.ok!==true||result.accepted!==true)throw new Error('DELETE_FAILED');
+      parentsCache=parentsCache.filter(row=>phone10(row.phone)!==phone10(current.phone));
+      parentsSignature=parentSig(parentsCache);
       window.MedsiEducatorPrewarm?.clear();
       refreshUnreadBadge();
       return result;
