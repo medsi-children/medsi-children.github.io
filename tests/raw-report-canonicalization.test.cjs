@@ -9,12 +9,22 @@ const source = fs.readFileSync(
   'utf8'
 );
 
-function api() {
+function api(nameVariantRows = []) {
   const emptySheet = { getLastRow: () => 1, getDataRange: () => ({ getValues: () => [[]] }) };
+  const nameVariantsSheet = {
+    getLastRow: () => nameVariantRows.length + 1,
+    getDataRange: () => ({
+      getValues: () => [['Имя-ориентир', 'Варианты'], ...nameVariantRows]
+    })
+  };
   const context = {
     console,
     Logger: { log() {} },
-    SpreadsheetApp: { openById: () => ({ getSheetByName: () => emptySheet }) },
+    SpreadsheetApp: {
+      openById: () => ({
+        getSheetByName: name => name === 'NAME_VARIANTS' ? nameVariantsSheet : emptySheet
+      })
+    },
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: name => name === 'MEDSI_SPREADSHEET_ID' ? 'synthetic-sheet' : ''
@@ -360,4 +370,79 @@ test('web and manual sheet edits share structural rules and allow correctable fo
   assert.equal(result.ok,false);
   assert.match(note,/повторяется/);
   assert.equal(cell.getValue(),raw);
+});
+
+
+test('NAME_VARIANTS matches aliases without renaming the registered display name', () => {
+  const x = api([['Владимир', 'Вова, Володя']]);
+  const volodya = child(x, 'Володя', 'Сидоров', '89990000001');
+  volodya.index = 0;
+
+  assert.equal(x.normalizeReportChildName_('Володя', 'Сидоров'), 'Володя С');
+  assert.equal(x.getNameBaseKey_('Володя'), x.getNameBaseKey_('Вова'));
+
+  const context = x.buildDistributionContext_([volodya], []);
+  const prepared = x.canonicalizeRawChildReport_(
+    'Вова С: Спокойно участвовал в занятиях.',
+    { children:[volodya] }
+  );
+  assert.equal(prepared.text, 'Володя С. — Спокойно участвовал в занятиях.');
+
+  const parsed = x.parseReportBlocks_(
+    prepared.text,
+    x.buildKnownBaseKeys_([volodya]),
+    context
+  );
+  const distributed = x.buildSafeDistribution_('morning', parsed, context);
+  assert.equal(distributed.byRow[0], 'Володя: Спокойно участвовал в занятиях.');
+});
+
+test('exact registered spelling wins before a shared alias group', () => {
+  const x = api([['Александр', 'Саша, Александра']]);
+  const alexander = child(x, 'Александр', 'Петров', '89990000011');
+  const alexandra = child(x, 'Александра', 'Иванова', '89990000012');
+  alexander.index = 0;
+  alexandra.index = 1;
+  const children = [alexander, alexandra];
+  const context = x.buildDistributionContext_(children, []);
+  const known = x.buildKnownBaseKeys_(children);
+
+  const exact = x.parseReportBlocks_(
+    'Александр П. — Первый текст.\nАлександра И. — Второй текст.',
+    known,
+    context
+  );
+  const exactDistribution = x.buildSafeDistribution_('morning', exact, context);
+  assert.equal(exactDistribution.byRow[0], 'Александр: Первый текст.');
+  assert.equal(exactDistribution.byRow[1], 'Александра: Второй текст.');
+
+  const aliases = x.parseReportBlocks_(
+    'Саша П. — Первый текст.\nСаша И. — Второй текст.',
+    known,
+    context
+  );
+  const aliasDistribution = x.buildSafeDistribution_('morning', aliases, context);
+  assert.equal(aliasDistribution.byRow[0], 'Александр: Первый текст.');
+  assert.equal(aliasDistribution.byRow[1], 'Александра: Второй текст.');
+
+  const ambiguous = x.parseReportBlocks_('Саша — Нельзя угадывать.', known, context);
+  const ambiguousDistribution = x.buildSafeDistribution_('morning', ambiguous, context);
+  assert.deepEqual(Object.keys(ambiguousDistribution.byRow), []);
+});
+
+test('explicit exact name with a wrong initial never falls back to another alias', () => {
+  const x = api([['Александр', 'Саша, Александра']]);
+  const alexander = child(x, 'Александр', 'Петров', '89990000011');
+  const alexandra = child(x, 'Александра', 'Иванова', '89990000012');
+  alexander.index = 0;
+  alexandra.index = 1;
+  const children = [alexander, alexandra];
+  const context = x.buildDistributionContext_(children, []);
+  const parsed = x.parseReportBlocks_(
+    'Александр И. — Не должен попасть Александре.',
+    x.buildKnownBaseKeys_(children),
+    context
+  );
+  const distributed = x.buildSafeDistribution_('morning', parsed, context);
+  assert.deepEqual(Object.keys(distributed.byRow), []);
 });

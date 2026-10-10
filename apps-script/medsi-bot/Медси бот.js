@@ -764,7 +764,7 @@ function loadNameEquivalents_() {
     addNameVariantRow_(dict, canon, canonRaw, variantsRaw);
   }
 
-  Logger.log(`📖 Загружено ${Object.keys(dict).length} канонических имён`);
+  Logger.log(`📖 Загружено ${Object.keys(dict).length} групп вариантов имён`);
   return { dict, canon };
 }
 
@@ -772,18 +772,16 @@ const NAME_DATA = loadNameEquivalents_();
 const NAME_EQUIVALENTS = NAME_DATA.dict;
 const CANON_NAME_MAP   = NAME_DATA.canon;
 
+// Historical helper kept for compatibility. NAME_VARIANTS is now matching-only:
+ // it must never rename the child's stored/display first name.
 function canonizeChildName_(fullName) {
   const raw = String(fullName || '').trim();
   if (!raw) return raw;
 
-  const base = stripInitialFromName_(raw);
+  const base = stripInitialFromName_(raw) || raw;
   const suf  = getSuffixToken_(raw);
 
-  const baseNorm = normalizeName_(base);
-  const canonKey = (CANON_NAME_MAP && CANON_NAME_MAP[baseNorm]) ? CANON_NAME_MAP[baseNorm] : baseNorm;
-
-  const prettyCanon = capWord(canonKey || base);
-  return suf ? `${prettyCanon} ${suf}` : prettyCanon;
+  return suf ? `${base} ${suf}` : base;
 }
 
 function normRu(s) {
@@ -5091,13 +5089,15 @@ function appendToDatabase_(phone, parentFirst, childFirst, familyForStore) {
     if (exists) return;
   }
 
-  const childCanonBase = canonizeChildName_(childFirst);
+  // DATABASE mirrors the registration spelling too. Name equivalence is only
+  // for matching report headers; it is not a data-normalization rule.
+  const childStoredBase = stripInitialFromName_(childFirst) || String(childFirst || '').trim();
 
   const row = findFirstEmptyRowInColA_(sh);
   sh.getRange(row, 1, 1, 4).setValues([[
     phone,
     parentFirst,
-    childCanonBase,
+    childStoredBase,
     familyForStore
   ]]);
 }
@@ -5645,8 +5645,9 @@ function normalizeReportChildName_(nameRaw, familyRaw) {
   const name = String(nameRaw || '').trim();
   if (!name) return '';
 
-  const baseKey = getNameBaseKey_(name);
-  const baseName = baseKey ? capWord(baseKey) : (stripInitialFromName_(name) || name);
+  // Preserve the first name exactly as stored in REPORTS. NAME_VARIANTS only
+  // decides whether another spelling can match this child during distribution.
+  const baseName = stripInitialFromName_(name) || name;
   const suffix = getSuffixToken_(name) || getFamilyInitialSuffix_(familyRaw);
 
   return suffix ? `${baseName} ${suffix}` : baseName;
@@ -5694,6 +5695,7 @@ function buildReportChildren_(baseNames, families) {
       index,
       fullName: name,
       baseName: stripInitialFromName_(name),
+      displayNameKey: normalizeName_(stripInitialFromName_(name)),
       baseKey,
       suffix,
       suffixKey: normalizeSuffixKey_(suffix),
@@ -5783,6 +5785,18 @@ function resolveReportBlock_(block, contextByBase) {
   };
 
   let candidates = ctx.registered.filter(child => child.baseKey === block.baseKey);
+
+  // A registered spelling wins over its aliases. Example: if both
+  // "Александр" and "Александра" are active and NAME_VARIANTS links both to
+  // "Саша", an explicit "Александр" header must not become a generic alias
+  // lookup. Aliases are consulted only when there is no exact active spelling.
+  const requestedDisplayKey = normalizeName_(block.baseRaw);
+  const exactNameCandidates = requestedDisplayKey
+    ? candidates.filter(child => (
+        String(child.displayNameKey || normalizeName_(child.baseName || child.fullName)) === requestedDisplayKey
+      ))
+    : [];
+  if (exactNameCandidates.length) candidates = exactNameCandidates;
 
   if (block.hasSuffix) {
     const exactCandidates = candidates.filter(child => child.suffixKey && child.suffixKey === block.suffixKey);
@@ -6015,8 +6029,11 @@ function formatRawReportNameToken_(valueRaw) {
 function canonicalRawReportLabelForChild_(child, contextByBase) {
   if (!child) return '';
 
-  const baseKey = String(child.baseKey || getNameBaseKey_(child.baseName || child.fullName) || '').trim();
-  const baseName = capWord(baseKey || stripInitialFromName_(child.fullName || child.baseName));
+  // Canonical raw formatting follows the registered display spelling, not the
+  // orientation name in NAME_VARIANTS.
+  const baseName = formatRawReportNameToken_(
+    stripInitialFromName_(child.fullName || child.baseName) || child.baseName || child.fullName
+  );
   if (!baseName) return '';
 
   const familyKey = normalizeFamilyName_(child.family || '');
@@ -6060,8 +6077,9 @@ function canonicalRawReportLabelForChild_(child, contextByBase) {
 
 function canonicalRawReportLabelForHeader_(header) {
   if (!header) return '';
-  const baseKey = String(header.baseKey || getNameBaseKey_(header.baseRaw) || '').trim();
-  const baseName = capWord(baseKey || header.baseRaw);
+  // An unregistered child has no authoritative display spelling, so preserve
+  // the spelling that the educator actually wrote.
+  const baseName = formatRawReportNameToken_(header.baseRaw);
   if (!baseName) return String(header.raw || '').trim();
 
   const suffixKey = String(header.suffixKey || '').trim();
