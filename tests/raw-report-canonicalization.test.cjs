@@ -63,7 +63,7 @@ test('room number before a child header is removed without consuming the name se
   ].join('\n');
 
   assert.equal(
-    x.stripInlineRoomPrefixBeforeChild_(raw),
+    x.stripRoomNumbers_(raw),
     'Лиза Ф.: Была на встрече в 17:00.\nМаша — Играла в настольные игры.\nЛиза Ф. — Отдыхала.\nМаша: Читала книгу.'
   );
   const result = x.canonicalizeRawChildReport_(raw, { children:[lisa] });
@@ -73,8 +73,8 @@ test('room number before a child header is removed without consuming the name se
   );
   assert.equal(result.changed, true);
   assert.equal(
-    x.stripInlineRoomPrefixBeforeChild_('Лиза Ф.: В 17:00 обсуждали комнату 501: всё спокойно.'),
-    'Лиза Ф.: В 17:00 обсуждали комнату 501: всё спокойно.'
+    x.stripRoomNumbers_('Лиза Ф.: В 17:00 обсуждали комнату 501: всё спокойно.'),
+    'Лиза Ф.: В 17:00 обсуждали комнату всё спокойно.'
   );
 });
 
@@ -89,11 +89,11 @@ test('room label after report boilerplate does not remove the first child', () =
     'Игры и общение',
     '',
     '501: Лена — Первое вымышленное предложение.',
-    'Маша — Второе вымышленное предложение.'
+    '502: Маша — Второе вымышленное предложение.'
   ].join('\n');
   const context = x.buildDistributionContext_([lena, masha], []);
   x.buildReportValidationChildren_ = () => [lena, masha];
-  for (const variant of ['501: Лена', '501 Лена', '501:\nЛена', '501\nЛена']) {
+  for (const variant of ['501: Лена', '501 Лена', '501:\nЛена', '501\nЛена', '№ 501: Лена', '501 / Лена', '501 — Лена', '501, Лена', 'Палата № 501: Лена']) {
     const prepared = x.prepareRawReportSourceText_('evening', raw.replace('501: Лена', variant));
     assert.equal(prepared.ok, true);
     assert.equal(prepared.text,
@@ -105,31 +105,13 @@ test('room label after report boilerplate does not remove the first child', () =
   }
 });
 
-test('an unrecognized room heading blocks publication instead of dropping the first child', () => {
+test('room numbers are removed wherever they appear without changing other numbers', () => {
   const x = api();
-  for (const raw of [
-    'Вечерний отчёт\n501 / Лена — Первое вымышленное предложение.\nМаша — Второе вымышленное предложение.',
-    'Лена — Первое вымышленное предложение.\n502 / Маша — Второе вымышленное предложение.'
-  ]) {
-    const prepared = x.prepareRawReportSourceText_('evening', raw);
-    assert.equal(prepared.ok, false);
-    assert.equal(prepared.canonical.unrecognizedRoomHeader, true);
-    assert.match(prepared.message, /номера палаты/);
-    assert.match(prepared.text, /\/ (?:Лена|Маша) -/);
-  }
-
-  const raw = 'Вечерний отчёт\n501 / Лена — Первое вымышленное предложение.\nМаша — Второе вымышленное предложение.';
-  let value = raw;
-  let note = '';
-  const cell = {
-    getValue: () => value,
-    setValue: next => { value = next; },
-    setNote: next => { note = next; }
-  };
-  const result = x.processRawReportSourceEdit_('evening', { getRange: () => cell });
-  assert.equal(result.ok, false);
-  assert.equal(value, raw);
-  assert.match(note, /номера палаты/);
+  const raw = 'Лена — Комната 501: свободна. В 17:00 переход в 502 палату. Номер 1501 и число 3.501 остаются.';
+  assert.equal(x.stripRoomNumbers_(raw),
+    'Лена — Комната свободна. В 17:00 переход в палату. Номер 1501 и число 3.501 остаются.');
+  assert.equal(x.stripRoomNumbers_('503:\n  Лена — Текст.\nМаша — Текст.'),
+    'Лена — Текст.\nМаша — Текст.');
 });
 
 test('unregistered child keeps a bare name, while an explicit initial gets a dot', () => {

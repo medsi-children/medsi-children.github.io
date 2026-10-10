@@ -5307,24 +5307,21 @@ function cleanReportTextForParsing_(text) {
     .replace(/\n{2,}/g, '\n')
     .trim();
 
-  clean = clean.replace(
-    /(^|\n)\s*№?\s*(50[1-9]|51[0-2])\s*(?=\n|$)/g,
-    ''
-  );
-
-  return stripInlineRoomPrefixBeforeChild_(clean)
+  return stripRoomNumbers_(clean)
     .replace(/(\b\d{1,2})\s*:\s*(\d{2})(\b)/g, '$1:$2$3')
     .replace(/(\b\d{1,2})\s*:\s*(\d{2})\s*:\s*(\d{2})(\b)/g, '$1:$2:$3$4')
     .trim();
 }
 
-function stripInlineRoomPrefixBeforeChild_(text) {
-  // Only remove a room label at the start of a child block.  The separator
-  // after the child's name remains available to the report parser.
-  return String(text || '').replace(
-    /(^|\n)[ \t]*(?:№[ \t]*)?(?:50[1-9]|51[0-2])[ \t]*:?[ \t]*(?:\n[ \t]*)?(?=[А-ЯЁ][а-яё]+(?:[ \t]+[А-ЯЁ][а-яё.]{0,20})?[ \t]*[:\-–—])/g,
-    '$1'
-  );
+function stripRoomNumbers_(text) {
+  return String(text || '')
+    // Remove a room-only line together with its line break.
+    .replace(/(^|\n)[ \t]*(?:№[ \t]*)?(?:50[1-9]|51[0-2])[ \t]*:?[ \t]*(?:\n|$)/g, '$1')
+    // Remove the whole room label before a child, leaving the name separator.
+    .replace(/(^|\n)[ \t]*(?:палата[ \t]+)?(?:№[ \t]*)?(?:50[1-9]|51[0-2])[ \t]*(?:[:.,;\/\-–—][ \t]*)?(?=[А-ЯЁ][а-яё]+(?:[ \t]+[А-ЯЁ][а-яё.]{0,20})?[ \t]*[:\-–—])/gi, '$1')
+    // Room numbers anywhere else, with an attached colon when present.
+    .replace(/(^|[^0-9A-Za-zА-ЯЁа-яё.])[ \t]*(?:№[ \t]*)?(?:50[1-9]|51[0-2])(?![0-9A-Za-zА-ЯЁа-яё])[ \t]*:?[ \t]*/g, '$1')
+    .replace(/(^|\n)[ \t]+(?=[А-ЯЁ])/g, '$1');
 }
 
 function normalizeSuffixKey_(suffixRaw) {
@@ -6218,7 +6215,7 @@ function rawReportBlockWasPreviouslyDistributed_(kindRaw, block, previousTargets
 function canonicalizeRawChildReport_(textRaw, optionsRaw) {
   const options = optionsRaw || {};
   const source = cleanIncomingText_(textRaw);
-  const text = stripInlineRoomPrefixBeforeChild_(source);
+  const text = stripRoomNumbers_(source);
   if (!text) return { text:'', changed:false, rewritten:0, recovered:0, unresolved:[] };
 
   const currentChildren = options.children || buildReportValidationChildren_();
@@ -6260,20 +6257,6 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
     return Object.assign({}, item.header, { forcedResolution:item.currentClass.resolution });
   }), currentContext);
   candidates.forEach(function(item, index) { item.currentClass.resolution = inferred[index]; });
-
-  // An unrecognized room-labelled line can disappear with the preamble or be
-  // absorbed into another child's block. Stop publication in either case.
-  if (/(^|\n)[ \t]*(?:№[ \t]*)?(?:50[1-9]|51[0-2])(?=[ \t:.,\-–—/]|$)/.test(text)) {
-    return {
-      text:source,
-      changed:false,
-      rewritten:0,
-      recovered:0,
-      preambleRemoved:false,
-      unresolved:[],
-      unrecognizedRoomHeader:true
-    };
-  }
 
   const replacements = [];
   const unresolved = [];
@@ -6398,13 +6381,6 @@ function rawReportValidationNote_(validation) {
 function prepareRawReportSourceText_(kindRaw, textRaw) {
   const kind = String(kindRaw || '').toLowerCase();
   const canonical = canonicalizeRawChildReport_(textRaw);
-  if (canonical.unrecognizedRoomHeader) {
-    const validation = makeReportFormatError_(
-      'Ошибка отправки отчёта. После номера палаты не удалось распознать ребёнка. Проверьте строку с номером палаты и именем.',
-      { reason:'unrecognized_room_header' }
-    );
-    return { ok:false, text:canonical.text, canonical:canonical, validation:validation, message:validation.message };
-  }
   const validation = validateChildReportFormat_(kind, canonical.text);
   if (!validation.ok) {
     return {
@@ -6522,12 +6498,6 @@ function maintainRawReportsAfterProfilesChangeCore_(previousSnapshotRaw, reasonR
         );
       }
     });
-
-    if (canonical.unrecognizedRoomHeader) {
-      result.blocked += 1;
-      setRawReportSourceNote_(cell, 'Автоматическое перераспределение остановлено: проверьте строку с номером палаты и именем ребёнка.');
-      return;
-    }
 
     const validation = validateChildReportFormat_(kind, canonical.text);
     if (!validation.ok) {
