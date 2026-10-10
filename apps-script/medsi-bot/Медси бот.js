@@ -6261,6 +6261,20 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
   }), currentContext);
   candidates.forEach(function(item, index) { item.currentClass.resolution = inferred[index]; });
 
+  // An unrecognized room-labelled line can disappear with the preamble or be
+  // absorbed into another child's block. Stop publication in either case.
+  if (/(^|\n)[ \t]*(?:№[ \t]*)?(?:50[1-9]|51[0-2])(?=[ \t:.,\-–—/]|$)/.test(text)) {
+    return {
+      text:source,
+      changed:false,
+      rewritten:0,
+      recovered:0,
+      preambleRemoved:false,
+      unresolved:[],
+      unrecognizedRoomHeader:true
+    };
+  }
+
   const replacements = [];
   const unresolved = [];
   let recovered = 0;
@@ -6384,6 +6398,13 @@ function rawReportValidationNote_(validation) {
 function prepareRawReportSourceText_(kindRaw, textRaw) {
   const kind = String(kindRaw || '').toLowerCase();
   const canonical = canonicalizeRawChildReport_(textRaw);
+  if (canonical.unrecognizedRoomHeader) {
+    const validation = makeReportFormatError_(
+      'Ошибка отправки отчёта. После номера палаты не удалось распознать ребёнка. Проверьте строку с номером палаты и именем.',
+      { reason:'unrecognized_room_header' }
+    );
+    return { ok:false, text:canonical.text, canonical:canonical, validation:validation, message:validation.message };
+  }
   const validation = validateChildReportFormat_(kind, canonical.text);
   if (!validation.ok) {
     return {
@@ -6501,6 +6522,12 @@ function maintainRawReportsAfterProfilesChangeCore_(previousSnapshotRaw, reasonR
         );
       }
     });
+
+    if (canonical.unrecognizedRoomHeader) {
+      result.blocked += 1;
+      setRawReportSourceNote_(cell, 'Автоматическое перераспределение остановлено: проверьте строку с номером палаты и именем ребёнка.');
+      return;
+    }
 
     const validation = validateChildReportFormat_(kind, canonical.text);
     if (!validation.ok) {

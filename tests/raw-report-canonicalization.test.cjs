@@ -10,7 +10,7 @@ const source = fs.readFileSync(
 );
 
 function api() {
-  const emptySheet = { getDataRange: () => ({ getValues: () => [[]] }) };
+  const emptySheet = { getLastRow: () => 1, getDataRange: () => ({ getValues: () => [[]] }) };
   const context = {
     console,
     Logger: { log() {} },
@@ -91,14 +91,45 @@ test('room label after report boilerplate does not remove the first child', () =
     '501: Лена — Первое вымышленное предложение.',
     'Маша — Второе вымышленное предложение.'
   ].join('\n');
-  const result = x.canonicalizeRawChildReport_(raw, { children:[lena, masha] });
-  assert.equal(result.text,
-    'Лена Т. — Первое вымышленное предложение.\nМаша У. — Второе вымышленное предложение.');
   const context = x.buildDistributionContext_([lena, masha], []);
-  const parsed = x.parseReportBlocks_(result.text, x.buildKnownBaseKeys_([lena, masha]), context);
-  const distributed = x.buildSafeDistribution_('evening', parsed, context);
-  assert.match(distributed.byRow[0], /^Лена: Первое вымышленное предложение\.$/);
-  assert.match(distributed.byRow[1], /^Маша: Второе вымышленное предложение\.$/);
+  x.buildReportValidationChildren_ = () => [lena, masha];
+  for (const variant of ['501: Лена', '501 Лена', '501:\nЛена', '501\nЛена']) {
+    const prepared = x.prepareRawReportSourceText_('evening', raw.replace('501: Лена', variant));
+    assert.equal(prepared.ok, true);
+    assert.equal(prepared.text,
+      'Лена Т. — Первое вымышленное предложение.\nМаша У. — Второе вымышленное предложение.');
+    const parsed = x.parseReportBlocks_(prepared.text, x.buildKnownBaseKeys_([lena, masha]), context);
+    const distributed = x.buildSafeDistribution_('evening', parsed, context);
+    assert.match(distributed.byRow[0], /^Лена: Первое вымышленное предложение\.$/);
+    assert.match(distributed.byRow[1], /^Маша: Второе вымышленное предложение\.$/);
+  }
+});
+
+test('an unrecognized room heading blocks publication instead of dropping the first child', () => {
+  const x = api();
+  for (const raw of [
+    'Вечерний отчёт\n501 / Лена — Первое вымышленное предложение.\nМаша — Второе вымышленное предложение.',
+    'Лена — Первое вымышленное предложение.\n502 / Маша — Второе вымышленное предложение.'
+  ]) {
+    const prepared = x.prepareRawReportSourceText_('evening', raw);
+    assert.equal(prepared.ok, false);
+    assert.equal(prepared.canonical.unrecognizedRoomHeader, true);
+    assert.match(prepared.message, /номера палаты/);
+    assert.match(prepared.text, /\/ (?:Лена|Маша) -/);
+  }
+
+  const raw = 'Вечерний отчёт\n501 / Лена — Первое вымышленное предложение.\nМаша — Второе вымышленное предложение.';
+  let value = raw;
+  let note = '';
+  const cell = {
+    getValue: () => value,
+    setValue: next => { value = next; },
+    setNote: next => { note = next; }
+  };
+  const result = x.processRawReportSourceEdit_('evening', { getRange: () => cell });
+  assert.equal(result.ok, false);
+  assert.equal(value, raw);
+  assert.match(note, /номера палаты/);
 });
 
 test('unregistered child keeps a bare name, while an explicit initial gets a dot', () => {
