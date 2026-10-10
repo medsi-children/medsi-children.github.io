@@ -104,12 +104,13 @@
     const source = String(text || '');
     const protectedText = /\b(?:https?:\/\/|www\.)[^\s]+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
     function normalizePlain(part) {
-      return part.replace(/([А-ЯЁа-яё]+)[ \t]*([,.])[ \t]*(?=[А-ЯЁа-яё]|\n|$)/g, (match, word, mark, offset, input) => {
+      const punctuation = part.replace(/([А-ЯЁа-яё]+)[ \t]*([,.])[ \t]*(?=[А-ЯЁа-яё]|\n|$)/g, (match, word, mark, offset, input) => {
         // Single-letter initials and abbreviations such as «т.д.» are ambiguous.
         if (mark === '.' && word.length === 1) return match;
         const next = input[offset + match.length];
         return word + mark + (next && next !== '\n' ? ' ' : '');
       });
+      return punctuation.replace(/\([ \t]+/g, '(').replace(/[ \t]+\)/g, ')');
     }
     let result = '';
     let start = 0;

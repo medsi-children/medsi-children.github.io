@@ -30,13 +30,17 @@ test('only educator text receives conservative punctuation spacing', async () =>
     requests.push(JSON.parse(options.body));
     return { ok: true, status: 200, json: async () => ({ ok: true }) };
   });
-  const raw = 'Первое , второе. Третье ,четвёртое\nПятое .Шестое';
-  const fixed = 'Первое, второе. Третье, четвёртое\nПятое. Шестое';
+  const raw = 'Первое , второе. Третье ,четвёртое\nПятое .Шестое ( интересное )';
+  const fixed = 'Первое, второе. Третье, четвёртое\nПятое. Шестое (интересное)';
   assert.equal(chat.normalizeEducatorText(raw), fixed);
   assert.equal(chat.normalizeEducatorText(fixed), fixed);
   for (const sample of ['Первое , Второе', 'Первое ,Второе', 'Первое,Второе', 'Первое . Второе', 'Первое .Второе', 'Первое.Второе']) {
     assert.equal(chat.normalizeEducatorText(sample), sample.includes(',') ? 'Первое, Второе' : 'Первое. Второе');
   }
+  assert.equal(chat.normalizeEducatorText('Книжки ( интересные), раскраски ( милые ) и (  вложенные ( детали )  ).'),
+    'Книжки (интересные), раскраски (милые) и (вложенные (детали)).');
+  assert.equal(chat.normalizeEducatorText('Ссылка: https://example.test/(путь) и строка ( \nтекст\n)'),
+    'Ссылка: https://example.test/(путь) и строка (\nтекст\n)');
   assert.equal(chat.normalizeEducatorText('В 17:00, 09.10.2026 — 3.14 и 1,5; т.д. А.С. https://example.test/путь,текст'),
     'В 17:00, 09.10.2026 — 3.14 и 1,5; т.д. А.С. https://example.test/путь,текст');
 
