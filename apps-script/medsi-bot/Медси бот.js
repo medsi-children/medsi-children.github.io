@@ -5403,6 +5403,7 @@ const REPORT_NON_NAME_HEADER_WORDS_ = {
 const REPORT_SERVICE_HEADER_PHRASES_ = {
   'для врачей': true,
   врачам: true,
+  поступление: true,
   'общий комментарий': true,
   'сегодня у ребят были': true
 };
@@ -6215,7 +6216,7 @@ function rawReportBlockWasPreviouslyDistributed_(kindRaw, block, previousTargets
 function canonicalizeRawChildReport_(textRaw, optionsRaw) {
   const options = optionsRaw || {};
   const source = cleanIncomingText_(textRaw);
-  const text = stripRoomNumbers_(source);
+  const text = stripRoomNumbers_(stripLeadingDoctorSection_(source));
   if (!text) return { text:'', changed:false, rewritten:0, recovered:0, unresolved:[] };
 
   const currentChildren = options.children || buildReportValidationChildren_();
@@ -6358,6 +6359,24 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
     preambleRemoved:preambleRemoved,
     unresolved:uniqueStrings_(unresolved)
   };
+}
+
+function stripLeadingDoctorSection_(text) {
+  const source = String(text || '');
+  const doctorHeader = /(^|\n)[ \t]*[❗‼!]*[ \t]*для[ \t]+врачей[ \t]*:?/i.exec(source);
+  if (!doctorHeader) return source;
+
+  // A room label after the doctors' section marks the start of the child list.
+  // Look for it before removing room numbers, so a doctor note headed with a
+  // child's name cannot become the first child block.
+  const afterHeader = source.slice(doctorHeader.index + doctorHeader[0].length);
+  const roomLine = /(^|\n)[ \t]*(?:палата[ \t]+)?(?:№[ \t]*)?(?:50[1-9]|51[0-2])(?:[ \t]*[:.,;\/\-–—][ \t]*|[ \t]+)?(?:[А-ЯЁ][а-яё]+(?:[ \t]+[А-ЯЁ][а-яё.]{0,20})?[ \t]*[:\-–—]|(?=\n|$))/gim;
+  const firstRoom = roomLine.exec(afterHeader);
+  if (!firstRoom) return source;
+
+  const doctorStart = doctorHeader.index + (doctorHeader[1] ? 1 : 0);
+  const childStart = doctorHeader.index + doctorHeader[0].length + firstRoom.index + (firstRoom[1] ? 1 : 0);
+  return doctorStart === 0 ? source.slice(childStart) : source.slice(0, doctorStart) + source.slice(childStart);
 }
 
 function getLatestReportCell_(sheet, colIndex) {

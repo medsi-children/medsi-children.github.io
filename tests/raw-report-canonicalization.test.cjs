@@ -105,6 +105,56 @@ test('room label after report boilerplate does not remove the first child', () =
   }
 });
 
+test('doctor notes before a room-labelled child list do not become child blocks', () => {
+  const x = api();
+  const lena = child(x, 'Лена', 'Тестовая', '89990000001');
+  const masha = child(x, 'Маша', 'Учебная', '89990000002');
+  lena.index = 0;
+  masha.index = 1;
+  x.buildReportValidationChildren_ = () => [lena, masha];
+  const raw = [
+    'Вечерний отчёт',
+    'Для врачей: Служебное наблюдение.',
+    'Лена — Служебная запись.',
+    'Другая служебная строка.',
+    '501: Лена — Основной текст.',
+    'Маша — Второй текст.'
+  ].join('\n');
+
+  const prepared = x.prepareRawReportSourceText_('evening', raw);
+  assert.equal(prepared.ok, true);
+  assert.equal(prepared.text, 'Лена Т. — Основной текст.\nМаша У. — Второй текст.');
+  const context = x.buildDistributionContext_([lena, masha], []);
+  const parsed = x.parseReportBlocks_(prepared.text, x.buildKnownBaseKeys_([lena, masha]), context);
+  const distributed = x.buildSafeDistribution_('evening', parsed, context);
+  assert.match(distributed.byRow[0], /^Лена: Основной текст\.$/);
+  assert.match(distributed.byRow[1], /^Маша: Второй текст\.$/);
+});
+
+test('admissions and a doctor section before standalone room labels are discarded', () => {
+  const x = api();
+  const lena = child(x, 'Лена', 'Тестовая', '89990000001');
+  const masha = child(x, 'Маша', 'Учебная', '89990000002');
+  lena.index = 0;
+  masha.index = 1;
+  x.buildReportValidationChildren_ = () => [lena, masha];
+  const raw = [
+    '09.10.2026 г. Утро — день',
+    '❗Поступление:',
+    '508 Новый ребёнок, 16 лет',
+    '❗Для врачей',
+    'Служебное наблюдение.',
+    '501',
+    'Лена: Первый текст.',
+    '503',
+    'Маша: Второй текст.'
+  ].join('\n');
+
+  const prepared = x.prepareRawReportSourceText_('morning', raw);
+  assert.equal(prepared.ok, true);
+  assert.equal(prepared.text, 'Лена Т. — Первый текст.\nМаша У. — Второй текст.');
+});
+
 test('room numbers are removed wherever they appear without changing other numbers', () => {
   const x = api();
   const raw = 'Лена — Комната 501: свободна. В 17:00 переход в 502 палату. Номер 1501 и число 3.501 остаются.';
