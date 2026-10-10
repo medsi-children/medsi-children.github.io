@@ -155,7 +155,7 @@ test('surname and relationship corrections preserve the chat and legacy login id
   db.prepare('INSERT INTO chat_profiles VALUES(?,?,?,?,?)').run('9990000001','Анна','Никита Иванова','Мама','');
   db.prepare('INSERT INTO legacy_parent_access VALUES(?)').run('9990000001');
   db.prepare('INSERT INTO chat_messages VALUES(?,?)').run('9990000001','Synthetic history');
-  const wrap=sql=>({args:[],bind(...args){this.args=args;return this},run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}});
+  const wrap=sql=>({args:[],bind(...args){this.args=args;return this},all:async()=>({results:[]}),run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}});
   const context={Response,console};vm.createContext(context);vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {','const worker = {'),context);
   try{
     const env={CHAT_DB:{prepare:wrap,batch:async statements=>Promise.all(statements.map(s=>s.run()))}};
