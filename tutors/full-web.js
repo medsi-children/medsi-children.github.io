@@ -162,10 +162,9 @@
   function openReport(type){$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Психотерапия','Вставьте отчёт по психотерапии.'];setScreen('screenForm',spec[0],spec[1])}
   async function submitReportPayload(type,text,submissionId,onProgress=()=>{}) {
     if (!tutorToken || !['morning','evening','psychology'].includes(type) || !String(text).trim()) throw new Error('Некорректный отчёт.');
-      // Cloudflare outbox accepts the report immediately and drains it to
-      // Apps Script in the background. If unavailable, retain the proven
-      // direct path below as a safe rollback.
-      if(d1Session&&window.MedsiOverlayTransport&&MedsiOverlayTransport.reportSubmit){
+      // Child reports need the Apps Script validation result before the
+      // educator sees a success screen. Psychology has no child blocks.
+      if(type==='psychology'&&d1Session&&window.MedsiOverlayTransport&&MedsiOverlayTransport.reportSubmit){
         try{
           const queued=await MedsiOverlayTransport.reportSubmit(d1Session,{reportType:type,text,submissionId});
           if(queued&&queued.accepted){return {accepted:true}}

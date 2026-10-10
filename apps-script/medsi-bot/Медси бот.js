@@ -1312,6 +1312,7 @@ function getReportHeaderCandidatesForValidation_(text, knownBaseKeys, contextByB
       start: match.index,
       headerEnd: headerRe.lastIndex,
       lineNumber,
+      directResolution: resolution,
       resolution
     });
   }
@@ -1476,6 +1477,36 @@ function validateChildReportFormat_(reportType, text) {
   const candidates = parsed.candidates || [];
   const okCandidates = candidates.filter(item => item.resolution && item.resolution.status === 'ok');
 
+  // Count directly resolved headers before exclusion-based name inference:
+  // that inference can mark two identical bare names ambiguous and hide a
+  // real duplicate from the sender.
+  const duplicateByIdentity = {};
+  const duplicateNames = [];
+  candidates.forEach(item => {
+    const resolution = item.directResolution && item.directResolution.status === 'ok'
+      ? item.directResolution : item.resolution;
+    if (!resolution || resolution.status !== 'ok') return;
+    const targets = reportResolutionTargets_(resolution);
+    const identitiesInBlock = {};
+    targets.forEach(child => {
+      const identity = reportChildIdentityKey_(child);
+      if (!identity || identitiesInBlock[identity]) return;
+      identitiesInBlock[identity] = true;
+      if (!duplicateByIdentity[identity]) {
+        duplicateByIdentity[identity] = { count:0, name:childDisplayNameForReportError_(child, item.rawName) };
+      }
+      duplicateByIdentity[identity].count += 1;
+    });
+  });
+  Object.keys(duplicateByIdentity).forEach(identity => {
+    const item = duplicateByIdentity[identity];
+    if (item.count > 1) duplicateNames.push(item.name);
+  });
+  if (duplicateNames.length) {
+    const names = uniqueStrings_(duplicateNames).slice(0, 8);
+    return makeReportFormatError_(reportDuplicateBlockMessage_(names), { duplicateNames:names });
+  }
+
   if (okCandidates.length === 0) {
     const ambiguous = candidates.filter(item => item.resolution && item.resolution.status === 'ambiguous');
     if (ambiguous.length) {
@@ -1511,52 +1542,6 @@ function validateChildReportFormat_(reportType, text) {
     mainCandidates.filter(item => item.resolution && item.resolution.status === 'ambiguous')
   );
   const ambiguousNames = uniqueStrings_(ambiguous.map(item => item.rawName));
-
-  // Один и тот же ребёнок не должен иметь два отдельных блока отчёта.
-  // При этом дети с одинаковым именем и разными инициалами считаются
-  // разными детьми: «Маша М.» и «Маша У.» разрешены одновременно.
-  const duplicateByIdentity = {};
-  const duplicateNames = [];
-
-  okCandidates.forEach(item => {
-    const resolution = item && item.resolution;
-    const targets = resolution && resolution.children && resolution.children.length
-      ? resolution.children
-      : (resolution && resolution.child ? [resolution.child] : []);
-
-    // Один заголовок может соответствовать нескольким строкам REPORTS одного
-    // ребёнка, например если зарегистрированы оба родителя. Это всё ещё один
-    // блок отчёта, поэтому внутри одного candidate считаем identity только раз.
-    const identitiesInBlock = {};
-
-    targets.forEach(child => {
-      const identity = reportChildIdentityKey_(child);
-      if (!identity || identitiesInBlock[identity]) return;
-      identitiesInBlock[identity] = true;
-
-      if (!duplicateByIdentity[identity]) {
-        duplicateByIdentity[identity] = {
-          count: 0,
-          name: childDisplayNameForReportError_(child, item.rawName)
-        };
-      }
-
-      duplicateByIdentity[identity].count += 1;
-    });
-  });
-
-  Object.keys(duplicateByIdentity).forEach(identity => {
-    const item = duplicateByIdentity[identity];
-    if (item.count > 1) duplicateNames.push(item.name);
-  });
-
-  if (duplicateNames.length) {
-    const names = uniqueStrings_(duplicateNames).slice(0, 8);
-    return makeReportFormatError_(
-      reportDuplicateBlockMessage_(names),
-      { duplicateNames: names }
-    );
-  }
 
   // Only an explicit ":" or dash makes a child-name line a report header.
   // A bare "Лиза Ф" can be an ordinary mention inside another child's block
@@ -6216,7 +6201,7 @@ function rawReportBlockWasPreviouslyDistributed_(kindRaw, block, previousTargets
 function canonicalizeRawChildReport_(textRaw, optionsRaw) {
   const options = optionsRaw || {};
   const source = cleanIncomingText_(textRaw);
-  const text = stripRoomNumbers_(stripLeadingDoctorSection_(source));
+  const text = stripRoomNumbers_(source);
   if (!text) return { text:'', changed:false, rewritten:0, recovered:0, unresolved:[] };
 
   const currentChildren = options.children || buildReportValidationChildren_();
@@ -6361,24 +6346,6 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
   };
 }
 
-function stripLeadingDoctorSection_(text) {
-  const source = String(text || '');
-  const doctorHeader = /(^|\n)[ \t]*[❗‼!]*[ \t]*для[ \t]+врачей[ \t]*:?/i.exec(source);
-  if (!doctorHeader) return source;
-
-  // A room label after the doctors' section marks the start of the child list.
-  // Look for it before removing room numbers, so a doctor note headed with a
-  // child's name cannot become the first child block.
-  const afterHeader = source.slice(doctorHeader.index + doctorHeader[0].length);
-  const roomLine = /(^|\n)[ \t]*(?:палата[ \t]+)?(?:№[ \t]*)?(?:50[1-9]|51[0-2])(?:[ \t]*[:.,;\/\-–—][ \t]*|[ \t]+)?(?:[А-ЯЁ][а-яё]+(?:[ \t]+[А-ЯЁ][а-яё.]{0,20})?[ \t]*[:\-–—]|(?=\n|$))/gim;
-  const firstRoom = roomLine.exec(afterHeader);
-  if (!firstRoom) return source;
-
-  const doctorStart = doctorHeader.index + (doctorHeader[1] ? 1 : 0);
-  const childStart = doctorHeader.index + doctorHeader[0].length + firstRoom.index + (firstRoom[1] ? 1 : 0);
-  return doctorStart === 0 ? source.slice(childStart) : source.slice(0, doctorStart) + source.slice(childStart);
-}
-
 function getLatestReportCell_(sheet, colIndex) {
   const col = Number(colIndex || 1);
   if (!sheet) return null;
@@ -6399,6 +6366,13 @@ function rawReportValidationNote_(validation) {
 
 function prepareRawReportSourceText_(kindRaw, textRaw) {
   const kind = String(kindRaw || '').toLowerCase();
+  if (/(^|\n)[ \t]*[❗‼!]*[ \t]*(?:для[ \t]+врачей|врачам)[ \t]*(?=[:\n]|$)/i.test(cleanIncomingText_(textRaw))) {
+    const validation = makeReportFormatError_(
+      'Ошибка отправки отчёта. Уберите раздел «Для врачей» перед отправкой детского отчёта.',
+      { reason:'doctor_section' }
+    );
+    return { ok:false, text:String(textRaw || ''), validation:validation, message:validation.message };
+  }
   const canonical = canonicalizeRawChildReport_(textRaw);
   const validation = validateChildReportFormat_(kind, canonical.text);
   if (!validation.ok) {
