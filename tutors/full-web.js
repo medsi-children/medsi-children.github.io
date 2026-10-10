@@ -45,7 +45,7 @@
         const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
         if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));
         clearTimeout(timer);return p.result;
-      }catch(e){clearTimeout(timer);lastError=e;if(attempt+1<attempts)await new Promise(resolve=>setTimeout(resolve,350))}
+      }catch(e){clearTimeout(timer);lastError=controller.signal.aborted?new Error('TIMEOUT'):e;if(attempt+1<attempts)await new Promise(resolve=>setTimeout(resolve,350))}
     }
     throw lastError||new Error('TIMEOUT');
   }

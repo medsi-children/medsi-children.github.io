@@ -148,3 +148,31 @@ test('report form keeps invalid text and shows success only after queue receipt'
   assert.equal(context.document.body.dataset.screen, 'screenDone');
   assert.equal(element('btnSend').disabled, false);
 });
+
+test('an aborted Apps Script fallback checks the same submission instead of showing AbortError', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../tutors/full-web.js'), 'utf8');
+  const callApi = source.slice(source.indexOf('  async function callApi('), source.indexOf('  function setAuthError('));
+  const submit = source.slice(source.indexOf('  async function submitReportPayload('), source.indexOf('  async function sendReport('));
+  let requests = 0;
+  const recovered = [];
+  const context = {
+    APP_BASE_URL:'https://example.invalid', tutorToken:'synthetic', d1Session:null,
+    window:{MedsiReportValidation:{validate}}, AbortController,
+    setTimeout:callback=>setTimeout(callback, 1), clearTimeout,
+    fetch:async(_url, options)=>{
+      requests++;
+      return new Promise((_resolve,reject)=>options.signal.addEventListener('abort',()=>{
+        reject(Object.assign(new Error('This operation was aborted'),{name:'AbortError'}));
+      }));
+    },
+    waitForReportAcceptance:async()=>null,
+    recoverReportSubmission:async(kind,text,id)=>{recovered.push({kind,text,id});return {ok:true};}
+  };
+  vm.createContext(context);
+  vm.runInContext(callApi + submit, context);
+  const text = 'Лена — Основной текст.';
+  const result = await context.submitReportPayload('morning',text,'report_synthetic_timeout');
+  assert.equal(result.accepted, true);
+  assert.equal(requests, 1);
+  assert.deepEqual(recovered,[{kind:'morning',text,id:'report_synthetic_timeout'}]);
+});
