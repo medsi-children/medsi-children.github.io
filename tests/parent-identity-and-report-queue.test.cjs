@@ -399,3 +399,33 @@ test('educator frontend no longer waits for Apps Script to delete a child', () =
   assert.doesNotMatch(fn,/deleteReportChildByPhone/);
   assert.ok(fn.indexOf('removePhoneCardOptimistically') < fn.indexOf('await ensureD1Fresh'));
 });
+
+
+test('chat deletion uses a fresh educator session and keeps the child until durable acceptance', async () => {
+  const source=read('chat-overlay/educator-chat.js');
+  const start=source.indexOf('    async function confirmChildDeletion(){');
+  const end=source.indexOf("    childDeleteModal.querySelector('#childDeleteConfirm').onclick=confirmChildDeletion;",start);
+  assert.ok(start>=0&&end>start);
+  assert.doesNotMatch(source,/deleteReportChildByPhone/);
+  const buttons={confirm:{disabled:false},cancel:{disabled:false}};
+  const calls=[], errors=[], removed=[];
+  let response={ok:false,message:'not accepted'};
+  const context={
+    deleteTarget:{phone:'79990000001'},deletionOperations:new Map(),
+    crypto:{randomUUID:()=> '00000000-0000-4000-8000-000000000001'},
+    phone10:value=>String(value).replace(/\D/g,'').slice(-10),
+    childDeleteModal:{querySelector:selector=>selector==='#childDeleteConfirm'?buttons.confirm:buttons.cancel,classList:{add(){}}},
+    window:{MedsiTutorAdmin:{session:async()=>({token:'fresh-synthetic-session'})}},
+    session:{token:'stale-synthetic-session'},
+    transport:{parentDelete:async(auth,payload)=>{calls.push({auth,payload});return response}},
+    overlay:{showError:message=>errors.push(message)},removeDeletedChat:target=>removed.push(target)
+  };
+  vm.createContext(context);vm.runInContext(source.slice(start,end),context);
+  await context.confirmChildDeletion();
+  assert.equal(removed.length,0);assert.ok(context.deleteTarget);assert.equal(errors[0],'not accepted');
+  assert.equal(buttons.confirm.disabled,false);assert.equal(buttons.cancel.disabled,false);
+  response={ok:true,accepted:true};await context.confirmChildDeletion();
+  assert.equal(calls[0].auth.token,'fresh-synthetic-session');
+  assert.equal(calls[0].payload.operationId,calls[1].payload.operationId);
+  assert.equal(removed.length,1);assert.equal(context.deleteTarget,null);
+});

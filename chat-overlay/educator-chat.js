@@ -108,21 +108,10 @@
     let sending=false;
     let disposed=false;
     let deleteTarget=null;
+    const deletionOperations=new Map();
     let threadRequestId=0;
     let initialMessagesRendered=false;
     const THREAD_LOAD_TIMEOUT_MS=8000;
-
-    function tutorToken(){try{return String(localStorage.getItem('medsi_tutor_session_v1')||'')}catch(_){return''}}
-    async function appApi(method,args){
-      const endpoint=window.MEDSI_APP_BASE_URL||'';
-      if(!endpoint)throw new Error('Серверное действие пока не подключено к тестовой оболочке.');
-      const res=await fetch(endpoint,{method:'POST',headers:{'content-type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'api',method,args:args||[]})});
-      const payload=await res.json();
-      if(!payload||!payload.ok)throw new Error(payload&&payload.message||'Ошибка Apps Script API.');
-      const result=payload.result;
-      if(result&&result.ok===false)throw new Error(result.message||'Операция не выполнена.');
-      return result;
-    }
 
     function showListScreen(){
       document.body.dataset.screen='screenChats';
@@ -384,8 +373,28 @@
     imagePreview.querySelector('#chatImageRemoveBtn').onclick=clearFile;
     chatReplyPreview.querySelector('#chatReplyCancel').onclick=()=>setReply(null);
     childDeleteModal.querySelector('#childDeleteCancel').onclick=()=>{deleteTarget=null;childDeleteModal.classList.add('hidden')};
-    childDeleteModal.querySelector('#childDeleteConfirm').onclick=async()=>{if(!deleteTarget)return;const target=deleteTarget;try{childDeleteModal.querySelector('#childDeleteConfirm').disabled=true;await appApi('deleteReportChildByPhone',[target.phone,tutorToken()]);deleteTarget=null;childDeleteModal.classList.add('hidden');removeDeletedChat(target)}catch(err){overlay.showError(err.message)}finally{childDeleteModal.querySelector('#childDeleteConfirm').disabled=false}};
-    childDeleteModal.onclick=e=>{if(e.target===childDeleteModal){deleteTarget=null;childDeleteModal.classList.add('hidden')}};
+    async function confirmChildDeletion(){
+      const confirmButton=childDeleteModal.querySelector('#childDeleteConfirm');
+      const cancelButton=childDeleteModal.querySelector('#childDeleteCancel');
+      if(!deleteTarget||confirmButton.disabled)return;
+      const target=deleteTarget;
+      const targetPhone=phone10(target.phone);
+      if(!deletionOperations.has(targetPhone))deletionOperations.set(targetPhone,'delete_'+crypto.randomUUID().replace(/-/g,''));
+      confirmButton.disabled=true;cancelButton.disabled=true;
+      try{
+        if(typeof transport.parentDelete!=='function')throw new Error('Не загрузилось быстрое удаление. Обновите страницу и попробуйте ещё раз.');
+        const auth=window.MedsiTutorAdmin&&typeof window.MedsiTutorAdmin.session==='function'
+          ?await window.MedsiTutorAdmin.session():session;
+        const result=await transport.parentDelete(auth,{phone:target.phone,operationId:deletionOperations.get(targetPhone)});
+        if(!result||result.ok!==true||result.accepted!==true)throw new Error(result&&result.message||'Не удалось подтвердить удаление.');
+        deletionOperations.delete(targetPhone);
+        deleteTarget=null;childDeleteModal.classList.add('hidden');removeDeletedChat(target);
+        window.MedsiEducatorPrewarm?.clear();
+      }catch(err){overlay.showError(err.message)}
+      finally{confirmButton.disabled=false;cancelButton.disabled=false}
+    }
+    childDeleteModal.querySelector('#childDeleteConfirm').onclick=confirmChildDeletion;
+    childDeleteModal.onclick=e=>{if(e.target===childDeleteModal&&!childDeleteModal.querySelector('#childDeleteConfirm').disabled){deleteTarget=null;childDeleteModal.classList.add('hidden')}};
     document.addEventListener('click',closeMessageMenu);
 
     loadChats(false);
