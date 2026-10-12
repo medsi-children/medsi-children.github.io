@@ -464,7 +464,7 @@
 
   function offerTherapy() {
     const actions = element('div', 'choices');
-    const open = actionButton('Психотерапия', '1f9e0.svg', () => requestTherapyReport());
+    const open = actionButton('Групповая терапия', '1f9e0.svg', () => requestTherapyReport());
     actions.appendChild(open);
     conversation.appendChild(actions);
     scrollToEnd();
