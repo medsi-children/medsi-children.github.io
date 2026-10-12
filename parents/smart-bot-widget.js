@@ -300,8 +300,8 @@
     await Promise.all([
       educator || window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261002-15'),
       window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20261009-psych-conclusion-1'),
-      script('/parents/bot-chat-view.js?v=20261005-2'),
-      script('/parents/bot-chat-runtime.js?v=20261008-routine-dance-1'),
+      script('/parents/bot-chat-view.js?v=20261012-group-therapy-label-1'),
+      script('/parents/bot-chat-runtime.js?v=20261012-group-therapy-label-1'),
       avatarReady
     ]);
     frame = document.createElement('section');
