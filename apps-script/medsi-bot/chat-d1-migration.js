@@ -668,10 +668,28 @@ function onReportsD1Edit(event) {
       return;
     }
     reconcileReportsProfilesToD1_('edit');
-  } catch (error) { Logger.log('REPORTS_D1_EDIT_SYNC_FAILED ' + (error && error.message || error)); }
+  } catch (error) {
+    const message = String(error && error.message || error);
+    Logger.log('REPORTS_D1_EDIT_SYNC_FAILED ' + message);
+    try {
+      const range = event && event.range;
+      const sheet = range && range.getSheet();
+      const sheetName = sheet && sheet.getName();
+      if (range && range.getRow() === 1 && range.getColumn() === 1 &&
+          (sheetName === SHEET_MORNING || sheetName === SHEET_EVENING)) {
+        setRawReportSourceNote_(range, 'Ошибка автоматической обработки отчёта: ' + message + '. Исходный текст сохранён; повторите изменение ячейки после устранения причины.');
+      }
+    } catch (noteError) {
+      Logger.log('REPORTS_D1_EDIT_ERROR_NOTE_FAILED ' + (noteError && noteError.message || noteError));
+    }
+  }
 }
 
 function onReportsD1Change(event) {
+  // A cell edit already has a dedicated onEdit handler. Running the broader
+  // profile reconciliation for EDIT events holds the global script lock while
+  // it calls D1, blocking report publication and distribution.
+  if (event && String(event.changeType || '').toUpperCase() === 'EDIT') return;
   try { reconcileReportsProfilesToD1_('change:' + String(event && event.changeType || 'unknown')); }
   catch (error) { Logger.log('REPORTS_D1_CHANGE_SYNC_FAILED ' + (error && error.message || error)); }
 }

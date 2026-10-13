@@ -1666,7 +1666,9 @@ function getReportSubmissionStatus(submissionIdRaw, tutorTokenRaw) {
 // Report retries carry the original submission time. A retry of an old
 // queued request must not overwrite a newer website or manual publication.
 function saveRawReportPublication_(kind, cell, text, publicationAt, expectedRaw) {
-  const lock = LockService.getScriptLock();
+  // Report publication/distribution has its own lock so long profile syncs
+  // cannot prevent a report from being saved or canonicalized.
+  const lock = LockService.getUserLock();
   lock.waitLock(5000);
   try {
     if (expectedRaw !== undefined && String(cell.getValue() || '') !== expectedRaw) return false;
@@ -6745,7 +6747,7 @@ function applyRawReportCleanup_(plan) {
 }
 
 function distributeChildReports(triggerKindRaw) {
-  return withChatWriteLock_(function() {
+  return withReportWriteLock_(function() {
   removeLegacyDistributionLogSheet_();
 
   const dataSheet    = getDataSheet_();
@@ -6828,6 +6830,16 @@ function distributeChildReports(triggerKindRaw) {
     Logger.log('REPORT_CURRENT_SYNC_AFTER_DISTRIBUTION_FAILED ' + (error && error.message || error));
   }
   });
+}
+
+function withReportWriteLock_(callback) {
+  const lock = LockService.getUserLock();
+  lock.waitLock(15000);
+  try {
+    return callback();
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function pluralizeDaysRu_(n) {
