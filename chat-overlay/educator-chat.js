@@ -358,7 +358,6 @@
     btnRefreshChats.onclick=()=>loadChats(true);
     btnThreadBack.onclick=()=>{threadRequestId++;activeChat=null;setReply(null);editing=null;clearFile();editor.textContent='';bucket='unread';loadChats(false)};
     btnQuickReplies.onclick=()=>quickPanel.classList.toggle('hidden');
-    quickDoctors.onclick=()=>doctorButtons.classList.toggle('hidden');
     btnVideo.onclick=()=>fileInput.click();
     attach.onclick=()=>fileInput.click();
     send.onclick=submit;
