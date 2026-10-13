@@ -19,6 +19,19 @@ test('spreadsheet change trigger skips ordinary cell edits', () => {
   assert.equal(calls, 1);
 });
 
+test('simple onEdit can start without spreadsheet-scope access', () => {
+  let spreadsheetReads = 0;
+  const context = {
+    Logger: { log() {} },
+    SpreadsheetApp: { openById() { spreadsheetReads += 1; throw new Error('Spreadsheet scope is unavailable'); } },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: () => 'synthetic-sheet' }) }
+  };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'Медси бот.js'), 'utf8'), context);
+  context.onEdit({ range: { getSheet: () => ({ getName: () => 'MORNING' }), getRow: () => 1, getColumn: () => 1 } });
+  assert.equal(spreadsheetReads, 0);
+});
+
 test('report publication uses a dedicated user lock', () => {
   const acquired = [];
   const lock = { waitLock() {}, releaseLock() {} };

@@ -769,9 +769,19 @@ function loadNameEquivalents_() {
   return { dict, canon };
 }
 
-const NAME_DATA = loadNameEquivalents_();
-const NAME_EQUIVALENTS = NAME_DATA.dict;
-const CANON_NAME_MAP   = NAME_DATA.canon;
+// Do not access SpreadsheetApp while Apps Script is initializing globals.
+// Simple triggers (such as onEdit) cannot call openById; load the shared
+// variants only when a name-matching helper actually needs them.
+let NAME_DATA = null;
+let NAME_EQUIVALENTS = {};
+let CANON_NAME_MAP = {};
+
+function ensureNameEquivalentsLoaded_() {
+  if (NAME_DATA) return;
+  NAME_DATA = loadNameEquivalents_();
+  NAME_EQUIVALENTS = NAME_DATA.dict;
+  CANON_NAME_MAP = NAME_DATA.canon;
+}
 
 // Historical helper kept for compatibility. NAME_VARIANTS is now matching-only:
  // it must never rename the child's stored/display first name.
@@ -801,6 +811,7 @@ function capWord(w) {
 
 function isInNameBase(nameNorm) {
   if (!nameNorm) return false;
+  ensureNameEquivalentsLoaded_();
   const canonKey = (CANON_NAME_MAP && CANON_NAME_MAP[nameNorm]) ? CANON_NAME_MAP[nameNorm] : nameNorm;
   return !!NAME_EQUIVALENTS && Object.prototype.hasOwnProperty.call(NAME_EQUIVALENTS, canonKey);
 }
@@ -1001,6 +1012,7 @@ function baseNameTrimInitial_(s) {
 }
 
 function getAllNameVariantsForBase_(baseRaw) {
+  ensureNameEquivalentsLoaded_();
   const cleaned = String(baseRaw || '')
     .replace(/❗️|❗|‼️|‼|!+/g, '')
     .trim();
@@ -5339,6 +5351,7 @@ function isInitialSuffixKey_(suffixKey) {
 }
 
 function getNameBaseKey_(nameRaw) {
+  ensureNameEquivalentsLoaded_();
   const base = stripInitialFromName_(nameRaw);
   const key0 = normalizeName_(base);
   return (CANON_NAME_MAP && CANON_NAME_MAP[key0]) ? CANON_NAME_MAP[key0] : key0;
