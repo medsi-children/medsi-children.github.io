@@ -28,7 +28,8 @@ test('experimental parent and educator routes load isolated assets; production p
   assert.match(parentAssistant, /host=document\.body/);
   assert.match(read('parents/chat-ui-test.css'), /width:min\(360px,calc\(100vw - 24px - env\(safe-area-inset-left\) - env\(safe-area-inset-right\)\)\)/);
   assert.match(read('chat-overlay/educator-exact-test.css'), /\.tutor-assistant-close\{/);
-  assert.match(educatorLayout, /width:min\(96vw,1600px\)!important/);
+  assert.match(educatorLayout, /width:min\(94vmin,860px\)!important/);
+  assert.match(educatorLayout, /height:min\(94vmin,860px\)!important/);
   assert.match(educatorLayout, /@media \(min-width: 900px\)/);
   assert.match(tutorAssistant, /if\(!initialMessagesRendered\)\{/);
   assert.match(tutorAssistant, /detectTutorSuggestion\(\[\],cached\.rows\)/);
