@@ -49,6 +49,16 @@ test('experimental parent assistant uses the Medsi blob and existing report-dela
   assert.match(source, /\/lab\/report-history/);
 });
 
+test('the production parent chat now has the same tested assistant flow and styling', () => {
+  const production = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen.js'), 'utf8');
+  const experimental = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-ui.css'), 'utf8');
+  assert.equal(production, experimental);
+  assert.match(production, /if\(!isRetry&&assistantBypass!==text\)/);
+  assert.match(production, /function showAssistantFollowup\(resolved\)/);
+  assert.match(styles, /\.parent-assistant-card\{/);
+});
+
 test('experimental parent and educator doctor contacts match the assistant and stay in one quick-reply button', () => {
   const parentTest = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
   const parentAssistant = fs.readFileSync(path.join(__dirname, '..', 'parents', 'bot-chat-runtime.js'), 'utf8');

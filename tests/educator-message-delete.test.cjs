@@ -56,3 +56,13 @@ test('both educator panels expose delete for parent messages while keeping own-m
     assert.match(source,/m\.side==='educator'&&m\.type==='text'.*Редактировать/);
   }
 });
+
+test('the production educator panel includes the tested assistant suggestions and their reply preset',()=>{
+  const production=read('chat-overlay/educator-chat.js');
+  const experimental=read('chat-overlay/educator-chat-test.js');
+  const styles=read('tutors/assistant.css');
+  assert.equal(production,experimental);
+  assert.match(production,/function detectTutorSuggestion\(previous,next\)/);
+  assert.match(production,/\['reportDelay','Задержка отчёта','quick-indigo'\]/);
+  assert.match(styles,/\.tutor-assistant-suggestion\{/);
+});

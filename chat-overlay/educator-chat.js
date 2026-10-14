@@ -8,6 +8,7 @@
     delivery:"🗺️ Адрес: Гринвуд, с11, Путилково\nДля курьера напишите «на 5 этаж» и имя ребёнка.\n\n✅ Что можно привезти или заказать:\nЛюбую еду и напитки в безопасной упаковке - пиццу, суши, сладости, фрукты, сок. Также можно передать одежду, книги, раскраски, творческие наборы, безопасную канцелярию.\n\n🚫 Что нельзя передавать:\nОстрые и колюще-режущие предметы (ножницы, лезвия, точилки), стекло, металлические банки, аэрозоли и столовые приборы. Также нельзя кофе, энергетики, табак, вейпы и личную электронику.\n\n💊 Лекарства — только после согласования с лечащим врачом.\n❓ Если сомневаетесь насчёт вещи, уточните у воспитателей.",
     routine:`💌 Дорогие родители!\n\n🕘 РЕЖИМ ДНЯ\n\n☀️ Утро\n\n8:00 — Подъём\n8:30 — Зарядка\n9:00 — Завтрак\n9:30 — Игры и творчество\n10:00 — Групповая психотерапия\n11:00 — Прогулка\n12:00 — Игры и творчество\n13:00 — Обед\n14:00 — Сон-час\n\n🌙 Вечер\n\n16:00 — Танцы\n16:30 — Полдник\n17:00 — Игры и творчество\n18:00 — Ужин\n18:15 — Киносеанс\n21:00 — Подготовка ко сну / \nМедицинские процедуры\n22:00 — Отбой\n\n🩵 Спасибо за понимание!\nДетское Отделение Медси`,
     writeTopic:`💌 Дорогие родители!\n\n🗣️ Здесь можно задать вопрос, оставить пожелания по отчётам, получить просьбы ребёнка по доставке и согласовать звонки или онлайн-уроки.\n\n⭐ Вся информация по состоянию ребёнка входит в отчёт и обновляется два раза в день. Ответы на свои вопросы вы получите в составе следующего отчёта!\n\n💊 Все вопросы по медикаментам и терапии обсуждаются с вашим врачом!\n\n💬 Встречи и звонки также обсуждаются с лечащим врачом.\n\n‼️ У воспитателей и психологов нет возможности регулярно отвечать в чате, так как они работают с детьми.\n\n🔔 Расписание отчётов:\n\n☀️ Утро-день — до 16:00\n🌙 День-вечер — до 22:00\n🧠 Психотерапия — до 20:00\n\n🩵 Спасибо за понимание!\nДетское Отделение Медси`,
+    reportDelay:`💌 Дорогие родители!\n\nСегодня подготовка отчёта занимает немного больше времени, чем обычно. Пожалуйста, наберитесь терпения. Если в ближайшие часы отчёт не появится, напишите нам в чате.\n\n🩵 Спасибо за понимание!\nДетское Отделение Медси`,
     doctors:"Контакты врачей:\n\nАнастасия Михайловна\n+79253394090\nРабочие часы: с 9:00 до 18:00.\nВыходные дни: пятница и суббота.\n\nАнтон Геннадьевич\n+79859927884\nРабочие часы: с 9:00 до 18:00.\nВыходные дни: воскресенье и понедельник.\n\nПожалуйста, пишите и звоните врачам в рабочее время."
   };
   const threadCache=new Map();
@@ -79,7 +80,7 @@
     threadRow.append(btnThreadBack,btnQuickReplies,btnVideo);
     const quickPanel=document.createElement('div');quickPanel.id='quickRepliesPanel';quickPanel.className='quick-panel hidden';
     const quickGrid=document.createElement('div');quickGrid.className='quick-grid';
-    const quickDefs=[['meetings','Встречи с детьми','quick-red'],['meetTime','Время встреч','quick-orange'],['calls','Звонки детям','quick-yellow'],['therapy','Терапия и препараты','quick-green'],['delivery','Доставка еды и вещей','quick-cyan'],['routine','Режим дня','quick-blue'],['writeTopic','Пишите по делу','quick-purple'],['doctors','Контакты врачей','quick-doctors']];
+    const quickDefs=[['meetings','Встречи с детьми','quick-red'],['meetTime','Время встреч','quick-orange'],['calls','Звонки детям','quick-yellow'],['therapy','Терапия и препараты','quick-green'],['delivery','Доставка еды и вещей','quick-cyan'],['reportDelay','Задержка отчёта','quick-indigo'],['routine','Режим дня','quick-blue'],['writeTopic','Пишите по делу','quick-purple'],['doctors','Контакты врачей','quick-doctors']];
     quickDefs.forEach(([key,label,cls])=>{const b=document.createElement('button');b.type='button';b.className='quick-btn '+cls;b.textContent=label;b.onclick=()=>{editor.textContent=QUICK_REPLIES[key];quickPanel.classList.add('hidden');focusEditor()};quickGrid.appendChild(b)});
     quickPanel.appendChild(quickGrid);
     screenChatThread.append(chatThreadHeader,chatThreadBox,chatThreadError,chatReplyPreview,chatCompose,imagePreview,threadRow,quickPanel);
@@ -104,7 +105,43 @@
     const deletionOperations=new Map();
     let threadRequestId=0;
     let initialMessagesRendered=false;
+    let tutorAssistantCard=null,tutorAssistantSeen=new Set();
     const THREAD_LOAD_TIMEOUT_MS=8000;
+
+    function closeTutorAssistant(){if(tutorAssistantCard){tutorAssistantCard.remove();tutorAssistantCard=null}}
+    function makeTutorSuggestion(message){
+      if(!message||message.side!=='parent'||message.type!=='text')return false;
+      const key=messageKey(message);
+      if(!key||tutorAssistantSeen.has(key)||editorText())return false;
+      const text=String(message.text||'').toLocaleLowerCase('ru').replace(/ё/g,'е');let reply='';
+      if(/отчет|сводк/.test(text)&&/нет|не приш|не появ|где|стар|задерж|когда/.test(text))reply=QUICK_REPLIES.reportDelay;
+      else if(/достав|курьер|переда|привез|посыл/.test(text))reply=QUICK_REPLIES.delivery;
+      else return false;
+      tutorAssistantSeen.add(key);closeTutorAssistant();
+      const card=document.createElement('section');card.className='tutor-assistant-suggestion';card.setAttribute('aria-live','polite');
+      const close=document.createElement('button');close.type='button';close.className='tutor-assistant-close';close.setAttribute('aria-label','Закрыть подсказку');close.textContent='×';close.onclick=closeTutorAssistant;
+      const mark=document.createElement('span');mark.className='tutor-assistant-mark';mark.setAttribute('aria-hidden','true');mark.innerHTML='<span class="medsi-character"><img class="medsi-character-body" src="/parents/blob.webp" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span>';
+      const title=document.createElement('strong');title.textContent='Медси Бот';
+      const body=document.createElement('div');body.className='tutor-assistant-copy';body.textContent='Похоже, родитель спрашивает о '+(/отчет|сводк/.test(text)?'задержке отчёта':'доставке')+'. Хотите, я предложу ответ?';
+      const actions=document.createElement('div');actions.className='tutor-assistant-actions';
+      const prepare=document.createElement('button');prepare.type='button';prepare.textContent='Да';prepare.onclick=()=>{body.textContent=reply;actions.replaceChildren();const sendReply=document.createElement('button');sendReply.type='button';sendReply.textContent='Отправить';sendReply.onclick=()=>{if(editorText()){closeTutorAssistant();return}closeTutorAssistant();editor.textContent=reply;focusEditor();submit()};const back=document.createElement('button');back.type='button';back.className='secondary';back.textContent='Назад';back.onclick=()=>{body.textContent='Похоже, родитель спрашивает о '+(/отчет|сводк/.test(text)?'задержке отчёта':'доставке')+'. Хотите, я предложу ответ?';actions.replaceChildren(prepare,dismiss)};actions.append(sendReply,back)};
+      const dismiss=document.createElement('button');dismiss.type='button';dismiss.className='secondary';dismiss.textContent='Нет';dismiss.onclick=closeTutorAssistant;
+      actions.append(prepare,dismiss);card.append(close,mark,title,body,actions);document.body.appendChild(card);tutorAssistantCard=card;return true;
+    }
+    function detectTutorSuggestion(previous,next){
+      if(!Array.isArray(next)||!Array.isArray(previous))return;
+      const old=new Set(previous.map(messageKey));
+      if(!initialMessagesRendered){
+        for(let i=next.length-1;i>=0;i--){const row=next[i];if(!row||row.side!=='parent')continue;
+          const stamp=Number(row.timestamp),age=Date.now()-(stamp<1e12?stamp*1000:stamp);
+          const hasLaterEducatorReply=next.slice(i+1).some(item=>item&&item.side==='educator');
+          if(stamp&& (age<0||age>24*60*60*1000)||hasLaterEducatorReply)return;
+          makeTutorSuggestion(row);return;
+        }
+        return;
+      }
+      for(let i=next.length-1;i>=0;i--){const row=next[i];if(row&&row.side==='parent'&&!old.has(messageKey(row))){makeTutorSuggestion(row);return}}
+    }
 
     function showListScreen(){
       document.body.dataset.screen='screenChats';
@@ -270,9 +307,10 @@
         const res=await threadWithTimeout(targetPhone);
         if(disposed)return;
         if(requestId!==threadRequestId||!activeChat||phone10(activeChat.phone)!==targetPhone)return;
-        const receivedRows=Array.isArray(res&&res.messages)?res.messages:[];
-        const pendingRows=activeRows.filter(isPending).filter(pending=>!receivedRows.some(row=>samePendingMessage(pending,row)));
-        const nextRows=receivedRows.concat(pendingRows);
+      const receivedRows=Array.isArray(res&&res.messages)?res.messages:[];
+      const pendingRows=activeRows.filter(isPending).filter(pending=>!receivedRows.some(row=>samePendingMessage(pending,row)));
+      const nextRows=receivedRows.concat(pendingRows);
+      detectTutorSuggestion(activeRows,receivedRows);
         setCached(targetPhone,nextRows);
         renderRows(nextRows,!preserve||gap<80,{preserveExact:preserve&&gap>80,animateInitial:!initialMessagesRendered});
       }catch(err){
@@ -281,6 +319,7 @@
     }
     async function openThread(chat){
       threadRequestId++;
+      closeTutorAssistant();
       setReply(null);editing=null;clearFile();editor.textContent='';
       activeRows=[];
       initialMessagesRendered=false;
@@ -288,7 +327,7 @@
       if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
       showThreadScreen();renderThreadHeader(chat);
       const cached=getCached(chat.phone);
-      if(cached){chatThreadBox.replaceChildren();renderRows(cached.rows,true,{animateInitial:true});}
+      if(cached){chatThreadBox.replaceChildren();detectTutorSuggestion([],cached.rows);renderRows(cached.rows,true,{animateInitial:true});}
       else{
         const connecting=document.createElement('div');connecting.className='chat-empty';connecting.dataset.state='connecting';connecting.textContent='Подключаемся к чату…';chatThreadBox.replaceChildren(connecting);
       }
@@ -356,7 +395,7 @@
     btnChatsBack.onclick=()=>overlay.close();
     btnNewChat.onclick=()=>overlay.showError('Экран выбора нового родителя перенесём следующим блоком из оригинала.');
     btnRefreshChats.onclick=()=>loadChats(true);
-    btnThreadBack.onclick=()=>{threadRequestId++;activeChat=null;setReply(null);editing=null;clearFile();editor.textContent='';bucket='unread';loadChats(false)};
+    btnThreadBack.onclick=()=>{closeTutorAssistant();threadRequestId++;activeChat=null;setReply(null);editing=null;clearFile();editor.textContent='';bucket='unread';loadChats(false)};
     btnQuickReplies.onclick=()=>quickPanel.classList.toggle('hidden');
     btnVideo.onclick=()=>fileInput.click();
     attach.onclick=()=>fileInput.click();

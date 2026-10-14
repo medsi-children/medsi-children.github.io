@@ -24,7 +24,120 @@
     if(!label)label=new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'long',...(n&&p.year===n.year?{}:{year:'numeric'})}).format(new Date(Number(value)));
     return{key:p.key,label};
   }
-  let state=null,rows=[],busy=false,dead=false,chatClosed=false,chatPending=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false,initialMessagesRendered=false,retryDraft=null;
+  let state=null,rows=[],busy=false,dead=false,chatClosed=false,chatPending=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false,initialMessagesRendered=false,retryDraft=null,assistantCard=null,assistantDraft='',assistantBypass='';
+
+  const ASSISTANT_ANSWERS={
+    reportDelay:'Вы про утренний отчёт или вечерний отчёт?',
+    reportRequest:'',
+    reports:'Утренний отчёт с 15:00 до 16:00.\nВечерний — с 21:00 до 22:00.\n\nХотите посмотреть отчёт?',
+    delivery:'🗺️ Адрес: Гринвуд, с11, Путилково\nДля курьера напишите «на 5 этаж» и имя ребёнка.\n\n✅ Что можно привезти или заказать:\nЛюбую еду и напитки в безопасной упаковке - пиццу, суши, сладости, фрукты, сок. Также можно передать одежду, книги, раскраски, творческие наборы, безопасную канцелярию.\n\n🚫 Что нельзя передавать:\nОстрые и колюще-режущие предметы (ножницы, лезвия, точилки), стекло, металлические банки, аэрозоли и столовые приборы. Также нельзя кофе, энергетики, табак, вейпы и личную электронику.\n\n💊 Лекарства — только после согласования с лечащим врачом.\n❓ Если сомневаетесь насчёт вещи, уточните у воспитателей.',
+    meetings:'Встречу с ребёнком, пожалуйста, согласуйте с лечащим врачом. Он поможет выбрать время с учётом состояния ребёнка.',
+    meetTime:'Встречи с детьми проходят с 17:00 до 20:00. Пожалуйста, согласуйте встречу с лечащим врачом.',
+    calls:'Звонок ребёнку, пожалуйста, согласуйте с лечащим врачом. Он поможет выбрать подходящее время.',
+    doctors:'Контакты врачей:\n\nАнастасия Михайловна\n+79253394090\nРабочие часы: с 9:00 до 18:00.\nВыходные дни: пятница и суббота.\n\nАнтон Геннадьевич\n+79859927884\nРабочие часы: с 9:00 до 18:00.\nВыходные дни: воскресенье и понедельник.\n\nПожалуйста, пишите и звоните врачам в рабочее время.',
+    payment:'По вопросам оплаты свяжитесь с лечащим врачом. Оплата производится на ресепшене клиники.',
+    routine:'☀️ Утро\n8:00 — Подъём\n8:30 — Зарядка\n9:00 — Завтрак\n9:30 — Игры и творчество\n10:00 — Групповая терапия\n11:00 — Прогулка\n12:00 — Игры и творчество\n13:00 — Обед\n14:00 — Сон-час\n\n🌙 Вечер\n16:00 — Танцы\n16:30 — Полдник\n17:00 — Игры и творчество\n18:00 — Ужин\n18:15 — Киносеанс\n21:00 — Подготовка ко сну / медицинские процедуры\n22:00 — Отбой\n\nВстречи с детьми: 17:00–20:00.',
+    writeEducators:'Напишите воспитателям в чате — они ответят, как только смогут.',
+    medical:'Вопросы о лечении, препаратах, процедурах и анализах, пожалуйста, обсуждайте с лечащим врачом. Воспитатели не владеют такой информацией.',
+    medicine:'Вопросы о лекарствах, назначениях и дозировках, пожалуйста, обсуждайте с лечащим врачом. Воспитатели не владеют такой информацией.',
+    individualTherapy:'По вопросам индивидуальной психотерапии, пожалуйста, связывайтесь напрямую с вашим психологом.'
+  };
+  const DOCTOR_CONTACT_INTENTS=new Set(['meetings','meetTime','calls','payment','medical','medicine']);
+  function assistantIntent(text){
+    const bot=window.MedsiSmartBot;if(!bot||typeof bot.analyze!=='function')return null;
+    let result;try{result=bot.analyze(text)}catch(_){return null}
+    if(!result||result.confidence<0.9)return null;
+    const intent=result.intent,key=typeof intent==='string'?intent:intent&&intent.key;
+    if(!key||!Object.prototype.hasOwnProperty.call(ASSISTANT_ANSWERS,key))return null;
+    // Срочные и напрямую адресованные воспитателям сообщения остаются обычными.
+    if(['urgent','writeEducators','educators','childStatus','clarifyReportMedical','clarifyDoctorMeeting'].includes(key))return null;
+    if(key==='delivery'&&intent&&intent.variant==='medicine')return{key,kind:intent.kind||'',variant:intent.variant,answer:ASSISTANT_ANSWERS.delivery};
+    return{key,kind:intent&&typeof intent==='object'?intent.kind:'',variant:intent&&typeof intent==='object'?intent.variant:'',answer:ASSISTANT_ANSWERS[key]};
+  }
+  function moscowDateKey(value){const date=new Date(value);if(Number.isNaN(date.getTime()))return'';const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);return parts.filter(p=>p.type!=='literal').map(p=>p.value).join('-')}
+  function assistantReportStatus(kind){
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Moscow',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+    const minutes=Number(parts.hour)*60+Number(parts.minute);if(kind==='evening'&&minutes<180)return'late';
+    const start=kind==='morning'?900:1260,end=kind==='morning'?960:1320;
+    return minutes<start?'before':minutes<end?'publishing':minutes<end+60?'grace':'late';
+  }
+  function assistantReportDelayText(kind){
+    const status=assistantReportStatus(kind),title=kind==='morning'?'Утренний':'Вечерний',window=kind==='morning'?'с 15:00 до 16:00':'с 21:00 до 22:00';
+    if(status==='before')return`${title} отчёт обычно появляется ${window}. Пожалуйста, дождитесь этого времени.`;
+    if(status==='publishing'||status==='grace')return'Похоже, сегодня подготовка отчёта занимает немного больше времени. Пожалуйста, подождите ещё немного.';
+    return'Пожалуйста, попробуйте перезапустить приложение. Если отчет все еще не появится, вероятно произошла ошибка. Пожалуйста, сообщите воспитателям в чате 🙏';
+  }
+  async function assistantReportAnswer(kind,delayed){
+    try{
+      const session=await currentSession(),current=await t.request(session,'/lab/report-current');
+      if(!current)return'Чтобы я мог проверить отчёт, пожалуйста, войдите в Медси Бот.';
+      const currentReports=(current.reports||[]).filter(item=>['morning','evening'].includes(item.kind)&&String(item.text||'').trim());
+      let history=[],historyAvailable=true;
+      if(delayed||!kind){try{history=(await t.request(session,'/lab/report-history')).reports||[]}catch(_){historyAvailable=false}}
+      const found=currentReports.find(item=>item.kind===kind);
+      if(!delayed){
+        if(found)return found.text;
+        return`Пока нет доступного ${kind==='morning'?'утреннего':'вечернего'} отчёта. Обычно он появляется ${kind==='morning'?'с 15:00 до 16:00':'с 21:00 до 22:00'}.`;
+      }
+      const today=moscowDateKey(Date.now()),published=history.find(item=>item.kind===kind&&item.reportDate===today&&String(item.text||'').trim());
+      if(published)return published.text;
+      const previous=history.find(item=>item.kind===kind&&String(item.text||'').trim());
+      if(found&&previous&&String(found.text).trim()!==String(previous.text).trim())return found.text;
+      if(found&&(!previous||!historyAvailable))return'Я вижу последний доступный отчёт, но сейчас не могу точно проверить дату публикации нового. Покажу доступный отчёт.\n\n'+found.text;
+      if(!historyAvailable)return'Сейчас не получилось проверить, опубликован ли новый отчёт. Пожалуйста, попробуйте ещё раз чуть позже.';
+      return assistantReportDelayText(kind);
+    }catch(_){return delayed?'Сейчас не получилось проверить, опубликован ли новый отчёт. Пожалуйста, попробуйте ещё раз чуть позже.':'Сейчас не получилось загрузить отчёт. Пожалуйста, попробуйте ещё раз чуть позже.'}
+  }
+  async function assistantAnswer(suggestion){
+    if(suggestion.key==='reportDelay')return suggestion.kind?assistantReportAnswer(suggestion.kind,true):ASSISTANT_ANSWERS.reportDelay;
+    if(suggestion.key==='reportRequest')return suggestion.kind?assistantReportAnswer(suggestion.kind,false):ASSISTANT_ANSWERS.reports;
+    if(suggestion.key==='medical'&&suggestion.variant==='medicine')return ASSISTANT_ANSWERS.medicine;
+    return suggestion.answer;
+  }
+  function closeAssistantCard(keepDraft=true,bypass=false){
+    if(assistantCard){assistantCard.remove();assistantCard=null}
+    const input=$('parentChatInput');if(bypass&&keepDraft)assistantBypass=assistantDraft;
+    assistantDraft='';input.disabled=busy||chatClosed||chatPending;$('parentChatSend').disabled=busy||chatClosed||chatPending;$('parentChatAttach').disabled=busy||chatClosed||chatPending;
+  }
+  function assistantButton(label,action,kind){const button=document.createElement('button');button.type='button';button.className='parent-assistant-action'+(kind?' '+kind:'');button.textContent=label;button.onclick=action;return button}
+  function showAssistantCard(text,answer){
+    closeAssistantCard(false);assistantDraft=text;
+    const host=document.body;if(!host)return;
+    const card=document.createElement('section');card.className='parent-assistant-card';card.setAttribute('role','dialog');card.setAttribute('aria-label','Подсказка Медси Бота');
+    const close=document.createElement('button');close.type='button';close.className='parent-assistant-close';close.setAttribute('aria-label','Закрыть подсказку');close.textContent='×';close.onclick=()=>closeAssistantCard(true,true);
+    const mascot=document.createElement('span');mascot.className='parent-assistant-mascot';mascot.setAttribute('aria-hidden','true');mascot.innerHTML='<span class="medsi-character"><img class="medsi-character-body" src="/parents/blob.webp" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span>';
+    const title=document.createElement('strong');title.className='parent-assistant-title';title.textContent='Медси Бот';
+    const body=document.createElement('div');body.className='parent-assistant-copy';body.textContent='Хотите, я отвечу?';
+    const actions=document.createElement('div');actions.className='parent-assistant-actions';
+    const suggestion=assistantIntent(text);
+    function showResolutionActions(){actions.replaceChildren(assistantButton('Да, вопрос решился',()=>showAssistantFollowup(true)),assistantButton('Нет',()=>showAssistantFollowup(false),'secondary'))}
+    async function presentAnswer(selected){
+      body.textContent=await assistantAnswer(selected);actions.replaceChildren();
+      const needsDoctorContacts=DOCTOR_CONTACT_INTENTS.has(selected.key)||(selected.key==='delivery'&&selected.variant==='medicine');
+      if(needsDoctorContacts){
+        actions.append(assistantButton('Контакты врача',()=>{body.textContent=ASSISTANT_ANSWERS.doctors;showResolutionActions()}));
+        return;
+      }
+      showResolutionActions();
+    }
+    function beginAnswer(){
+      if(suggestion&&suggestion.key==='reportDelay'&&!suggestion.kind){
+        body.textContent='Вы про утренний отчёт или вечерний отчёт?';
+        actions.replaceChildren(assistantButton('Утренний отчёт',()=>presentAnswer({...suggestion,kind:'morning'})),assistantButton('Вечерний отчёт',()=>presentAnswer({...suggestion,kind:'evening'})));
+        return;
+      }
+      presentAnswer(suggestion||{answer:''});
+    }
+    actions.append(assistantButton('Да',beginAnswer),assistantButton('Нет',()=>{const draft=assistantDraft;closeAssistantCard(false);assistantBypass=draft;$('parentChatCompose').onsubmit({preventDefault(){}})},'secondary'));
+    card._suggestion=suggestion;
+    card.append(close,mascot,title,body,actions);host.appendChild(card);assistantCard=card;
+    $('parentChatInput').disabled=true;$('parentChatSend').disabled=true;$('parentChatAttach').disabled=true;
+  }
+  function showAssistantFollowup(resolved){
+    if(!assistantCard)return;const body=assistantCard.querySelector('.parent-assistant-copy'),actions=assistantCard.querySelector('.parent-assistant-actions');
+    body.textContent=resolved?'Всё ещё отправить вопрос воспитателям?':'Отправить вопрос воспитателям?';
+    actions.replaceChildren(assistantButton('Да, отправить',()=>{const draft=assistantDraft;closeAssistantCard(false);assistantBypass=draft;$('parentChatCompose').onsubmit({preventDefault(){}})},'primary'),assistantButton('Нет',()=>{const input=$('parentChatInput');if(input.value===assistantDraft)input.value='';closeAssistantCard(false);assistantBypass='';focusComposer()},'secondary'));
+  }
 
   function mediaUrl(m){
     const id=String(m&&m.fileId||'');if(!id)return'';
@@ -233,7 +346,7 @@
   }
 
   async function open(next){
-    stopLive();dead=false;chatClosed=false;chatPending=false;state={...next,phone:p10(next&&next.phone)};rows=[];initialMessagesRendered=false;clearError();closeReactionMenu();setBusy(false);if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
+    closeAssistantCard(false);assistantBypass='';stopLive();dead=false;chatClosed=false;chatPending=false;state={...next,phone:p10(next&&next.phone)};rows=[];initialMessagesRendered=false;clearError();closeReactionMenu();setBusy(false);if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
     $('parentChatChild').textContent=state.childName||state.parentName||'Ребёнок';
     $('parentChatPhone').textContent=state.phone?'8'+state.phone:'';
     $('parentChatInput').value=retryDraft&&retryDraft.phone===state.phone?retryDraft.text:'';
@@ -257,7 +370,7 @@
     }
     if(state===active&&!dead&&!chatClosed)scheduleLive(opened?LIVE_REFRESH_MS:1500)
   }
-  function close(){stopLive();dead=true;state=null;rows=[];chatClosed=false;chatPending=false;setBusy(false);clearError();closeLightbox();closeReactionMenu()}
+  function close(){closeAssistantCard(false);assistantBypass='';stopLive();dead=true;state=null;rows=[];chatClosed=false;chatPending=false;setBusy(false);clearError();closeLightbox();closeReactionMenu()}
 
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state&&!dead&&!chatClosed)scheduleLive(250)});
   window.addEventListener('online',()=>{if(state&&!dead&&!chatClosed)scheduleLive(250)});
@@ -265,6 +378,9 @@
   $('parentChatBack').onclick=()=>{if(state&&typeof state.onBack==='function')state.onBack()};
   $('parentChatCompose').onsubmit=async e=>{
     e.preventDefault();if(!state||busy||chatClosed)return;const text=messageText($('parentChatInput').value);if(!text)return;
+    const isRetry=retryDraft&&retryDraft.phone===state.phone&&retryDraft.text===text;
+    if(!isRetry&&assistantBypass!==text){const suggestion=assistantIntent(text);if(suggestion){showAssistantCard(text,suggestion.answer);return}}
+    assistantBypass='';
     const active=state,clientMessageId=retryDraft&&retryDraft.phone===active.phone&&retryDraft.text===text?retryDraft.clientMessageId:newMessageId();
     retryDraft={phone:active.phone,text,clientMessageId};
     setBusy(true);const optimistic={side:'parent',type:'text',text,timestamp:Date.now(),messageKey:'pending-'+Date.now().toString(36)};

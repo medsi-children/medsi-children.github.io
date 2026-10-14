@@ -26,6 +26,9 @@ test('experimental parent and educator routes load isolated assets; production p
   assert.match(tutorAssistant, /className='tutor-assistant-close'/);
   assert.match(tutorAssistant, /card\.append\(close,mark,title,body,actions\)/);
   assert.match(parentAssistant, /host=document\.body/);
+  assert.match(productionTutor,/educator-chat\.js\?v=20261014-chat-assistant-1/);
+  assert.match(productionParent,/chat-screen\.js\?v=20261014-assistant-1/);
+  assert.match(productionParent,/parents\/smart-bot\.js\?v=20261002-15/);
   assert.match(read('parents/chat-ui-test.css'), /width:min\(360px,calc\(100vw - 24px - env\(safe-area-inset-left\) - env\(safe-area-inset-right\)\)\)/);
   assert.match(read('chat-overlay/educator-exact-test.css'), /\.tutor-assistant-close\{/);
   assert.match(educatorLayout, /width:min\(94vmin,860px\)!important/);
