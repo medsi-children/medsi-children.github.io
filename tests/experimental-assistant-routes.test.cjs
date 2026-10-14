@@ -16,7 +16,7 @@ test('experimental parent and educator routes load isolated assets; production p
   assert.match(parent, /chat-screen-test\.js/);
   assert.match(parent, /chat-ui-test\.css/);
   assert.match(tutor, /educator-chat-test\.js/);
-  assert.match(tutor, /educator-chat-test\.js\?v=20261014-experiment-4/);
+  assert.match(tutor, /educator-chat-test\.js\?v=20261014-experiment-5/);
   assert.match(tutor, /educator-exact-test\.css\?v=20261014-experiment-3/);
   const tutorAssistant = read('chat-overlay/educator-chat-test.js');
   const parentAssistant = read('parents/chat-screen-test.js');

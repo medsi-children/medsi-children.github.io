@@ -1854,7 +1854,10 @@ async function mutateMessage(request, env, kind, rawKey, auth) {
   }
 
   const actor = auth.role;
-  if (actor !== row.side) return json({ ok: false, message: 'Only own messages can be changed' }, 403);
+  const educatorDeletingParentMessage = kind === 'delete' && actor === 'educator' && row.side === 'parent';
+  if (actor !== row.side && !educatorDeletingParentMessage) {
+    return json({ ok: false, message: 'Only own messages can be changed' }, 403);
+  }
   if (kind === 'edit') {
     const text = String(payload && payload.text || '').trim().slice(0, 4000);
     if (!text) return json({ ok: false, message: 'Text is required' }, 400);
