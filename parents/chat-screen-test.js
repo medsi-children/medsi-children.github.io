@@ -42,16 +42,17 @@
     medicine:'Вопросы о лекарствах, назначениях и дозировках, пожалуйста, обсуждайте с лечащим врачом. Воспитатели не владеют такой информацией.',
     individualTherapy:'По вопросам индивидуальной психотерапии, пожалуйста, связывайтесь напрямую с вашим психологом.'
   };
+  const DOCTOR_CONTACT_INTENTS=new Set(['meetings','meetTime','calls','payment','medical','medicine']);
   function assistantIntent(text){
     const bot=window.MedsiSmartBot;if(!bot||typeof bot.analyze!=='function')return null;
     let result;try{result=bot.analyze(text)}catch(_){return null}
     if(!result||result.confidence<0.9)return null;
     const intent=result.intent,key=typeof intent==='string'?intent:intent&&intent.key;
     if(!key||!Object.prototype.hasOwnProperty.call(ASSISTANT_ANSWERS,key))return null;
-    // Не перехватываем медицинские, срочные и адресованные воспитателям сообщения.
-    if(['medical','medicine','urgent','writeEducators','educators','childStatus','clarifyReportMedical','clarifyDoctorMeeting'].includes(key))return null;
-    if(key==='delivery'&&intent&&intent.variant==='medicine')return null;
-    return{key,kind:intent&&typeof intent==='object'?intent.kind:'',answer:ASSISTANT_ANSWERS[key]};
+    // Срочные и напрямую адресованные воспитателям сообщения остаются обычными.
+    if(['urgent','writeEducators','educators','childStatus','clarifyReportMedical','clarifyDoctorMeeting'].includes(key))return null;
+    if(key==='delivery'&&intent&&intent.variant==='medicine')return{key,kind:intent.kind||'',variant:intent.variant,answer:ASSISTANT_ANSWERS.delivery};
+    return{key,kind:intent&&typeof intent==='object'?intent.kind:'',variant:intent&&typeof intent==='object'?intent.variant:'',answer:ASSISTANT_ANSWERS[key]};
   }
   function moscowDateKey(value){const date=new Date(value);if(Number.isNaN(date.getTime()))return'';const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);return parts.filter(p=>p.type!=='literal').map(p=>p.value).join('-')}
   function assistantReportStatus(kind){
@@ -90,6 +91,7 @@
   async function assistantAnswer(suggestion){
     if(suggestion.key==='reportDelay')return suggestion.kind?assistantReportAnswer(suggestion.kind,true):ASSISTANT_ANSWERS.reportDelay;
     if(suggestion.key==='reportRequest')return suggestion.kind?assistantReportAnswer(suggestion.kind,false):ASSISTANT_ANSWERS.reports;
+    if(suggestion.key==='medical'&&suggestion.variant==='medicine')return ASSISTANT_ANSWERS.medicine;
     return suggestion.answer;
   }
   function closeAssistantCard(keepDraft=true,bypass=false){
@@ -108,7 +110,16 @@
     const body=document.createElement('div');body.className='parent-assistant-copy';body.textContent='Хотите, я отвечу?';
     const actions=document.createElement('div');actions.className='parent-assistant-actions';
     const suggestion=assistantIntent(text);
-    async function presentAnswer(selected){body.textContent=await assistantAnswer(selected);actions.replaceChildren(assistantButton('Да, вопрос решился',()=>showAssistantFollowup(true)),assistantButton('Нет',()=>showAssistantFollowup(false),'secondary'))}
+    function showResolutionActions(){actions.replaceChildren(assistantButton('Да, вопрос решился',()=>showAssistantFollowup(true)),assistantButton('Нет',()=>showAssistantFollowup(false),'secondary'))}
+    async function presentAnswer(selected){
+      body.textContent=await assistantAnswer(selected);actions.replaceChildren();
+      const needsDoctorContacts=DOCTOR_CONTACT_INTENTS.has(selected.key)||(selected.key==='delivery'&&selected.variant==='medicine');
+      if(needsDoctorContacts){
+        actions.append(assistantButton('Контакты врача',()=>{body.textContent=ASSISTANT_ANSWERS.doctors;showResolutionActions()}));
+        return;
+      }
+      showResolutionActions();
+    }
     function beginAnswer(){
       if(suggestion&&suggestion.key==='reportDelay'&&!suggestion.kind){
         body.textContent='Вы про утренний отчёт или вечерний отчёт?';

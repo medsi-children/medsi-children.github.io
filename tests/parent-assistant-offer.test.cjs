@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-test('parent assistant offer is limited to confident mapped topics and skips medical or uncertain messages', () => {
+test('parent assistant offers only for confident mapped topics and still skips urgent or uncertain messages', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
   const anchor = '  window.MedsiParentChatScreen={open,close,refresh};';
   assert.ok(source.includes(anchor));
@@ -18,6 +18,7 @@ test('parent assistant offer is limited to confident mapped topics and skips med
     MedsiSmartBot: { analyze(text) {
       if (text === 'report') return {intent:{key:'reportDelay',kind:'morning'},confidence:.95};
       if (text === 'medical') return {intent:{key:'medical'},confidence:.95};
+      if (text === 'calls') return {intent:{key:'calls'},confidence:.95};
       return {intent:{key:'delivery'},confidence:.7};
     } },
     MedsiOverlayTransport: { sendMessage:async()=>({}) }, addEventListener() {}
@@ -25,8 +26,16 @@ test('parent assistant offer is limited to confident mapped topics and skips med
   const document = { getElementById:element, addEventListener(){}, body:{dataset:{screen:'screenChat'}} };
   vm.runInNewContext(instrumented,{window,document,Intl,Date,setTimeout,clearTimeout});
   assert.equal(window.__assistantIntent('report').kind,'morning');
-  assert.equal(window.__assistantIntent('medical'),null);
+  assert.equal(window.__assistantIntent('medical').key,'medical');
+  assert.equal(window.__assistantIntent('calls').key,'calls');
   assert.equal(window.__assistantIntent('uncertain'),null);
+});
+
+test('doctor-directed answers reveal doctor contacts before asking whether the question was resolved', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+  assert.match(source, /const DOCTOR_CONTACT_INTENTS=new Set\(\['meetings','meetTime','calls','payment','medical','medicine'\]\)/);
+  assert.match(source, /assistantButton\('Контакты врача',\(\)=>\{body\.textContent=ASSISTANT_ANSWERS\.doctors;showResolutionActions\(\)\}\)/);
+  assert.match(source, /function showResolutionActions\(\)\{actions\.replaceChildren\(assistantButton\('Да, вопрос решился'/);
 });
 
 test('experimental parent assistant uses the Medsi blob and existing report-delay wording, without snapshot-error copy', () => {
