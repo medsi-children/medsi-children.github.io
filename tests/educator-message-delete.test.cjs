@@ -65,4 +65,5 @@ test('the production educator panel includes the tested assistant suggestions an
   assert.match(production,/function detectTutorSuggestion\(previous,next\)/);
   assert.match(production,/\['reportDelay','Задержка отчёта','quick-indigo'\]/);
   assert.match(styles,/\.tutor-assistant-suggestion\{/);
+  assert.match(read('chat-overlay/educator-exact.css'),/\.quick-indigo\{/);
 });

@@ -454,6 +454,7 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
 .quick-green{ background:linear-gradient(135deg,#6ee7b7,#34d399); }
 .quick-cyan{ background:linear-gradient(135deg,#67e8f9,#22d3ee); }
 .quick-blue{ background:linear-gradient(135deg,#93c5fd,#60a5fa); }
+.quick-indigo{ background:linear-gradient(135deg,#6687e9,#8c7fe8); }
 .quick-purple{ background:linear-gradient(135deg,#a78bfa,#c084fc); }
 .quick-doctors{ background:linear-gradient(135deg,#f9a8d4,#f472b6); color:#fff; border:1px solid rgba(167,139,250,.30); }
 .quick-subgrid{ display:grid; grid-template-columns:1fr; gap:8px; margin-top:10px; }
