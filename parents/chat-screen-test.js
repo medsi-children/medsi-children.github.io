@@ -48,23 +48,19 @@
     if(key==='delivery'&&intent&&intent.variant==='medicine')return null;
     return{key,kind:intent&&typeof intent==='object'?intent.kind:'',answer:ASSISTANT_ANSWERS[key]};
   }
-  function moscowDateKey(value){const date=new Date(value);if(Number.isNaN(date.getTime()))return'';const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);return parts.filter(p=>p.type!=='literal').map(p=>p.value).join('-')}
+  function assistantReportStatus(kind){
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Moscow',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+    const minutes=Number(parts.hour)*60+Number(parts.minute);if(kind==='evening'&&minutes<180)return'late';
+    const start=kind==='morning'?900:1260,end=kind==='morning'?960:1320;
+    return minutes<start?'before':minutes<end?'publishing':minutes<end+60?'grace':'late';
+  }
   async function assistantAnswer(suggestion){
     if(suggestion.key!=='reportDelay')return suggestion.answer;
-    const kind=suggestion.kind;if(!kind||!state||typeof t.request!=='function')return'Я не могу надёжно проверить, опубликован ли сегодняшний отчёт. Утренний обычно появляется с 15:00 до 16:00, вечерний — с 21:00 до 22:00.';
-    try{
-      const session=await currentSession(),[current,history]=await Promise.all([t.request(session,'/lab/report-current'),t.request(session,'/lab/report-history')]);
-      const today=moscowDateKey(Date.now()),published=(history.reports||[]).some(item=>item.kind===kind&&item.reportDate===today&&String(item.text||'').trim());
-      if(published)return`Сегодняшний ${kind==='morning'?'утренний':'вечерний'} отчёт уже опубликован. Попробуйте обновить страницу.`;
-      const existing=(current.reports||[]).find(item=>item.kind===kind&&String(item.text||'').trim());
-      if(existing&&moscowDateKey(existing.updatedAt)===today)return`Сегодняшний ${kind==='morning'?'утренний':'вечерний'} отчёт уже опубликован. Попробуйте обновить страницу.`;
-      if(!current||!Array.isArray(current.reports)||!Array.isArray(history.reports))throw new Error('incomplete snapshot');
-      const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Moscow',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).filter(p=>p.type!=='literal').map(p=>[p.type,p.value])),hour=Number(parts.hour);
-      const due=kind==='morning'?16:22,graceEnd=kind==='morning'?18:24;
-      if(hour<due)return`${kind==='morning'?'Утренний':'Вечерний'} отчёт обычно появляется ${kind==='morning'?'с 15:00 до 16:00':'с 21:00 до 22:00'}. Пока время его публикации не прошло.`;
-      if(hour<graceEnd)return'Сегодня подготовка отчёта занимает немного больше времени, чем обычно. Пожалуйста, наберитесь терпения. Если в ближайшие часы отчёт не появится, напишите воспитателям.';
-      return'Отчёт уже должен был появиться, но я не вижу сегодняшнюю публикацию. Если он не появится после обновления страницы, напишите воспитателям.';
-    }catch(_){return'Я не смог проверить снимок публикации отчёта, поэтому не хочу вводить вас в заблуждение. Утренний обычно появляется с 15:00 до 16:00, вечерний — с 21:00 до 22:00.'}
+    const kind=suggestion.kind;if(!kind)return ASSISTANT_ANSWERS.reports;
+    const status=assistantReportStatus(kind),title=kind==='morning'?'Утренний':'Вечерний',window=kind==='morning'?'с 15:00 до 16:00':'с 21:00 до 22:00';
+    if(status==='before')return`${title} отчёт обычно появляется ${window}. Пожалуйста, дождитесь этого времени.`;
+    if(status==='publishing'||status==='grace')return'Похоже, сегодня подготовка отчёта занимает немного больше времени. Пожалуйста, подождите ещё немного.';
+    return'Отчёт уже должен был появиться. Обновите страницу и проверьте ещё раз. Если отчёта всё ещё нет или показывается старый, вероятно, возникла ошибка. Пожалуйста, сообщите воспитателям в чате.';
   }
   function closeAssistantCard(keepDraft=true,bypass=false){
     if(assistantCard){assistantCard.remove();assistantCard=null}
@@ -77,7 +73,7 @@
     const host=$('screenChat');if(!host)return;
     const card=document.createElement('section');card.className='parent-assistant-card';card.setAttribute('role','dialog');card.setAttribute('aria-label','Подсказка Медси Бота');
     const close=document.createElement('button');close.type='button';close.className='parent-assistant-close';close.setAttribute('aria-label','Закрыть подсказку');close.textContent='×';close.onclick=()=>closeAssistantCard(true,true);
-    const mascot=document.createElement('span');mascot.className='parent-assistant-mascot';mascot.setAttribute('aria-hidden','true');mascot.textContent='✦';
+    const mascot=document.createElement('span');mascot.className='parent-assistant-mascot';mascot.setAttribute('aria-hidden','true');mascot.innerHTML='<span class="medsi-character"><img class="medsi-character-body" src="/parents/blob.webp" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span>';
     const title=document.createElement('strong');title.className='parent-assistant-title';title.textContent='Медси Бот';
     const body=document.createElement('div');body.className='parent-assistant-copy';body.textContent='Хотите, я отвечу?';
     const actions=document.createElement('div');actions.className='parent-assistant-actions';

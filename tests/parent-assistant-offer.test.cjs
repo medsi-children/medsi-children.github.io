@@ -28,3 +28,12 @@ test('parent assistant offer is limited to confident mapped topics and skips med
   assert.equal(window.__assistantIntent('medical'),null);
   assert.equal(window.__assistantIntent('uncertain'),null);
 });
+
+test('experimental parent assistant uses the Medsi blob and existing report-delay wording, without snapshot-error copy', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+  assert.match(source, /src="\/parents\/blob\.webp"/);
+  assert.match(source, /Похоже, сегодня подготовка отчёта занимает немного больше времени\. Пожалуйста, подождите ещё немного\./);
+  assert.match(source, /Отчёт уже должен был появиться\. Обновите страницу и проверьте ещё раз\./);
+  assert.doesNotMatch(source, /не могу надёжно проверить|не смог проверить снимок публикации/);
+  assert.doesNotMatch(source, /\/lab\/report-(?:current|history)/);
+});
