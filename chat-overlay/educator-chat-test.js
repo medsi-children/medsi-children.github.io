@@ -119,13 +119,14 @@
       else return false;
       tutorAssistantSeen.add(key);closeTutorAssistant();
       const card=document.createElement('section');card.className='tutor-assistant-suggestion';card.setAttribute('aria-live','polite');
+      const close=document.createElement('button');close.type='button';close.className='tutor-assistant-close';close.setAttribute('aria-label','Закрыть подсказку');close.textContent='×';close.onclick=closeTutorAssistant;
       const mark=document.createElement('span');mark.className='tutor-assistant-mark';mark.setAttribute('aria-hidden','true');mark.innerHTML='<span class="medsi-character"><img class="medsi-character-body" src="/parents/blob.webp" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span>';
       const title=document.createElement('strong');title.textContent='Медси Бот';
       const body=document.createElement('div');body.className='tutor-assistant-copy';body.textContent='Похоже, родитель спрашивает о '+(/отчет|сводк/.test(text)?'задержке отчёта':'доставке')+'. Хотите, я предложу ответ?';
       const actions=document.createElement('div');actions.className='tutor-assistant-actions';
       const prepare=document.createElement('button');prepare.type='button';prepare.textContent='Да';prepare.onclick=()=>{body.textContent=reply;actions.replaceChildren();const sendReply=document.createElement('button');sendReply.type='button';sendReply.textContent='Отправить';sendReply.onclick=()=>{if(editorText()){closeTutorAssistant();return}closeTutorAssistant();editor.textContent=reply;focusEditor();submit()};const back=document.createElement('button');back.type='button';back.className='secondary';back.textContent='Назад';back.onclick=()=>{body.textContent='Похоже, родитель спрашивает о '+(/отчет|сводк/.test(text)?'задержке отчёта':'доставке')+'. Хотите, я предложу ответ?';actions.replaceChildren(prepare,dismiss)};actions.append(sendReply,back)};
       const dismiss=document.createElement('button');dismiss.type='button';dismiss.className='secondary';dismiss.textContent='Нет';dismiss.onclick=closeTutorAssistant;
-      actions.append(prepare,dismiss);card.append(mark,title,body,actions);document.body.appendChild(card);tutorAssistantCard=card;return true;
+      actions.append(prepare,dismiss);card.append(close,mark,title,body,actions);document.body.appendChild(card);tutorAssistantCard=card;return true;
     }
     function detectTutorSuggestion(previous,next){
       if(!Array.isArray(next)||!Array.isArray(previous))return;
