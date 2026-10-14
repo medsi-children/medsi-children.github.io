@@ -436,6 +436,9 @@ function sendAppFile(res, fileName) {
 // Clean production URLs. Keep the .html files themselves available for old bookmarks.
 app.get(['/', '/index.html'], (_req, res) => sendAppFile(res, 'index.html'));
 app.get(['/tutors', '/tutors/'], (_req, res) => sendAppFile(res, 'tutors.html'));
+// Isolated review routes; production URLs continue to use the stable pages.
+app.get(['/parents_test', '/parents_test/'], (_req, res) => sendAppFile(res, 'parents_test.html'));
+app.get(['/tutors_test', '/tutors_test/'], (_req, res) => sendAppFile(res, 'tutors_test.html'));
 app.get(['/psychology', '/psychology/'], (_req, res) => sendAppFile(res, 'psychology.html'));
 app.get(['/tutors.html', '/psychology.html'], (req, res) => {
   sendAppFile(res, req.path === '/tutors.html' ? 'tutors.html' : 'psychology.html');
