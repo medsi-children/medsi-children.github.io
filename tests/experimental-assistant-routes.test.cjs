@@ -16,7 +16,12 @@ test('experimental parent and educator routes load isolated assets; production p
   assert.match(parent, /chat-screen-test\.js/);
   assert.match(parent, /chat-ui-test\.css/);
   assert.match(tutor, /educator-chat-test\.js/);
+  assert.match(tutor, /educator-chat-test\.js\?v=20261014-experiment-2/);
   assert.match(tutor, /educator-exact-test\.css/);
+  const tutorAssistant = read('chat-overlay/educator-chat-test.js');
+  assert.match(tutorAssistant, /if\(!initialMessagesRendered\)\{/);
+  assert.match(tutorAssistant, /detectTutorSuggestion\(\[\],cached\.rows\)/);
+  assert.doesNotMatch(tutorAssistant, /if\(!initialMessagesRendered\|\|/);
   assert.doesNotMatch(productionParent, /chat-screen-test|chat-ui-test/);
   assert.doesNotMatch(productionTutor, /educator-chat-test|educator-exact-test/);
 });

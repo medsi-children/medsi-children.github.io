@@ -110,12 +110,14 @@
 
     function closeTutorAssistant(){if(tutorAssistantCard){tutorAssistantCard.remove();tutorAssistantCard=null}}
     function makeTutorSuggestion(message){
-      if(!message||message.side!=='parent'||message.type!=='text'||!message.messageKey||tutorAssistantSeen.has(message.messageKey)||editorText())return;
+      if(!message||message.side!=='parent'||message.type!=='text')return false;
+      const key=messageKey(message);
+      if(!key||tutorAssistantSeen.has(key)||editorText())return false;
       const text=String(message.text||'').toLocaleLowerCase('ru').replace(/ё/g,'е');let reply='';
       if(/отчет|сводк/.test(text)&&/нет|не приш|не появ|где|стар|задерж|когда/.test(text))reply=QUICK_REPLIES.reportDelay;
       else if(/достав|курьер|переда|привез|посыл/.test(text))reply=QUICK_REPLIES.delivery;
-      else return;
-      tutorAssistantSeen.add(message.messageKey);closeTutorAssistant();
+      else return false;
+      tutorAssistantSeen.add(key);closeTutorAssistant();
       const card=document.createElement('section');card.className='tutor-assistant-suggestion';card.setAttribute('aria-live','polite');
       const mark=document.createElement('span');mark.className='tutor-assistant-mark';mark.setAttribute('aria-hidden','true');mark.textContent='✦';
       const title=document.createElement('strong');title.textContent='Медси Бот';
@@ -123,11 +125,20 @@
       const actions=document.createElement('div');actions.className='tutor-assistant-actions';
       const prepare=document.createElement('button');prepare.type='button';prepare.textContent='Да';prepare.onclick=()=>{body.textContent=reply;actions.replaceChildren();const sendReply=document.createElement('button');sendReply.type='button';sendReply.textContent='Отправить';sendReply.onclick=()=>{if(editorText()){closeTutorAssistant();return}closeTutorAssistant();editor.textContent=reply;focusEditor();submit()};const back=document.createElement('button');back.type='button';back.className='secondary';back.textContent='Назад';back.onclick=()=>{body.textContent='Похоже, родитель спрашивает о '+(/отчет|сводк/.test(text)?'задержке отчёта':'доставке')+'. Хотите, я предложу ответ?';actions.replaceChildren(prepare,dismiss)};actions.append(sendReply,back)};
       const dismiss=document.createElement('button');dismiss.type='button';dismiss.className='secondary';dismiss.textContent='Нет';dismiss.onclick=closeTutorAssistant;
-      actions.append(prepare,dismiss);card.append(mark,title,body,actions);document.body.appendChild(card);tutorAssistantCard=card;
+      actions.append(prepare,dismiss);card.append(mark,title,body,actions);document.body.appendChild(card);tutorAssistantCard=card;return true;
     }
     function detectTutorSuggestion(previous,next){
-      if(!initialMessagesRendered||!Array.isArray(next)||!Array.isArray(previous))return;
+      if(!Array.isArray(next)||!Array.isArray(previous))return;
       const old=new Set(previous.map(messageKey));
+      if(!initialMessagesRendered){
+        for(let i=next.length-1;i>=0;i--){const row=next[i];if(!row||row.side!=='parent')continue;
+          const stamp=Number(row.timestamp),age=Date.now()-(stamp<1e12?stamp*1000:stamp);
+          const hasLaterEducatorReply=next.slice(i+1).some(item=>item&&item.side==='educator');
+          if(stamp&& (age<0||age>24*60*60*1000)||hasLaterEducatorReply)return;
+          makeTutorSuggestion(row);return;
+        }
+        return;
+      }
       for(let i=next.length-1;i>=0;i--){const row=next[i];if(row&&row.side==='parent'&&!old.has(messageKey(row))){makeTutorSuggestion(row);return}}
     }
 
@@ -315,7 +326,7 @@
       if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
       showThreadScreen();renderThreadHeader(chat);
       const cached=getCached(chat.phone);
-      if(cached){chatThreadBox.replaceChildren();renderRows(cached.rows,true,{animateInitial:true});}
+      if(cached){chatThreadBox.replaceChildren();detectTutorSuggestion([],cached.rows);renderRows(cached.rows,true,{animateInitial:true});}
       else{
         const connecting=document.createElement('div');connecting.className='chat-empty';connecting.dataset.state='connecting';connecting.textContent='Подключаемся к чату…';chatThreadBox.replaceChildren(connecting);
       }
