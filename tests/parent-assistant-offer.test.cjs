@@ -34,6 +34,6 @@ test('experimental parent assistant uses the Medsi blob and existing report-dela
   assert.match(source, /src="\/parents\/blob\.webp"/);
   assert.match(source, /Похоже, сегодня подготовка отчёта занимает немного больше времени\. Пожалуйста, подождите ещё немного\./);
   assert.match(source, /Отчёт уже должен был появиться\. Обновите страницу и проверьте ещё раз\./);
-  assert.doesNotMatch(source, /не могу надёжно проверить|не смог проверить снимок публикации/);
+  assert.doesNotMatch(source, /не могу (?:надёжно )?проверить|не смог проверить снимок публикации/);
   assert.doesNotMatch(source, /\/lab\/report-(?:current|history)/);
 });

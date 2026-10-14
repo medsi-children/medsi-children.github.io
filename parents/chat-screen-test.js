@@ -27,7 +27,7 @@
   let state=null,rows=[],busy=false,dead=false,chatClosed=false,chatPending=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false,initialMessagesRendered=false,retryDraft=null,assistantCard=null,assistantDraft='',assistantBypass='';
 
   const ASSISTANT_ANSWERS={
-    reportDelay:'Утренний отчёт обычно появляется с 15:00 до 16:00, вечерний — с 21:00 до 22:00. Я не могу проверить, опубликован ли сегодняшний отчёт.',
+    reportDelay:'Утренний отчёт обычно появляется с 15:00 до 16:00, вечерний — с 21:00 до 22:00.',
     reports:'Утренний отчёт обычно появляется с 15:00 до 16:00, вечерний — с 21:00 до 22:00.',
     delivery:'Доставку еды и вещей можно согласовать с воспитателями. Лекарства передают только после согласования с лечащим врачом.',
     meetings:'Встречу с ребёнком, пожалуйста, согласуйте с лечащим врачом: он поможет выбрать время с учётом состояния ребёнка.',
