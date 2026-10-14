@@ -102,7 +102,7 @@
   function assistantButton(label,action,kind){const button=document.createElement('button');button.type='button';button.className='parent-assistant-action'+(kind?' '+kind:'');button.textContent=label;button.onclick=action;return button}
   function showAssistantCard(text,answer){
     closeAssistantCard(false);assistantDraft=text;
-    const host=$('screenChat');if(!host)return;
+    const host=document.body;if(!host)return;
     const card=document.createElement('section');card.className='parent-assistant-card';card.setAttribute('role','dialog');card.setAttribute('aria-label','Подсказка Медси Бота');
     const close=document.createElement('button');close.type='button';close.className='parent-assistant-close';close.setAttribute('aria-label','Закрыть подсказку');close.textContent='×';close.onclick=()=>closeAssistantCard(true,true);
     const mascot=document.createElement('span');mascot.className='parent-assistant-mascot';mascot.setAttribute('aria-hidden','true');mascot.innerHTML='<span class="medsi-character"><img class="medsi-character-body" src="/parents/blob.webp" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span>';

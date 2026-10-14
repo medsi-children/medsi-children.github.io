@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="/parents/chat-screen.css?v=20260911-smooth-media-1">
   <link rel="stylesheet" href="/parents/psychology-format.css?v=20260905-production" data-medsi-psych-format="1">
   <link rel="stylesheet" href="/parents/dashboard-ui.css?v=20260910-auth-chip-1">
-  <link rel="stylesheet" href="/parents/chat-ui-test.css?v=20261014-experiment-2">
+  <link rel="stylesheet" href="/parents/chat-ui-test.css?v=20261014-experiment-3">
   <link rel="stylesheet" href="/chat-overlay/composer-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/media-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/chat-motion-ui.css?v=20260907-1">
@@ -100,7 +100,7 @@
   window.MedsiLoadParentChat=function(){
     if(window.MedsiParentChatScreen)return Promise.resolve();
     if(chatPending)return chatPending;
-    chatPending=series(['/chat-overlay/transport.js?v=20261009-send-retry-1','/parents/smart-bot.js?v=20261002-15','/parents/prewarm.js?v=20260916-parent-recovery','/parents/chat-screen-test.js?v=20261014-experiment-2']).finally(function(){chatPending=null;});
+    chatPending=series(['/chat-overlay/transport.js?v=20261009-send-retry-1','/parents/smart-bot.js?v=20261002-15','/parents/prewarm.js?v=20260916-parent-recovery','/parents/chat-screen-test.js?v=20261014-experiment-3']).finally(function(){chatPending=null;});
     return chatPending;
   };
   var status=document.getElementById('parentBootStatus');

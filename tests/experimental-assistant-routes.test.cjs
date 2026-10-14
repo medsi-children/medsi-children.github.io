@@ -19,6 +19,13 @@ test('experimental parent and educator routes load isolated assets; production p
   assert.match(tutor, /educator-chat-test\.js\?v=20261014-experiment-3/);
   assert.match(tutor, /educator-exact-test\.css\?v=20261014-experiment-2/);
   const tutorAssistant = read('chat-overlay/educator-chat-test.js');
+  const parentAssistant = read('parents/chat-screen-test.js');
+  const educatorLayout = read('tutors/full-web-fixes.css');
+  assert.match(parent, /chat-screen-test\.js\?v=20261014-experiment-3/);
+  assert.match(parent, /chat-ui-test\.css\?v=20261014-experiment-3/);
+  assert.match(parentAssistant, /const host=document\.body/);
+  assert.match(educatorLayout, /@media \(min-width: 900px\)/);
+  assert.match(educatorLayout, /width:min\(96vw,1600px\)!important/);
   assert.match(tutorAssistant, /if\(!initialMessagesRendered\)\{/);
   assert.match(tutorAssistant, /detectTutorSuggestion\(\[\],cached\.rows\)/);
   assert.doesNotMatch(tutorAssistant, /if\(!initialMessagesRendered\|\|/);
