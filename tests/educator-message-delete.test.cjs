@@ -52,7 +52,7 @@ test('both educator panels expose delete for parent messages while keeping own-m
   for(const file of ['chat-overlay/educator-chat.js','chat-overlay/educator-chat-test.js']) {
     const source=read(file);
     assert.match(source,/m\.side==='educator'\|\|m\.side==='parent'/);
-    assert.match(source,/Удалить сообщение родителя/);
+    assert.match(source,/contextAction\('⌫','Удалить',async\(\)=>\{if\(!confirm\('Удалить это сообщение\?'\)\)/);
     assert.match(source,/m\.side==='educator'&&m\.type==='text'.*Редактировать/);
   }
 });

@@ -42,7 +42,7 @@ test('experimental parent assistant uses the Medsi blob and existing report-dela
   const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
   assert.match(source, /src="\/parents\/blob\.webp"/);
   assert.match(source, /Похоже, сегодня подготовка отчёта занимает немного больше времени\. Пожалуйста, подождите ещё немного\./);
-  assert.match(source, /Отчёт уже должен был появиться\. Обновите страницу и проверьте ещё раз\./);
+  assert.match(source, /Пожалуйста, попробуйте перезапустить приложение\. Если отчет все еще не появится, вероятно произошла ошибка\. Пожалуйста, сообщите воспитателям в чате 🙏/);
   assert.match(source, /Вы про утренний отчёт или вечерний отчёт\?/);
   assert.doesNotMatch(source, /не могу (?:надёжно )?проверить|не смог проверить снимок публикации/);
   assert.match(source, /\/lab\/report-current/);
