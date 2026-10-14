@@ -34,6 +34,23 @@ test('experimental parent assistant uses the Medsi blob and existing report-dela
   assert.match(source, /src="\/parents\/blob\.webp"/);
   assert.match(source, /Похоже, сегодня подготовка отчёта занимает немного больше времени\. Пожалуйста, подождите ещё немного\./);
   assert.match(source, /Отчёт уже должен был появиться\. Обновите страницу и проверьте ещё раз\./);
+  assert.match(source, /Вы про утренний отчёт или вечерний отчёт\?/);
   assert.doesNotMatch(source, /не могу (?:надёжно )?проверить|не смог проверить снимок публикации/);
-  assert.doesNotMatch(source, /\/lab\/report-(?:current|history)/);
+  assert.match(source, /\/lab\/report-current/);
+  assert.match(source, /\/lab\/report-history/);
+});
+
+test('experimental parent and educator doctor contacts match the assistant and stay in one quick-reply button', () => {
+  const parentTest = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+  const parentAssistant = fs.readFileSync(path.join(__dirname, '..', 'parents', 'bot-chat-runtime.js'), 'utf8');
+  const educatorTest = fs.readFileSync(path.join(__dirname, '..', 'chat-overlay', 'educator-chat-test.js'), 'utf8');
+  const unescapeNewlines = value => value.replace(/\\n/g, '\n');
+  const testParentContacts = parentTest.match(/doctors:'([^']*)'/)?.[1];
+  const sourceContacts = parentAssistant.match(/DOCTOR_CONTACTS_TEXT = "([^"]*)"/)?.[1];
+  const educatorContacts = educatorTest.match(/doctors:"([^"]*)"/)?.[1];
+  assert.ok(testParentContacts && sourceContacts && educatorContacts);
+  assert.equal(unescapeNewlines(testParentContacts), unescapeNewlines(sourceContacts));
+  assert.equal(unescapeNewlines(educatorContacts), unescapeNewlines(sourceContacts));
+  assert.equal((educatorTest.match(/\['doctors','Контакты врачей'/g) || []).length, 1);
+  assert.doesNotMatch(educatorTest, /\['(?:anastasia|anton)','/);
 });

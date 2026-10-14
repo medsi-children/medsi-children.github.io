@@ -27,15 +27,20 @@
   let state=null,rows=[],busy=false,dead=false,chatClosed=false,chatPending=false,lightbox=null,reactionMenu=null,liveTimer=0,liveRunning=false,initialMessagesRendered=false,retryDraft=null,assistantCard=null,assistantDraft='',assistantBypass='';
 
   const ASSISTANT_ANSWERS={
-    reportDelay:'Утренний отчёт обычно появляется с 15:00 до 16:00, вечерний — с 21:00 до 22:00.',
-    reports:'Утренний отчёт обычно появляется с 15:00 до 16:00, вечерний — с 21:00 до 22:00.',
-    delivery:'Доставку еды и вещей можно согласовать с воспитателями. Лекарства передают только после согласования с лечащим врачом.',
-    meetings:'Встречу с ребёнком, пожалуйста, согласуйте с лечащим врачом: он поможет выбрать время с учётом состояния ребёнка.',
-    meetTime:'Встречи проходят с 17:00 до 20:00. Пожалуйста, согласуйте встречу с лечащим врачом.',
-    calls:'Звонок ребёнку, пожалуйста, согласуйте с лечащим врачом.',
-    doctors:'Контакты врачей:\n\nАнастасия Михайловна — +79253394090\nРабочие часы: 9:00–18:00, выходные: пятница и суббота.\n\nАнтон Геннадьевич — +79859927884\nРабочие часы: 9:00–18:00, выходные: воскресенье и понедельник.',
+    reportDelay:'Вы про утренний отчёт или вечерний отчёт?',
+    reportRequest:'',
+    reports:'Утренний отчёт с 15:00 до 16:00.\nВечерний — с 21:00 до 22:00.\n\nХотите посмотреть отчёт?',
+    delivery:'🗺️ Адрес: Гринвуд, с11, Путилково\nДля курьера напишите «на 5 этаж» и имя ребёнка.\n\n✅ Что можно привезти или заказать:\nЛюбую еду и напитки в безопасной упаковке - пиццу, суши, сладости, фрукты, сок. Также можно передать одежду, книги, раскраски, творческие наборы, безопасную канцелярию.\n\n🚫 Что нельзя передавать:\nОстрые и колюще-режущие предметы (ножницы, лезвия, точилки), стекло, металлические банки, аэрозоли и столовые приборы. Также нельзя кофе, энергетики, табак, вейпы и личную электронику.\n\n💊 Лекарства — только после согласования с лечащим врачом.\n❓ Если сомневаетесь насчёт вещи, уточните у воспитателей.',
+    meetings:'Встречу с ребёнком, пожалуйста, согласуйте с лечащим врачом. Он поможет выбрать время с учётом состояния ребёнка.',
+    meetTime:'Встречи с детьми проходят с 17:00 до 20:00. Пожалуйста, согласуйте встречу с лечащим врачом.',
+    calls:'Звонок ребёнку, пожалуйста, согласуйте с лечащим врачом. Он поможет выбрать подходящее время.',
+    doctors:'Контакты врачей:\n\nАнастасия Михайловна\n+79253394090\nРабочие часы: с 9:00 до 18:00.\nВыходные дни: пятница и суббота.\n\nАнтон Геннадьевич\n+79859927884\nРабочие часы: с 9:00 до 18:00.\nВыходные дни: воскресенье и понедельник.\n\nПожалуйста, пишите и звоните врачам в рабочее время.',
     payment:'По вопросам оплаты свяжитесь с лечащим врачом. Оплата производится на ресепшене клиники.',
-    routine:'В режиме дня: подъём в 8:00, завтрак в 9:00, обед в 13:00, тихий час в 14:00, ужин в 18:00, отбой в 22:00. Встречи проходят с 17:00 до 20:00.'
+    routine:'☀️ Утро\n8:00 — Подъём\n8:30 — Зарядка\n9:00 — Завтрак\n9:30 — Игры и творчество\n10:00 — Групповая терапия\n11:00 — Прогулка\n12:00 — Игры и творчество\n13:00 — Обед\n14:00 — Сон-час\n\n🌙 Вечер\n16:00 — Танцы\n16:30 — Полдник\n17:00 — Игры и творчество\n18:00 — Ужин\n18:15 — Киносеанс\n21:00 — Подготовка ко сну / медицинские процедуры\n22:00 — Отбой\n\nВстречи с детьми: 17:00–20:00.',
+    writeEducators:'Напишите воспитателям в чате — они ответят, как только смогут.',
+    medical:'Вопросы о лечении, препаратах, процедурах и анализах, пожалуйста, обсуждайте с лечащим врачом. Воспитатели не владеют такой информацией.',
+    medicine:'Вопросы о лекарствах, назначениях и дозировках, пожалуйста, обсуждайте с лечащим врачом. Воспитатели не владеют такой информацией.',
+    individualTherapy:'По вопросам индивидуальной психотерапии, пожалуйста, связывайтесь напрямую с вашим психологом.'
   };
   function assistantIntent(text){
     const bot=window.MedsiSmartBot;if(!bot||typeof bot.analyze!=='function')return null;
@@ -44,23 +49,48 @@
     const intent=result.intent,key=typeof intent==='string'?intent:intent&&intent.key;
     if(!key||!Object.prototype.hasOwnProperty.call(ASSISTANT_ANSWERS,key))return null;
     // Не перехватываем медицинские, срочные и адресованные воспитателям сообщения.
-    if(['medical','urgent','writeEducators','educators','childStatus','clarifyReportMedical','clarifyDoctorMeeting'].includes(key))return null;
+    if(['medical','medicine','urgent','writeEducators','educators','childStatus','clarifyReportMedical','clarifyDoctorMeeting'].includes(key))return null;
     if(key==='delivery'&&intent&&intent.variant==='medicine')return null;
     return{key,kind:intent&&typeof intent==='object'?intent.kind:'',answer:ASSISTANT_ANSWERS[key]};
   }
+  function moscowDateKey(value){const date=new Date(value);if(Number.isNaN(date.getTime()))return'';const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);return parts.filter(p=>p.type!=='literal').map(p=>p.value).join('-')}
   function assistantReportStatus(kind){
     const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Moscow',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
     const minutes=Number(parts.hour)*60+Number(parts.minute);if(kind==='evening'&&minutes<180)return'late';
     const start=kind==='morning'?900:1260,end=kind==='morning'?960:1320;
     return minutes<start?'before':minutes<end?'publishing':minutes<end+60?'grace':'late';
   }
-  async function assistantAnswer(suggestion){
-    if(suggestion.key!=='reportDelay')return suggestion.answer;
-    const kind=suggestion.kind;if(!kind)return ASSISTANT_ANSWERS.reports;
+  function assistantReportDelayText(kind){
     const status=assistantReportStatus(kind),title=kind==='morning'?'Утренний':'Вечерний',window=kind==='morning'?'с 15:00 до 16:00':'с 21:00 до 22:00';
     if(status==='before')return`${title} отчёт обычно появляется ${window}. Пожалуйста, дождитесь этого времени.`;
     if(status==='publishing'||status==='grace')return'Похоже, сегодня подготовка отчёта занимает немного больше времени. Пожалуйста, подождите ещё немного.';
     return'Отчёт уже должен был появиться. Обновите страницу и проверьте ещё раз. Если отчёта всё ещё нет или показывается старый, вероятно, возникла ошибка. Пожалуйста, сообщите воспитателям в чате.';
+  }
+  async function assistantReportAnswer(kind,delayed){
+    try{
+      const session=await currentSession(),current=await t.request(session,'/lab/report-current');
+      if(!current)return'Чтобы я мог проверить отчёт, пожалуйста, войдите в Медси Бот.';
+      const currentReports=(current.reports||[]).filter(item=>['morning','evening'].includes(item.kind)&&String(item.text||'').trim());
+      let history=[],historyAvailable=true;
+      if(delayed||!kind){try{history=(await t.request(session,'/lab/report-history')).reports||[]}catch(_){historyAvailable=false}}
+      const found=currentReports.find(item=>item.kind===kind);
+      if(!delayed){
+        if(found)return found.text;
+        return`Пока нет доступного ${kind==='morning'?'утреннего':'вечернего'} отчёта. Обычно он появляется ${kind==='morning'?'с 15:00 до 16:00':'с 21:00 до 22:00'}.`;
+      }
+      const today=moscowDateKey(Date.now()),published=history.find(item=>item.kind===kind&&item.reportDate===today&&String(item.text||'').trim());
+      if(published)return published.text;
+      const previous=history.find(item=>item.kind===kind&&String(item.text||'').trim());
+      if(found&&previous&&String(found.text).trim()!==String(previous.text).trim())return found.text;
+      if(found&&(!previous||!historyAvailable))return'Я вижу последний доступный отчёт, но сейчас не могу точно проверить дату публикации нового. Покажу доступный отчёт.\n\n'+found.text;
+      if(!historyAvailable)return'Сейчас не получилось проверить, опубликован ли новый отчёт. Пожалуйста, попробуйте ещё раз чуть позже.';
+      return assistantReportDelayText(kind);
+    }catch(_){return delayed?'Сейчас не получилось проверить, опубликован ли новый отчёт. Пожалуйста, попробуйте ещё раз чуть позже.':'Сейчас не получилось загрузить отчёт. Пожалуйста, попробуйте ещё раз чуть позже.'}
+  }
+  async function assistantAnswer(suggestion){
+    if(suggestion.key==='reportDelay')return suggestion.kind?assistantReportAnswer(suggestion.kind,true):ASSISTANT_ANSWERS.reportDelay;
+    if(suggestion.key==='reportRequest')return suggestion.kind?assistantReportAnswer(suggestion.kind,false):ASSISTANT_ANSWERS.reports;
+    return suggestion.answer;
   }
   function closeAssistantCard(keepDraft=true,bypass=false){
     if(assistantCard){assistantCard.remove();assistantCard=null}
@@ -77,8 +107,18 @@
     const title=document.createElement('strong');title.className='parent-assistant-title';title.textContent='Медси Бот';
     const body=document.createElement('div');body.className='parent-assistant-copy';body.textContent='Хотите, я отвечу?';
     const actions=document.createElement('div');actions.className='parent-assistant-actions';
-    actions.append(assistantButton('Да',async()=>{const suggestion=assistantCard&&assistantCard._suggestion;body.textContent='Сейчас проверю…';actions.replaceChildren();body.textContent=await assistantAnswer(suggestion||{answer});if(assistantCard){const row=assistantCard.querySelector('.parent-assistant-actions');row.append(assistantButton('Да, вопрос решился',()=>showAssistantFollowup(true)),assistantButton('Нет',()=>showAssistantFollowup(false),'secondary'))}}),assistantButton('Нет',()=>{const draft=assistantDraft;closeAssistantCard(false);assistantBypass=draft;$('parentChatCompose').onsubmit({preventDefault(){}})},'secondary'));
-    card._suggestion=assistantIntent(text);
+    const suggestion=assistantIntent(text);
+    async function presentAnswer(selected){body.textContent=await assistantAnswer(selected);actions.replaceChildren(assistantButton('Да, вопрос решился',()=>showAssistantFollowup(true)),assistantButton('Нет',()=>showAssistantFollowup(false),'secondary'))}
+    function beginAnswer(){
+      if(suggestion&&suggestion.key==='reportDelay'&&!suggestion.kind){
+        body.textContent='Вы про утренний отчёт или вечерний отчёт?';
+        actions.replaceChildren(assistantButton('Утренний отчёт',()=>presentAnswer({...suggestion,kind:'morning'})),assistantButton('Вечерний отчёт',()=>presentAnswer({...suggestion,kind:'evening'})));
+        return;
+      }
+      presentAnswer(suggestion||{answer:''});
+    }
+    actions.append(assistantButton('Да',beginAnswer),assistantButton('Нет',()=>{const draft=assistantDraft;closeAssistantCard(false);assistantBypass=draft;$('parentChatCompose').onsubmit({preventDefault(){}})},'secondary'));
+    card._suggestion=suggestion;
     card.append(close,mascot,title,body,actions);host.appendChild(card);assistantCard=card;
     $('parentChatInput').disabled=true;$('parentChatSend').disabled=true;$('parentChatAttach').disabled=true;
   }
