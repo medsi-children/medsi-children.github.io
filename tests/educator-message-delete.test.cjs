@@ -41,6 +41,18 @@ test('educators may delete parent messages but may not edit them', async()=>{
   assert.equal(target.updates.length,1);
 });
 
+test('educators can edit captions on their own media messages', async()=>{
+  for (const type of ['image','video']) {
+    const target = worker({message_key:'message-key',side:'educator',phone10:'9990000001',type,text:'Old caption'});
+    const response = await target.mutate('edit','educator',{text:'New caption'});
+    assert.equal(response.status,200);
+    assert.equal((await response.json()).text,'New caption');
+    assert.equal(target.updates.length,1);
+    assert.match(target.updates[0].sql,/UPDATE chat_messages SET text = \?, edited_at = \?/);
+    assert.equal(target.updates[0].args[0],'New caption');
+  }
+});
+
 test('parents still cannot delete another side message', async()=>{
   const target = worker({message_key:'message-key',side:'educator',phone10:'9990000001',text:'Test'});
   const response = await target.mutate('delete','parent');
@@ -53,7 +65,7 @@ test('both educator panels expose delete for parent messages while keeping own-m
     const source=read(file);
     assert.match(source,/m\.side==='educator'\|\|m\.side==='parent'/);
     assert.match(source,/contextAction\('⌫','Удалить',async\(\)=>\{if\(!confirm\('Удалить это сообщение\?'\)\)/);
-    assert.match(source,/m\.side==='educator'&&m\.type==='text'.*Редактировать/);
+    assert.match(source,/m\.side==='educator'&&\['text','image','video'\]\.includes\(m\.type\).*Редактировать/);
   }
 });
 
