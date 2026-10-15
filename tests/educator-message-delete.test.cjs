@@ -57,46 +57,14 @@ test('both educator panels expose delete for parent messages while keeping own-m
   }
 });
 
-test('the production educator panel includes the tested assistant suggestions and their reply preset',()=>{
+test('educator chat keeps manual quick replies but no longer mounts the contextual assistant',()=>{
   const production=read('chat-overlay/educator-chat.js');
   const experimental=read('chat-overlay/educator-chat-test.js');
   const styles=read('tutors/assistant.css');
   assert.equal(production,experimental);
-  assert.match(production,/function detectTutorSuggestion\(previous,next\)/);
   assert.match(production,/\['reportDelay','Задержка отчёта','quick-indigo'\]/);
-  assert.match(production,/function tutorMessageHasLaterReply\(list,key\)/);
-  assert.match(production,/editor\.addEventListener\('input'/);
-  assert.match(styles,/\.tutor-assistant-suggestion\.is-compact\{/);
-  assert.match(styles,/\.tutor-assistant-suggestion\.is-expanded\{/);
-  assert.match(styles,/\.tutor-assistant-suggestion\.is-compact\{[^}]*width:max-content;[^}]*max-width:min\(292px/);
-  assert.match(styles,/\.tutor-assistant-suggestion\.is-compact\{[^}]*left:max\(20px,env\(safe-area-inset-left\)\)/);
-  assert.match(styles,/\.tutor-assistant-suggestion\.is-compact:after\{[^}]*border-radius:16px;/);
-  assert.match(styles,/\.tutor-assistant-suggestion\.is-compact \.tutor-assistant-actions\{[^}]*margin-top:0;[^}]*padding:3px 12px 10px/);
-  assert.match(styles,/right:max\(12px,env\(safe-area-inset-right\)\)/);
   assert.match(read('chat-overlay/educator-exact.css'),/\.quick-indigo\{/);
-});
-
-test('educator assistant is time-aware and conservative about context',()=>{
-  const source=read('chat-overlay/educator-chat-test.js');
-  const anchor='  window.MedsiEducatorOverlayChat={mount};';
-  assert.ok(source.includes(anchor));
-  const instrumented=source.replace(anchor, '  window.__tutorSuggestionPlan=tutorSuggestionPlan;\n'+anchor);
-  const context={window:{},Intl,Date};
-  vm.createContext(context);
-  vm.runInContext(instrumented,context);
-  const plan=context.window.__tutorSuggestionPlan;
-  const morningBefore=Date.parse('2026-10-15T07:42:00Z'); // 10:42 Moscow
-  const morningLate=Date.parse('2026-10-15T14:10:00Z');   // 17:10 Moscow
-
-  assert.equal(plan('когда утренний отчет?',morningBefore).key,'reportSchedule');
-  assert.equal(plan('где утренний отчет?',morningBefore).key,'reportSchedule');
-  assert.equal(plan('где утренний отчет?',morningLate).key,'reportDelay');
-  assert.equal(plan('где отчет?',morningLate),null);
-  assert.equal(plan('спасибо, доставку получили',morningBefore),null);
-  assert.equal(plan('куда курьеру привезти вещи?',morningBefore).key,'delivery');
-  assert.equal(plan('номер лечащего врача',morningBefore).key,'doctors');
-  assert.equal(plan('какие препараты принимает ребенок?',morningBefore).key,'medical');
-  assert.equal(plan('у ребенка температура, какие лекарства дать?',morningBefore),null);
-  assert.equal(plan('почему в утреннем отчете нет лекарства?',morningBefore),null);
-  assert.equal(plan('срочно где утренний отчет',morningLate),null);
+  assert.doesNotMatch(production,/tutorSuggestionPlan|detectTutorSuggestion|makeTutorSuggestion|closeTutorAssistant|tutor-assistant-suggestion/);
+  assert.doesNotMatch(production,/Кажется, здесь могу помочь\. Предложить ответ\?/);
+  assert.doesNotMatch(styles,/\.tutor-assistant-suggestion|\.tutor-assistant-copy|\.tutor-assistant-actions/);
 });
