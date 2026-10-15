@@ -64,9 +64,21 @@ test('report timing answers do not offer an unavailable report and explicit repo
   assert.doesNotMatch(source, /if\(found\)return found\.text/);
 });
 
+test('main parent blob follows the same conservative report flow', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'bot-chat-runtime.js'), 'utf8');
+  assert.match(source, /reports: \{ question: 'Когда ждать отчёт\?', answer: 'Утренний отчёт с 15:00 до 16:00\\nВечерний — с 21:00 до 22:00\.'/);
+  assert.doesNotMatch(source, /Когда ждать отчёт\?'[^\n]*Хотите посмотреть отчёт/);
+  assert.match(source, /parsed\.key === 'reportRequest' && !kind/);
+  assert.match(source, /Какой отчёт показать — утренний или вечерний\?/);
+  assert.match(source, /Сейчас идёт окно публикации:/);
+  assert.match(source, /Сегодняшний \$\{kind === 'morning' \? 'утренний' : 'вечерний'\} отчёт пока не опубликован/);
+  assert.doesNotMatch(source, /Встречи с детьми проходят с 17:00 до 20:00\. Пожалуйста, согласуйте встречу/);
+});
+
 test('experimental parent assistant uses the Medsi blob and existing report-delay wording, without snapshot-error copy', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
   assert.match(source, /src="\/parents\/blob\.webp"/);
+  assert.match(source, /Сейчас идёт окно публикации:/);
   assert.match(source, /Похоже, сегодня подготовка отчёта занимает немного больше времени\. Пожалуйста, подождите ещё немного\./);
   assert.match(source, /Пожалуйста, попробуйте перезапустить приложение\. Если отчет все еще не появится, вероятно произошла ошибка\. Пожалуйста, сообщите воспитателям в чате 🙏/);
   assert.match(source, /Вы про утренний отчёт или вечерний отчёт\?/);
