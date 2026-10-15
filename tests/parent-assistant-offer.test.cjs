@@ -97,7 +97,8 @@ test('the production parent chat now has the same tested assistant flow and styl
   assert.match(styles, /\.parent-assistant-card\.is-compact\{/);
   assert.match(styles, /\.parent-assistant-card\.is-expanded\{/);
   assert.match(styles, /\.parent-assistant-card\.is-compact\{[^}]*width:max-content;[^}]*max-width:min\(292px/);
-  assert.match(styles, /\.parent-assistant-card\.is-compact:after\{/);
+  assert.match(styles, /\.parent-assistant-card\.is-compact\{[^}]*left:max\(20px,env\(safe-area-inset-left\)\)/);
+  assert.match(styles, /\.parent-assistant-card\.is-compact:after\{[^}]*border-radius:16px;/);
   assert.match(styles, /\.parent-assistant-card\.is-compact \.parent-assistant-actions\{[^}]*margin-top:0;[^}]*padding:3px 12px 10px/);
   assert.match(styles, /right:max\(12px,env\(safe-area-inset-right\)\)/);
   assert.match(production, /parent-assistant-card is-compact/);
