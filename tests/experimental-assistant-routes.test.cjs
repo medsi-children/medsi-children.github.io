@@ -11,34 +11,30 @@ test('experimental parent and educator routes load isolated assets; production p
   const tutor = read('tutors_test.html');
   const productionParent = read('index.html');
   const productionTutor = read('tutors.html');
+  const tutorChat = read('chat-overlay/educator-chat-test.js');
+  const parentAssistant = read('parents/chat-screen-test.js');
+  const educatorLayout = read('tutors/full-web-fixes.css');
+
   assert.match(server, /\/parents_test.*parents_test\.html/);
   assert.match(server, /\/tutors_test.*tutors_test\.html/);
   assert.match(parent, /chat-screen-test\.js/);
   assert.match(parent, /chat-ui-test\.css/);
-  assert.match(tutor, /educator-chat-test\.js/);
-  assert.match(tutor, /educator-chat-test\.js\?v=20261014-experiment-6/);
-  assert.match(tutor, /educator-exact-test\.css\?v=20261014-experiment-3/);
-  const tutorAssistant = read('chat-overlay/educator-chat-test.js');
-  const parentAssistant = read('parents/chat-screen-test.js');
-  const educatorLayout = read('tutors/full-web-fixes.css');
+  assert.match(tutor, /educator-chat-test\.js\?v=20261015-no-context-assistant-1/);
+  assert.match(tutor, /educator-exact-test\.css\?v=20261015-no-context-assistant-1/);
   assert.match(parent, /chat-screen-test\.js\?v=20261014-experiment-5/);
   assert.match(parent, /chat-ui-test\.css\?v=20261014-experiment-4/);
-  assert.match(tutorAssistant, /className='tutor-assistant-close'/);
-  assert.match(tutorAssistant, /card\.append\(close,mark,title,body,actions\)/);
+
   assert.match(parentAssistant, /host=document\.body/);
-  assert.match(productionTutor,/educator-chat\.js\?v=20261014-chat-assistant-1/);
+  assert.doesNotMatch(tutorChat, /tutorSuggestionPlan|detectTutorSuggestion|tutor-assistant-suggestion/);
+  assert.doesNotMatch(read('chat-overlay/educator-exact-test.css'), /\.tutor-assistant-suggestion|\.tutor-assistant-close/);
+
+  assert.match(productionTutor,/educator-chat\.js\?v=20261015-no-context-assistant-1/);
   assert.match(productionParent,/chat-screen\.js\?v=20261014-assistant-1/);
   assert.match(productionParent,/parents\/smart-bot\.js\?v=20261002-15/);
   assert.match(read('parents/chat-ui-test.css'), /width:min\(360px,calc\(100vw - 24px - env\(safe-area-inset-left\) - env\(safe-area-inset-right\)\)\)/);
-  assert.match(read('chat-overlay/educator-exact-test.css'), /\.tutor-assistant-close\{/);
   assert.match(educatorLayout, /width:min\(94vmin,860px\)!important/);
   assert.match(educatorLayout, /height:min\(94vmin,860px\)!important/);
   assert.match(educatorLayout, /@media \(min-width: 900px\)/);
-  assert.match(tutorAssistant, /if\(!initialMessagesRendered\)\{/);
-  assert.match(tutorAssistant, /detectTutorSuggestion\(\[\],cached\.rows\)/);
-  assert.doesNotMatch(tutorAssistant, /if\(!initialMessagesRendered\|\|/);
-  assert.match(tutorAssistant, /class="medsi-character-body" src="\/parents\/blob\.webp"/);
-  assert.match(tutorAssistant, /class="medsi-character-eyes"/);
   assert.doesNotMatch(productionParent, /chat-screen-test|chat-ui-test/);
   assert.doesNotMatch(productionTutor, /educator-chat-test|educator-exact-test/);
 });
