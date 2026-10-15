@@ -29,7 +29,7 @@
   const ASSISTANT_ANSWERS={
     reportDelay:'Вы про утренний отчёт или вечерний отчёт?',
     reportRequest:'',
-    reports:'Утренний отчёт с 15:00 до 16:00.\nВечерний — с 21:00 до 22:00.\n\nХотите посмотреть отчёт?',
+    reports:'Утренний отчёт с 15:00 до 16:00.\nВечерний — с 21:00 до 22:00.',
     delivery:'🗺️ Адрес: Гринвуд, с11, Путилково\nДля курьера напишите «на 5 этаж» и имя ребёнка.\n\n✅ Что можно привезти или заказать:\nЛюбую еду и напитки в безопасной упаковке - пиццу, суши, сладости, фрукты, сок. Также можно передать одежду, книги, раскраски, творческие наборы, безопасную канцелярию.\n\n🚫 Что нельзя передавать:\nОстрые и колюще-режущие предметы (ножницы, лезвия, точилки), стекло, металлические банки, аэрозоли и столовые приборы. Также нельзя кофе, энергетики, табак, вейпы и личную электронику.\n\n💊 Лекарства — только после согласования с лечащим врачом.\n❓ Если сомневаетесь насчёт вещи, уточните у воспитателей.',
     meetings:'Встречу с ребёнком, пожалуйста, согласуйте с лечащим врачом. Он поможет выбрать время с учётом состояния ребёнка.',
     meetTime:'Встречи с детьми проходят с 17:00 до 20:00. Пожалуйста, согласуйте встречу с лечащим врачом.',
@@ -120,10 +120,17 @@
       }
       showResolutionActions();
     }
+    function showReportKindChoices(prompt){
+      body.textContent=prompt;
+      actions.replaceChildren(assistantButton('Утренний отчёт',()=>presentAnswer({...suggestion,kind:'morning'})),assistantButton('Вечерний отчёт',()=>presentAnswer({...suggestion,kind:'evening'})));
+    }
     function beginAnswer(){
       if(suggestion&&suggestion.key==='reportDelay'&&!suggestion.kind){
-        body.textContent='Вы про утренний отчёт или вечерний отчёт?';
-        actions.replaceChildren(assistantButton('Утренний отчёт',()=>presentAnswer({...suggestion,kind:'morning'})),assistantButton('Вечерний отчёт',()=>presentAnswer({...suggestion,kind:'evening'})));
+        showReportKindChoices('Вы про утренний отчёт или вечерний отчёт?');
+        return;
+      }
+      if(suggestion&&suggestion.key==='reportRequest'&&!suggestion.kind){
+        showReportKindChoices('Какой отчёт показать?');
         return;
       }
       presentAnswer(suggestion||{answer:''});
