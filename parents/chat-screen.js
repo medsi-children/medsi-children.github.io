@@ -82,8 +82,14 @@
   function assistantReportDelayText(kind){
     const status=assistantReportStatus(kind),title=kind==='morning'?'Утренний':'Вечерний',window=kind==='morning'?'с 15:00 до 16:00':'с 21:00 до 22:00';
     if(status==='before')return`${title} отчёт обычно появляется ${window}. Пожалуйста, дождитесь этого времени.`;
-    if(status==='publishing'||status==='grace')return'Похоже, сегодня подготовка отчёта занимает немного больше времени. Пожалуйста, подождите ещё немного.';
+    if(status==='publishing')return`Сейчас идёт окно публикации: ${window}. Пожалуйста, дождитесь его окончания.`;
+    if(status==='grace')return'Похоже, сегодня подготовка отчёта занимает немного больше времени. Пожалуйста, подождите ещё немного.';
     return'Пожалуйста, попробуйте перезапустить приложение. Если отчет все еще не появится, вероятно произошла ошибка. Пожалуйста, сообщите воспитателям в чате 🙏';
+  }
+  function assistantExpectedReportDate(kind){
+    const now=Date.now();
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Moscow',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date(now)).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+    return kind==='evening'&&Number(parts.hour)<3?moscowDateKey(now-24*60*60*1000):moscowDateKey(now);
   }
   async function assistantReportAnswer(kind,delayed){
     try{
@@ -93,8 +99,8 @@
       let history=[],historyAvailable=true;
       try{history=(await t.request(session,'/lab/report-history')).reports||[]}catch(_){historyAvailable=false}
       const found=currentReports.find(item=>item.kind===kind);
-      const today=moscowDateKey(Date.now());
-      const published=history.find(item=>item.kind===kind&&item.reportDate===today&&String(item.text||'').trim());
+      const expectedDate=assistantExpectedReportDate(kind);
+      const published=history.find(item=>item.kind===kind&&item.reportDate===expectedDate&&String(item.text||'').trim());
       const previous=history.find(item=>item.kind===kind&&String(item.text||'').trim());
       const changedFromHistory=!!(found&&previous&&String(found.text).trim()!==String(previous.text).trim());
       const title=kind==='morning'?'утренний':'вечерний';
