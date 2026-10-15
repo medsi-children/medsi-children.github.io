@@ -71,7 +71,7 @@
   const DOCTOR_CONTACTS_TEXT = "Контакты врачей:\n\nАнастасия Михайловна\n+79253394090\nРабочие часы: с 9:00 до 18:00.\nВыходные дни: пятница и суббота.\n\nАнтон Геннадьевич\n+79859927884\nРабочие часы: с 9:00 до 18:00.\nВыходные дни: воскресенье и понедельник.\n\nПожалуйста, пишите и звоните врачам в рабочее время.";
 
   const scenarios = {
-    reports: { question: 'Когда ждать отчёт?', answer: 'Утренний отчёт с 15:00 до 16:00.\nВечерний — с 21:00 до 22:00.\n\nХотите посмотреть отчёт?', mood: 'neutral', after: 'reportChoices' },
+    reports: { question: 'Когда ждать отчёт?', answer: 'Утренний отчёт с 15:00 до 16:00.\nВечерний — с 21:00 до 22:00.', mood: 'neutral' },
     chooseReport: { question: 'Да', answer: 'Какой отчёт?', after: 'reportChoices' },
     noThanks: { question: 'Нет', answer: 'Хорошо. Если понадобится, я рядом.' },
     clarifyReportMedical: { question: 'Вопрос об отчёте и лечении', answer: 'Вы хотите посмотреть отчёт или задать вопрос о лечении?', after: 'clarifyReportMedical' },
@@ -92,20 +92,20 @@
         "medicine": "💊 Лекарства — только после согласования с лечащим врачом."
 }
     },
-    payment: { question: 'Как оплатить?', answer: 'По вопросам оплаты свяжитесь с лечащим врачом. Оплата производится на ресепшене клиники.' },
+    payment: { question: 'Как оплатить?', answer: 'По вопросам оплаты, пожалуйста, уточните информацию у лечащего врача или на ресепшене клиники.' },
     meetings: { question: 'Как договориться о встрече?', answer: 'Встречу с ребёнком, пожалуйста, согласуйте с лечащим врачом. Он поможет выбрать время с учётом состояния ребёнка.' },
-    meetTime: { question: 'Когда можно встретиться с ребёнком?', answer: 'Встречи с детьми проходят с 17:00 до 20:00. Пожалуйста, согласуйте встречу с лечащим врачом.' },
+    meetTime: { question: 'Когда можно встретиться с ребёнком?', answer: 'Актуальное время встречи зависит от дня и состояния ребёнка. Пожалуйста, согласуйте встречу с лечащим врачом — он подскажет подходящее время.' },
     calls: { question: 'Как договориться о звонке?', answer: 'Звонок ребёнку, пожалуйста, согласуйте с лечащим врачом. Он поможет выбрать подходящее время.' },
     doctors: { question: 'Как связаться с лечащим врачом?', answer: DOCTOR_CONTACTS_TEXT },
     medical: { question: 'Вопрос о лечении', answer: 'Вопросы о лечении, препаратах, процедурах и анализах, пожалуйста, обсуждайте с лечащим врачом. Воспитатели не владеют такой информацией.', variants: { medicine: 'Вопросы о лекарствах, назначениях и дозировках, пожалуйста, обсуждайте с лечащим врачом. Воспитатели не владеют такой информацией.' } },
     urgent: { question: 'У меня срочный вопрос', answer: 'Если вопрос срочный, пожалуйста, напишите его в чате с воспитателями. Они ответят, как только смогут.', after: 'educatorChat', variants: { medical: 'Если медицинский вопрос требует срочного решения, пожалуйста, свяжитесь с лечащим врачом в рабочее время.\n\n' + DOCTOR_CONTACTS_TEXT } },
     signIn: { question: 'Не получается войти', answer: 'По вопросам входа, кода подтверждения и доступа к системе, пожалуйста, напишите воспитателям в чате.', after: 'educatorChat' },
-    therapy: { question: 'Психотерапия', answer: 'Что вас интересует: занятия с психологом или групповая терапия?', after: 'therapyChoices' },
-    groupTherapy: { question: 'Групповая терапия' },
-    groupTherapyTime: { question: 'Когда групповая терапия?', answer: 'В режиме дня групповая терапия указана на 10:00. Отчёт по занятию могу показать здесь.', after: 'therapy' },
+    therapy: { question: 'Психотерапия', answer: 'Что вас интересует: занятия с психологом или групповая психотерапия?', after: 'therapyChoices' },
+    groupTherapy: { question: 'Групповая психотерапия' },
+    groupTherapyTime: { question: 'Когда групповая психотерапия?', answer: 'В режиме дня групповая психотерапия указана на 10:00. Отчёт по занятию могу показать здесь.', after: 'therapy' },
     individualTherapy: { question: 'Индивидуальные занятия с психологом', answer: 'По вопросам индивидуальной психотерапии, пожалуйста, связывайтесь напрямую с вашим психологом.' },
     greeting: { question: 'Добрый день', answer: 'Добрый день', icon: '1f499.svg', iconPosition: 'after', after: 'greetingFollowup' },
-    routine: { question: 'Какой режим дня?', answer: '☀️ Утро\n8:00 — Подъём\n8:30 — Зарядка\n9:00 — Завтрак\n9:30 — Игры и творчество\n10:00 — Групповая терапия\n11:00 — Прогулка\n12:00 — Игры и творчество\n13:00 — Обед\n14:00 — Сон-час\n\n🌙 Вечер\n16:00 — Танцы\n16:30 — Полдник\n17:00 — Игры и творчество\n18:00 — Ужин\n18:15 — Киносеанс\n21:00 — Подготовка ко сну / медицинские процедуры\n22:00 — Отбой\n\nВстречи с детьми: 17:00–20:00.' },
+    routine: { question: 'Какой режим дня?', answer: '☀️ Утро\n8:00 — Подъём\n8:30 — Зарядка\n9:00 — Завтрак\n9:30 — Игры и творчество\n10:00 — Групповая психотерапия\n11:00 — Прогулка\n12:00 — Игры и творчество\n13:00 — Обед\n14:00 — Сон-час\n\n🌙 Вечер\n16:00 — Танцы\n16:30 — Полдник\n17:00 — Игры и творчество\n18:00 — Ужин\n18:15 — Киносеанс\n21:00 — Подготовка ко сну / медицинские процедуры\n22:00 — Отбой\n\nВстречи с детьми: 17:00–20:00.' },
     home: { question: 'Как добавить систему на экран «Домой»?', answer: 'На главном экране есть подсказка по добавлению Медси Бота на экран «Домой». После этого система будет открываться как обычное приложение.' },
     thanks: { question: 'Спасибо!', answer: 'Пожалуйста! Я рядом, если понадобится подсказка.', mood: 'happy' }
   };
@@ -201,7 +201,8 @@
   function reportDelayText(kind) {
     const status = reportStatus(kind);
     if (status === 'before') return `${reportTitle(kind)} обычно появляется ${reportWindow(kind)}. Пожалуйста, дождитесь этого времени.`;
-    if (status === 'publishing' || status === 'grace') return 'Похоже, сегодня подготовка отчёта занимает немного больше времени. Пожалуйста, подождите ещё немного.';
+    if (status === 'publishing') return `Сейчас идёт окно публикации: ${reportWindow(kind)}. Пожалуйста, дождитесь его окончания.`;
+    if (status === 'grace') return 'Похоже, сегодня подготовка отчёта занимает немного больше времени. Пожалуйста, подождите ещё немного.';
     return 'Пожалуйста, попробуйте перезапустить приложение. Если отчет все еще не появится, вероятно произошла ошибка. Пожалуйста, сообщите воспитателям в чате 🙏';
   }
   function showReportDelay(kind, suffix = '') {
@@ -242,7 +243,7 @@
     const content = element('div', 'message-content');
     const card = element('div', 'report-card therapy-report-card');
     const heading = element('div', 'report-card-heading');
-    heading.append(emoji('1f9e0.svg', ''), element('strong', '', 'Групповая терапия'));
+    heading.append(emoji('1f9e0.svg', ''), element('strong', '', 'Групповая психотерапия'));
     const body = element('div', 'therapy-report-body');
     const formatter = window.MedsiPsychologyFormatter;
     if (formatter && typeof formatter.render === 'function') formatter.render(body, text);
@@ -265,13 +266,13 @@
       }
       const report = (current.reports || []).find(item => item.kind === 'psychology' && String(item.text || '').trim());
       if (report) therapyReportCard(report.text);
-      else message('bot', 'Отчёта по групповой терапии пока нет. Пожалуйста, попробуйте позже.');
+      else message('bot', 'Отчёта по групповой психотерапии пока нет. Пожалуйста, попробуйте позже.');
     } catch (_) {
-      message('bot', 'Сейчас не получилось загрузить отчёт по групповой терапии. Пожалуйста, попробуйте ещё раз чуть позже.', 'sad');
+      message('bot', 'Сейчас не получилось загрузить отчёт по групповой психотерапии. Пожалуйста, попробуйте ещё раз чуть позже.', 'sad');
     } finally { clearTyping(); setThinking(false); busy = false; }
   }
 
-  function requestTherapyReport(question = 'Групповая терапия') {
+  function requestTherapyReport(question = 'Групповая психотерапия') {
     if (busy) return;
     busy = true;
     awaitingTherapyChoice = false;
@@ -290,43 +291,34 @@
         message('bot', reportAccessText());
         return;
       }
+      if (!kind) {
+        message('bot', 'Какой отчёт показать — утренний или вечерний?');
+        offerReportChoices();
+        pendingChoice = 'reports';
+        return;
+      }
       const currentReports = (current.reports || []).filter(item => ['morning', 'evening'].includes(item.kind) && String(item.text || '').trim());
       let history = [];
       let historyAvailable = true;
-      if (delayed || !kind) {
-        try { history = (await readParent('/lab/report-history')).reports || []; } catch (_) { historyAvailable = false; }
-      }
-      if (!kind) {
-        const changed = currentReports.filter(item => {
-          const previous = history.find(saved => saved.kind === item.kind && String(saved.text || '').trim());
-          return previous && String(previous.text).trim() !== String(item.text).trim();
-        });
-        if (changed.length === 1) { reportCard(changed[0].kind, changed[0].text); lastReportKind = changed[0].kind; return; }
-        const latest = history.find(item => ['morning', 'evening'].includes(item.kind) && String(item.text || '').trim());
-        if (latest && changed.length === 0) { reportCard(latest.kind, latest.text, latest.reportDate); lastReportKind = latest.kind; return; }
-        if (currentReports.length === 1) kind = currentReports[0].kind;
-        else { message('bot', 'Какой отчёт показать — утренний или вечерний?'); offerReportChoices(); return; }
-      }
+      try { history = (await readParent('/lab/report-history')).reports || []; } catch (_) { historyAvailable = false; }
       lastReportKind = kind;
       const found = currentReports.find(item => item.kind === kind);
-      if (!delayed) {
-        if (found) reportCard(kind, found.text);
-        else message('bot', `Пока нет доступного ${kind === 'morning' ? 'утреннего' : 'вечернего'} отчёта. Обычно он появляется ${reportWindow(kind)}.`, 'sad');
-        return;
-      }
-      const today = expectedReportDate(kind);
-      const published = history.find(item => item.kind === kind && item.reportDate === today && String(item.text || '').trim());
-      if (published) { reportCard(kind, published.text, published.reportDate); return; }
+      const expectedDate = expectedReportDate(kind);
+      const published = history.find(item => item.kind === kind && item.reportDate === expectedDate && String(item.text || '').trim());
       const previous = history.find(item => item.kind === kind && String(item.text || '').trim());
-      if (found && previous && String(found.text).trim() !== String(previous.text).trim()) {
-        reportCard(kind, found.text);
+      const changedFromHistory = !!(found && previous && String(found.text).trim() !== String(previous.text).trim());
+      if (!delayed) {
+        if (published) { reportCard(kind, published.text, published.reportDate); return; }
+        if (reportStatus(kind) !== 'before' && changedFromHistory) { reportCard(kind, found.text); return; }
+        if (!historyAvailable) {
+          message('bot', `Сейчас не получилось проверить, опубликован ли сегодняшний ${kind === 'morning' ? 'утренний' : 'вечерний'} отчёт. Пожалуйста, попробуйте ещё раз чуть позже.`, 'sad');
+          return;
+        }
+        message('bot', `Сегодняшний ${kind === 'morning' ? 'утренний' : 'вечерний'} отчёт пока не опубликован. Обычно он появляется ${reportWindow(kind)}.`, 'sad');
         return;
       }
-      if (found && (!historyAvailable || !previous)) {
-        message('bot', 'Я вижу последний доступный отчёт, но сейчас не могу точно проверить дату публикации нового. Покажу доступный отчёт.');
-        reportCard(kind, found.text);
-        return;
-      }
+      if (published) { reportCard(kind, published.text, published.reportDate); return; }
+      if (reportStatus(kind) !== 'before' && changedFromHistory) { reportCard(kind, found.text); return; }
       if (!historyAvailable) {
         message('bot', 'Сейчас не получилось проверить, опубликован ли новый отчёт. Пожалуйста, попробуйте ещё раз чуть позже.', 'sad');
         return;
@@ -466,7 +458,7 @@
 
   function offerTherapy() {
     const actions = element('div', 'choices');
-    const open = actionButton('Групповая терапия', '1f9e0.svg', () => requestTherapyReport());
+    const open = actionButton('Групповая психотерапия', '1f9e0.svg', () => requestTherapyReport());
     actions.appendChild(open);
     conversation.appendChild(actions);
     scrollToEnd();
@@ -475,7 +467,7 @@
   function offerTherapyChoices() {
     const actions = element('div', 'choices');
     actions.appendChild(actionButton('Занятия с психологом', '1f9e0.svg', () => runScenario('individualTherapy')));
-    actions.appendChild(actionButton('Групповая терапия', '1f9e0.svg', () => runScenario('groupTherapy')));
+    actions.appendChild(actionButton('Групповая психотерапия', '1f9e0.svg', () => runScenario('groupTherapy')));
     conversation.appendChild(actions);
     pendingChoice = 'therapy';
     scrollToEnd();
@@ -514,6 +506,11 @@
         pendingChoice = 'reportDelay';
         message('bot', 'Вы про утренний отчёт или вечерний отчёт?');
         offerReportDelayChoices();
+        busy = false;
+      } else if (parsed.key === 'reportRequest' && !kind) {
+        pendingChoice = 'reports';
+        message('bot', 'Какой отчёт показать — утренний или вечерний?');
+        offerReportChoices();
         busy = false;
       } else answerReport(kind, parsed.key === 'reportDelay');
       return;
@@ -589,7 +586,7 @@
     if (lastReportKind && ['reports', 'reportRequest', 'reportDelay'].includes(lastIntentKey) && /^(?:покажи|отправь|скинь|пришли|дай)(?: его)?$/.test(simple)) return { key: 'reportRequest', kind: lastReportKind };
     if (['reports', 'reportRequest', 'reportDelay'].includes(lastIntentKey) && /^(?:а )?(?:когда|во сколько)$/.test(simple)) return 'reports';
     if (awaitingTherapyChoice) {
-      if (/^(?:групп[а-я]*|групповая терапия|отчет по группе)$/.test(simple)) return 'groupTherapy';
+      if (/^(?:групп[а-я]*|групповая психотерапия|отчет по группе)$/.test(simple)) return 'groupTherapy';
       if (/^(?:индивидуал[а-я]*|занятия с психологом|психолог)$/.test(simple)) return 'individualTherapy';
     }
     if (window.MedsiSmartBot && window.MedsiSmartBot.isGreetingOnly(text)) return 'greeting';
