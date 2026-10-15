@@ -16,6 +16,9 @@ test('parent assistant offers only for confident mapped topics and still skips u
   };
   const window = {
     MedsiSmartBot: { analyze(text) {
+      if (text.includes('medical symptom')) return {intent:{key:'medical'},confidence:.95};
+      if (text.includes('human action')) return {intent:{key:'calls'},confidence:.95};
+      if (text.includes('delivery status')) return {intent:{key:'delivery'},confidence:.95};
       if (text === 'report') return {intent:{key:'reportDelay',kind:'morning'},confidence:.95};
       if (text === 'medical') return {intent:{key:'medical'},confidence:.95};
       if (text === 'calls') return {intent:{key:'calls'},confidence:.95};
@@ -28,14 +31,24 @@ test('parent assistant offers only for confident mapped topics and still skips u
   assert.equal(window.__assistantIntent('report').kind,'morning');
   assert.equal(window.__assistantIntent('medical').key,'medical');
   assert.equal(window.__assistantIntent('calls').key,'calls');
+  assert.equal(window.__assistantIntent('у ребёнка температура и ему плохо medical symptom'),null);
+  assert.equal(window.__assistantIntent('позвоните ребенку human action'),null);
+  assert.equal(window.__assistantIntent('спасибо, доставку уже получили delivery status'),null);
   assert.equal(window.__assistantIntent('uncertain'),null);
 });
 
 test('doctor-directed answers reveal doctor contacts before asking whether the question was resolved', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
   assert.match(source, /const DOCTOR_CONTACT_INTENTS=new Set\(\['meetings','meetTime','calls','payment','medical','medicine'\]\)/);
-  assert.match(source, /assistantButton\('Контакты врача',\(\)=>\{body\.textContent=ASSISTANT_ANSWERS\.doctors;showResolutionActions\(\)\}\)/);
+  assert.match(source, /assistantButton\('Контакты врача',\(\)=>\{body\.textContent=ASSISTANT_ANSWERS\.doctors;showResolutionActions\(\)\}\),assistantButton\('Да, вопрос решился'/);
   assert.match(source, /function showResolutionActions\(\)\{actions\.replaceChildren\(assistantButton\('Да, вопрос решился'/);
+});
+
+test('resolved parent questions close cleanly instead of asking to send them anyway', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+  assert.match(source, /if\(resolved\)\{/);
+  assert.match(source, /Хорошо, тогда вопрос воспитателям не отправляю\./);
+  assert.doesNotMatch(source, /Всё ещё отправить вопрос воспитателям\?/);
 });
 
 test('report timing answers do not offer an unavailable report and explicit report requests ask which report to show', () => {
@@ -46,6 +59,9 @@ test('report timing answers do not offer an unavailable report and explicit repo
   assert.match(source, /showReportKindChoices\('Какой отчёт показать\?'\)/);
   assert.match(source, /assistantButton\('Утренний отчёт'/);
   assert.match(source, /assistantButton\('Вечерний отчёт'/);
+  assert.match(source, /history=\(await t\.request\(session,'\/lab\/report-history'\)\)\.reports\|\|\[\]/);
+  assert.match(source, /Сегодняшний \$\{title\} отчёт пока не опубликован/);
+  assert.doesNotMatch(source, /if\(found\)return found\.text/);
 });
 
 test('experimental parent assistant uses the Medsi blob and existing report-delay wording, without snapshot-error copy', () => {
@@ -66,7 +82,10 @@ test('the production parent chat now has the same tested assistant flow and styl
   assert.equal(production, experimental);
   assert.match(production, /if\(!isRetry&&assistantBypass!==text\)/);
   assert.match(production, /function showAssistantFollowup\(resolved\)/);
-  assert.match(styles, /\.parent-assistant-card\{/);
+  assert.match(styles, /\.parent-assistant-card\.is-compact\{/);
+  assert.match(styles, /\.parent-assistant-card\.is-expanded\{/);
+  assert.match(styles, /right:max\(12px,env\(safe-area-inset-right\)\)/);
+  assert.match(production, /parent-assistant-card is-compact/);
 });
 
 test('experimental parent and educator doctor contacts match the assistant and stay in one quick-reply button', () => {
