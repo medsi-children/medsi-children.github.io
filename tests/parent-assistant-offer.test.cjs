@@ -66,7 +66,7 @@ test('report timing answers do not offer an unavailable report and explicit repo
 
 test('main parent blob follows the same conservative report flow', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'bot-chat-runtime.js'), 'utf8');
-  assert.match(source, /reports: \{ question: 'Когда ждать отчёт\?', answer: 'Утренний отчёт с 15:00 до 16:00\\nВечерний — с 21:00 до 22:00\.'/);
+  assert.ok(source.includes("reports: { question: 'Когда ждать отчёт?', answer: 'Утренний отчёт с 15:00 до 16:00.\\nВечерний — с 21:00 до 22:00.', mood: 'neutral' }"));
   assert.doesNotMatch(source, /Когда ждать отчёт\?'[^\n]*Хотите посмотреть отчёт/);
   assert.match(source, /parsed\.key === 'reportRequest' && !kind/);
   assert.match(source, /Какой отчёт показать — утренний или вечерний\?/);
