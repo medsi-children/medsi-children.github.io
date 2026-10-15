@@ -64,6 +64,35 @@ test('the production educator panel includes the tested assistant suggestions an
   assert.equal(production,experimental);
   assert.match(production,/function detectTutorSuggestion\(previous,next\)/);
   assert.match(production,/\['reportDelay','Задержка отчёта','quick-indigo'\]/);
-  assert.match(styles,/\.tutor-assistant-suggestion\{/);
+  assert.match(production,/function tutorMessageHasLaterReply\(list,key\)/);
+  assert.match(production,/editor\.addEventListener\('input'/);
+  assert.match(styles,/\.tutor-assistant-suggestion\.is-compact\{/);
+  assert.match(styles,/\.tutor-assistant-suggestion\.is-expanded\{/);
+  assert.match(styles,/right:max\(12px,env\(safe-area-inset-right\)\)/);
   assert.match(read('chat-overlay/educator-exact.css'),/\.quick-indigo\{/);
+});
+
+test('educator assistant is time-aware and conservative about context',()=>{
+  const source=read('chat-overlay/educator-chat-test.js');
+  const anchor='  window.MedsiEducatorOverlayChat={mount};';
+  assert.ok(source.includes(anchor));
+  const instrumented=source.replace(anchor, '  window.__tutorSuggestionPlan=tutorSuggestionPlan;\n'+anchor);
+  const context={window:{},Intl,Date};
+  vm.createContext(context);
+  vm.runInContext(instrumented,context);
+  const plan=context.window.__tutorSuggestionPlan;
+  const morningBefore=Date.parse('2026-10-15T07:42:00Z'); // 10:42 Moscow
+  const morningLate=Date.parse('2026-10-15T14:10:00Z');   // 17:10 Moscow
+
+  assert.equal(plan('когда утренний отчет?',morningBefore).key,'reportSchedule');
+  assert.equal(plan('где утренний отчет?',morningBefore).key,'reportSchedule');
+  assert.equal(plan('где утренний отчет?',morningLate).key,'reportDelay');
+  assert.equal(plan('где отчет?',morningLate),null);
+  assert.equal(plan('спасибо, доставку получили',morningBefore),null);
+  assert.equal(plan('куда курьеру привезти вещи?',morningBefore).key,'delivery');
+  assert.equal(plan('номер лечащего врача',morningBefore).key,'doctors');
+  assert.equal(plan('какие препараты принимает ребенок?',morningBefore).key,'medical');
+  assert.equal(plan('у ребенка температура, какие лекарства дать?',morningBefore),null);
+  assert.equal(plan('почему в утреннем отчете нет лекарства?',morningBefore),null);
+  assert.equal(plan('срочно где утренний отчет',morningLate),null);
 });
