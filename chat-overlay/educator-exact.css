@@ -447,10 +447,11 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
 .quick-toggle{ border:none; background:var(--btn-mint); color:#fff; text-shadow:0 1px 1px rgba(0,0,0,.08); }
 .quick-panel{ margin-top:12px; padding:12px; border-radius:14px; background:#f3fcfd; border:1px solid rgba(36,211,218,.18); }
 .quick-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+@media (min-width:561px){ .quick-grid > .quick-btn:last-child:nth-child(odd){ grid-column:1 / -1; justify-self:center; width:calc((100% - 10px) / 2); } }
 /* One calm palette for quick replies; legacy class names preserve action mapping. */
-.quick-btn{ border:1px solid rgba(255,255,255,.22); border-radius:14px; padding:12px 14px; font-size:.98rem; font-weight:700; cursor:pointer; min-height:50px; color:#fff; background:linear-gradient(135deg,#128599,#087c8b); box-shadow:inset 0 1px 0 rgba(255,255,255,.15),0 3px 8px rgba(13,115,133,.09); text-shadow:none; transition:filter .16s ease,box-shadow .16s ease; }
-.quick-red,.quick-orange,.quick-yellow,.quick-green,.quick-cyan,.quick-blue,.quick-purple,.quick-doctors{ background:linear-gradient(135deg,#128599,#087c8b); }
-.quick-indigo{ background:linear-gradient(135deg,#128599,#087c8b); }
+.quick-btn{ border:1px solid rgba(255,255,255,.22); border-radius:14px; padding:12px 14px; font-size:.98rem; font-weight:700; cursor:pointer; min-height:50px; color:#fff; background:linear-gradient(135deg,#0fc7ce,#44dbe1); box-shadow:inset 0 1px 0 rgba(255,255,255,.15),0 3px 8px rgba(13,115,133,.09); text-shadow:none; transition:filter .16s ease,box-shadow .16s ease; }
+.quick-red,.quick-orange,.quick-yellow,.quick-green,.quick-cyan,.quick-blue,.quick-purple,.quick-doctors{ background:linear-gradient(135deg,#0fc7ce,#44dbe1); }
+.quick-indigo{ background:linear-gradient(135deg,#0fc7ce,#44dbe1); }
 @media (hover:hover){ .quick-btn:hover{ filter:brightness(1.08); box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 5px 12px rgba(13,115,133,.16); } }
 .quick-btn:focus-visible{ outline:3px solid #075c72; outline-offset:3px; }
 .quick-btn:active{ filter:brightness(.94); }

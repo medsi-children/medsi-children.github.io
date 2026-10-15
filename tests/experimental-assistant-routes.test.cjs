@@ -20,7 +20,7 @@ test('experimental parent and educator routes load isolated assets; production p
   assert.match(parent, /chat-screen-test\.js/);
   assert.match(parent, /chat-ui-test\.css/);
   assert.match(tutor, /educator-chat-test\.js\?v=20261015-teal-timeout-1/);
-  assert.match(tutor, /educator-exact-test\.css\?v=20261015-teal-timeout-1/);
+  assert.match(tutor, /educator-exact-test\.css\?v=20261015-light-teal-centered-2/);
   assert.match(parent, /chat-screen-test\.js\?v=20261014-experiment-5/);
   assert.match(parent, /chat-ui-test\.css\?v=20261014-experiment-4/);
 
