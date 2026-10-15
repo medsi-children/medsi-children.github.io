@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
   <link rel="manifest" href="/tutors-manifest.json">
   <link rel="stylesheet" href="/chat-overlay/overlay.css?v=20260905-production">
-  <link rel="stylesheet" href="/chat-overlay/educator-exact.css?v=20261014-assistant-1">
+  <link rel="stylesheet" href="/chat-overlay/educator-exact.css?v=20261015-teal-timeout-1">
   <link rel="stylesheet" href="/chat-overlay/overlay-fixes.css?v=20260905-production">
   <link rel="stylesheet" href="/tutors/full-web.css?v=20260905-production">
   <link rel="stylesheet" href="/tutors/full-web-fixes.css?v=20261014-chat-canvas-2">
@@ -48,15 +48,13 @@
     .auth-checking p{margin:14px 0 0}
   </style>
   <script>
-    window.addEventListener('DOMContentLoaded',function(){
-      setTimeout(function(){
+    setTimeout(function(){
         if(window.medsiTutorBootReady)return;
         var text=document.getElementById('authCheckingText');
         var retry=document.getElementById('authRetry');
         if(text)text.textContent='Не удалось полностью загрузить панель. Проверьте соединение и обновите страницу.';
         if(retry)retry.classList.remove('hidden');
-      },12000);
-    });
+    },12000);
   </script>
   <script defer src="/notify-client.js?v=20261007-verified-subscription-1"></script>
   <script defer src="/tutors/push-auth.js?v=20260906-timeweb-1"></script>
@@ -65,7 +63,7 @@
   <script defer src="/chat-overlay/upload-ux.js?v=20260907-1"></script>
   <script defer src="/tutors/chat-prewarm.js?v=20261009-profile-lifecycle-1"></script>
   <script defer src="/chat-overlay/interaction-fix.js?v=20260905-production"></script>
-<script defer src="/chat-overlay/educator-chat.js?v=20261015-media-caption-edit-1"></script>
+<script defer src="/chat-overlay/educator-chat.js?v=20261015-teal-timeout-1"></script>
 <script defer src="/chat-overlay/composer-ui.js?v=20260907-1"></script>
 <script defer src="/chat-overlay/chat-list-ui.js?v=20260907-1"></script>
 <script defer src="/tutors/phone-cards-ui.js?v=20260907-1"></script>

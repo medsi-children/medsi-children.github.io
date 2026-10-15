@@ -80,3 +80,47 @@ test('educator chat keeps manual quick replies but no longer mounts the contextu
   assert.doesNotMatch(production,/Кажется, здесь могу помочь\. Предложить ответ\?/);
   assert.doesNotMatch(styles,/\.tutor-assistant-suggestion|\.tutor-assistant-copy|\.tutor-assistant-actions/);
 });
+
+for (const file of ['chat-overlay/educator-chat.js', 'chat-overlay/educator-chat-test.js']) {
+  function threadLoader(thread) {
+    const source = read(file);
+    const prefix = source.slice(0, source.indexOf('  function mount('));
+    const helper = source.slice(source.indexOf('    function threadWithTimeout('), source.indexOf('    function showThreadLoadFailure('));
+    let fireTimeout, cleared = false, delay;
+    const context = {transport:{thread},session:{token:'fixture'},
+      setTimeout(fn,ms){fireTimeout=fn;delay=ms;return 1;},
+      clearTimeout(){cleared=true;}};
+    vm.runInNewContext(prefix + helper + '\nglobalThis.load=threadWithTimeout;})();', context);
+    return {load:context.load,timeout:()=>fireTimeout(),delay:()=>delay,cleared:()=>cleared};
+  }
+  test(`${file}: opening a thread reaches transport and clears its timeout`,async()=>{
+    const response={messages:[{text:'Fixture message'}]};
+    let calls=0;
+    const loader=threadLoader(async(session,phone)=>{calls++;assert.equal(session.token,'fixture');assert.equal(phone,'0000000000');return response;});
+    assert.equal(await loader.load('0000000000'),response);
+    assert.equal(calls,1);assert.equal(loader.delay(),8000);assert.equal(loader.cleared(),true);
+  });
+  test(`${file}: a stalled thread rejects with a recoverable timeout`,async()=>{
+    const loader=threadLoader(()=>new Promise(()=>{}));
+    const pending=loader.load('0000000000');
+    loader.timeout();
+    await assert.rejects(pending,error=>error.code==='THREAD-TIMEOUT');
+  });
+  test(`${file}: a network rejection reaches the caller`,async()=>{
+    const loader=threadLoader(async()=>{throw new Error('network unavailable');});
+    await assert.rejects(loader.load('0000000000'),/network unavailable/);
+    assert.equal(loader.cleared(),true);
+  });
+}
+
+for(const file of ['tutors.html','tutors_test.html']) {
+  test(`${file}: stalled deferred scripts cannot prevent the loading watchdog`,()=>{
+    const script=read(file).match(/<script>\s*([\s\S]*?)<\/script>/)[1];
+    const nodes={authCheckingText:{textContent:''},authRetry:{classList:{remove(value){this.removed=value;}}}};
+    let timer,delay;
+    vm.runInNewContext(script,{window:{},document:{getElementById:id=>nodes[id]},setTimeout(fn,ms){timer=fn;delay=ms;}});
+    assert.equal(delay,12000);timer();
+    assert.match(nodes.authCheckingText.textContent,/Не удалось полностью загрузить/);
+    assert.equal(nodes.authRetry.classList.removed,'hidden');
+  });
+}

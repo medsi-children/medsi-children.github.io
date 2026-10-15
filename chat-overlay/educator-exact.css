@@ -447,16 +447,14 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
 .quick-toggle{ border:none; background:var(--btn-mint); color:#fff; text-shadow:0 1px 1px rgba(0,0,0,.08); }
 .quick-panel{ margin-top:12px; padding:12px; border-radius:14px; background:#f3fcfd; border:1px solid rgba(36,211,218,.18); }
 .quick-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.quick-btn{ border:none; border-radius:12px; padding:12px 14px; font-size:.98rem; font-weight:800; cursor:pointer; min-height:50px; color:#fff; text-shadow:0 1px 1px rgba(0,0,0,.10); }
-.quick-red{ background:linear-gradient(135deg,#fb7185,#f87171); }
-.quick-orange{ background:linear-gradient(135deg,#fb923c,#fdba74); }
-.quick-yellow{ background:linear-gradient(135deg,#fcd34d,#fbbf24); }
-.quick-green{ background:linear-gradient(135deg,#6ee7b7,#34d399); }
-.quick-cyan{ background:linear-gradient(135deg,#67e8f9,#22d3ee); }
-.quick-blue{ background:linear-gradient(135deg,#93c5fd,#60a5fa); }
-.quick-indigo{ background:linear-gradient(135deg,#6687e9,#8c7fe8); }
-.quick-purple{ background:linear-gradient(135deg,#a78bfa,#c084fc); }
-.quick-doctors{ background:linear-gradient(135deg,#f9a8d4,#f472b6); color:#fff; border:1px solid rgba(167,139,250,.30); }
+/* One calm palette for quick replies; legacy class names preserve action mapping. */
+.quick-btn{ border:1px solid rgba(255,255,255,.22); border-radius:14px; padding:12px 14px; font-size:.98rem; font-weight:700; cursor:pointer; min-height:50px; color:#fff; background:linear-gradient(135deg,#128599,#087c8b); box-shadow:inset 0 1px 0 rgba(255,255,255,.15),0 3px 8px rgba(13,115,133,.09); text-shadow:none; transition:filter .16s ease,box-shadow .16s ease; }
+.quick-red,.quick-orange,.quick-yellow,.quick-green,.quick-cyan,.quick-blue,.quick-purple,.quick-doctors{ background:linear-gradient(135deg,#128599,#087c8b); }
+.quick-indigo{ background:linear-gradient(135deg,#128599,#087c8b); }
+@media (hover:hover){ .quick-btn:hover{ filter:brightness(1.08); box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 5px 12px rgba(13,115,133,.16); } }
+.quick-btn:focus-visible{ outline:3px solid #075c72; outline-offset:3px; }
+.quick-btn:active{ filter:brightness(.94); }
+@media (prefers-reduced-motion:reduce){ .quick-btn{ transition:none; } }
 .quick-subgrid{ display:grid; grid-template-columns:1fr; gap:8px; margin-top:10px; }
 .quick-doctor-btn{ border:none; border-radius:12px; padding:12px 14px; min-height:48px; font-size:.98rem; font-weight:800; background:#fff; cursor:pointer; text-align:left; border:1px solid rgba(36,211,218,.22); }
 .doctor-anastasia{ color:#2563eb; }.doctor-anna{ color:#16a34a; }.doctor-kristina{ color:#ea580c; }
