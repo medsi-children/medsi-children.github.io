@@ -68,6 +68,9 @@ test('the production educator panel includes the tested assistant suggestions an
   assert.match(production,/editor\.addEventListener\('input'/);
   assert.match(styles,/\.tutor-assistant-suggestion\.is-compact\{/);
   assert.match(styles,/\.tutor-assistant-suggestion\.is-expanded\{/);
+  assert.match(styles,/\.tutor-assistant-suggestion\.is-compact\{[^}]*width:max-content;[^}]*max-width:min\(292px/);
+  assert.match(styles,/\.tutor-assistant-suggestion\.is-compact:after\{/);
+  assert.match(styles,/\.tutor-assistant-suggestion\.is-compact \.tutor-assistant-actions\{[^}]*margin-top:0;[^}]*padding:3px 12px 10px/);
   assert.match(styles,/right:max\(12px,env\(safe-area-inset-right\)\)/);
   assert.match(read('chat-overlay/educator-exact.css'),/\.quick-indigo\{/);
 });
