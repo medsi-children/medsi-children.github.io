@@ -38,6 +38,16 @@ test('doctor-directed answers reveal doctor contacts before asking whether the q
   assert.match(source, /function showResolutionActions\(\)\{actions\.replaceChildren\(assistantButton\('Да, вопрос решился'/);
 });
 
+test('report timing answers do not offer an unavailable report and explicit report requests ask which report to show', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+  assert.match(source, /reports:'Утренний отчёт с 15:00 до 16:00\\nВечерний — с 21:00 до 22:00\.'/);
+  assert.doesNotMatch(source, /reports:'[^']*Хотите посмотреть отчёт\?/);
+  assert.match(source, /suggestion&&suggestion\.key==='reportRequest'&&!suggestion\.kind/);
+  assert.match(source, /showReportKindChoices\('Какой отчёт показать\?'\)/);
+  assert.match(source, /assistantButton\('Утренний отчёт'/);
+  assert.match(source, /assistantButton\('Вечерний отчёт'/);
+});
+
 test('experimental parent assistant uses the Medsi blob and existing report-delay wording, without snapshot-error copy', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
   assert.match(source, /src="\/parents\/blob\.webp"/);
