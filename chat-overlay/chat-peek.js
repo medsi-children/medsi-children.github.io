@@ -36,11 +36,13 @@
     if (!card.isConnected || document.body.dataset.screen !== 'screenChats') return;
     close();
     sourceCard = card;
+    const selection = window.getSelection();
+    if (selection && selection.anchorNode && card.contains(selection.anchorNode)) selection.removeAllRanges();
     const last = card.querySelector('.chat-card-last');
     const educator = !!(last && last.classList.contains('educator'));
     modal = document.createElement('div');
     modal.className = 'medsi-chat-peek-backdrop';
-    modal.innerHTML = '<section class="medsi-chat-peek" role="dialog" aria-modal="true" aria-labelledby="medsiChatPeekTitle"><header><h2 id="medsiChatPeekTitle"></h2><button type="button" class="medsi-chat-peek-close" aria-label="Закрыть превью">×</button></header><div class="medsi-chat-peek-message" tabindex="0"></div></section>';
+    modal.innerHTML = '<section class="medsi-chat-peek" role="dialog" aria-modal="true" aria-labelledby="medsiChatPeekTitle"><header><h2 id="medsiChatPeekTitle"></h2><button type="button" class="medsi-chat-peek-close" aria-label="Закрыть превью"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m7 7 10 10M17 7 7 17"/></svg></button></header><div class="medsi-chat-peek-message" tabindex="0"></div></section>';
     modal.querySelector('h2').textContent = educator ? 'Детское Отделение Медси' : (card.querySelector('.chat-card-meta')?.textContent.split('\n')[0] || 'Родитель').replace(/:\s*/, ' ');
     modal.querySelector('.medsi-chat-peek').classList.toggle('from-educator', educator);
     const message = modal.querySelector('.medsi-chat-peek-message');
@@ -79,6 +81,7 @@
   }, true);
 
   document.addEventListener('contextmenu', event => {
+    if (modal && modal.contains(event.target)) { event.preventDefault(); return; }
     const card = cardFor(event);
     if (!card) return;
     event.preventDefault();
@@ -86,6 +89,10 @@
     if (!modal) open(card);
     ignoreReleaseClick = true;
   }, true);
+
+  document.addEventListener('selectstart', event => {
+    if (cardFor(event) || (modal && modal.contains(event.target))) event.preventDefault();
+  });
 
   document.addEventListener('keydown', event => {
     if (!modal) {
