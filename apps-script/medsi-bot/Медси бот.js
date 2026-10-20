@@ -5343,6 +5343,12 @@ function normalizeSuffixKey_(suffixRaw) {
     .trim()
     .toLowerCase()
     .replace(/ё/g, 'е')
+    // Russian reports are sometimes typed with a Latin keyboard. Normalize
+    // visually identical Latin letters in initials/prefixes so "Саша K"
+    // can match a Russian surname beginning with "К".
+    .replace(/[abcehkmoptxy]/g, function(letter) {
+      return ({a:'а',b:'в',c:'с',e:'е',h:'н',k:'к',m:'м',o:'о',p:'р',t:'т',x:'х',y:'у'})[letter] || letter;
+    })
     .replace(/[^а-яa-z]/g, '');
 }
 
@@ -5823,17 +5829,11 @@ function resolveReportBlock_(block, contextByBase) {
 
   let candidates = ctx.registered.filter(child => child.baseKey === block.baseKey);
 
-  // A registered spelling wins over its aliases. Example: if both
-  // "Александр" and "Александра" are active and NAME_VARIANTS links both to
-  // "Саша", an explicit "Александр" header must not become a generic alias
-  // lookup. Aliases are consulted only when there is no exact active spelling.
-  const requestedDisplayKey = normalizeName_(block.baseRaw);
-  const exactNameCandidates = requestedDisplayKey
-    ? candidates.filter(child => (
-        String(child.displayNameKey || normalizeName_(child.baseName || child.fullName)) === requestedDisplayKey
-      ))
-    : [];
-  if (exactNameCandidates.length) candidates = exactNameCandidates;
+  // NAME_VARIANTS makes all linked spellings equivalent for identity matching.
+  // Do not narrow by the spelling written in the raw report: an exact-name
+  // child may coexist with another child registered under an alias (for
+  // example "Саша Б." and "Александра К."). Surname initials disambiguate;
+  // a bare shared alias remains ambiguous below.
 
   if (block.hasSuffix) {
     const exactCandidates = candidates.filter(child => child.suffixKey && child.suffixKey === block.suffixKey);

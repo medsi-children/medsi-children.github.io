@@ -397,7 +397,7 @@ test('NAME_VARIANTS matches aliases without renaming the registered display name
   assert.equal(distributed.byRow[0], 'Володя: Спокойно участвовал в занятиях.');
 });
 
-test('exact registered spelling wins before a shared alias group', () => {
+test('NAME_VARIANTS spellings resolve by surname suffix and bare aliases stay ambiguous', () => {
   const x = api([['Александр', 'Саша, Александра']]);
   const alexander = child(x, 'Александр', 'Петров', '89990000011');
   const alexandra = child(x, 'Александра', 'Иванова', '89990000012');
@@ -430,7 +430,7 @@ test('exact registered spelling wins before a shared alias group', () => {
   assert.deepEqual(Object.keys(ambiguousDistribution.byRow), []);
 });
 
-test('explicit exact name with a wrong initial never falls back to another alias', () => {
+test('a linked name variant can resolve to another registered spelling by surname initial', () => {
   const x = api([['Александр', 'Саша, Александра']]);
   const alexander = child(x, 'Александр', 'Петров', '89990000011');
   const alexandra = child(x, 'Александра', 'Иванова', '89990000012');
@@ -439,10 +439,42 @@ test('explicit exact name with a wrong initial never falls back to another alias
   const children = [alexander, alexandra];
   const context = x.buildDistributionContext_(children, []);
   const parsed = x.parseReportBlocks_(
-    'Александр И. — Не должен попасть Александре.',
+    'Александр И. — Отчёт Александры.',
     x.buildKnownBaseKeys_(children),
     context
   );
   const distributed = x.buildSafeDistribution_('morning', parsed, context);
-  assert.deepEqual(Object.keys(distributed.byRow), []);
+  assert.equal(distributed.byRow[1], 'Александра: Отчёт Александры.');
+});
+
+test('shared Katya and Sasha aliases use the surname initial, including Latin K', () => {
+  const x = api([
+    ['Катя', 'Екатерина'],
+    ['Саша', 'Александра']
+  ]);
+  const children = [
+    child(x, 'Катя', 'Авдеева', '89990000021'),
+    child(x, 'Екатерина', 'Глотова', '89990000022'),
+    child(x, 'Саша', 'Бычкова', '89990000023'),
+    child(x, 'Александра', 'Калягина', '89990000024')
+  ];
+  children.forEach((item, index) => { item.index = index; });
+  const context = x.buildDistributionContext_(children, []);
+  const known = x.buildKnownBaseKeys_(children);
+
+  const bareKatya = x.parseReportBlocks_('Катя — Безопасно не угадываем.', known, context);
+  const bareKatyaDistribution = x.buildSafeDistribution_('morning', bareKatya, context);
+  assert.deepEqual(Object.keys(bareKatyaDistribution.byRow), []);
+  const bareSasha = x.parseReportBlocks_('Саша — Безопасно не угадываем.', known, context);
+  const bareSashaDistribution = x.buildSafeDistribution_('morning', bareSasha, context);
+  assert.deepEqual(Object.keys(bareSashaDistribution.byRow), []);
+
+  const aliases = x.parseReportBlocks_(
+    'Катя Г. — Отчёт Екатерины.\nСаша K — Отчёт Александры.',
+    known,
+    context
+  );
+  const distributed = x.buildSafeDistribution_('morning', aliases, context);
+  assert.equal(distributed.byRow[1], 'Екатерина: Отчёт Екатерины.');
+  assert.equal(distributed.byRow[3], 'Александра: Отчёт Александры.');
 });
