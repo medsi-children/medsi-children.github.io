@@ -41,7 +41,7 @@
     modal = document.createElement('div');
     modal.className = 'medsi-chat-peek-backdrop';
     modal.innerHTML = '<section class="medsi-chat-peek" role="dialog" aria-modal="true" aria-labelledby="medsiChatPeekTitle"><header><h2 id="medsiChatPeekTitle"></h2><button type="button" class="medsi-chat-peek-close" aria-label="Закрыть превью">×</button></header><div class="medsi-chat-peek-message" tabindex="0"></div></section>';
-    modal.querySelector('h2').textContent = educator ? 'Вы' : (card.querySelector('.chat-card-meta')?.textContent.split('\n')[0] || 'Родитель').replace(/:\s*/, ' ');
+    modal.querySelector('h2').textContent = educator ? 'Детское Отделение Медси' : (card.querySelector('.chat-card-meta')?.textContent.split('\n')[0] || 'Родитель').replace(/:\s*/, ' ');
     modal.querySelector('.medsi-chat-peek').classList.toggle('from-educator', educator);
     const message = modal.querySelector('.medsi-chat-peek-message');
     message.textContent = last?.textContent || 'Нет сообщений';
