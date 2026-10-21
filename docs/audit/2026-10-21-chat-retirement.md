@@ -76,12 +76,19 @@ HTTP/prototype-имён, безопасные триггеры, отказ не�
 Удаление трёх листов выполняется после проверки опубликованного Apps Script;
 результат фиксируется в локальном DOCUMENTATION/VERIFIED_STATE.md.
 
-PARENT_ACCESS_REQUESTS нужен для однократного импорта прежних заявок; удалять
-его без проверки migration-флага нельзя. PUSH_SUBSCRIPTIONS и
-PARENT_REGISTRATION_ATTEMPTS пока сохранены: дальнейшее снятие требует отдельной
-проверки подписок/compatibility и уже сохранённого состояния. Это не часть трёх
-снятых chat-листов. Основное ядро имён/ownership, порядок lock и формат identity
-в этой правке не переписываются; риски описаны в apps-script-structure.md.
+PARENT_ACCESS_REQUESTS нужен для однократного импорта прежних заявок; он остаётся,
+поскольку значение migration-флага нельзя подтвердить безопасным read-only способом.
+Проверка 21.10.2026 установила, что одноимённый Google Sheet
+PARENT_REGISTRATION_ATTEMPTS не имеет потребителей в текущем коде: действующая
+регистрация использует одноимённую таблицу Cloudflare D1, которая остаётся нужна.
+Google-листы PUSH_SUBSCRIPTIONS и PARENT_REGISTRATION_ATTEMPTS удалены из рабочей
+таблицы после проверки отдельной полной резервной копии. Пять старых Apps Script
+девять старых Apps Script-функций Google-хранилища/клиентского push-пути сохранены в
+`archive/apps-script-legacy-push-subscriptions/`;
+активные подписки проходят через Push Worker и его KV. `PARENT_ACCESS_REQUESTS`
+и D1 `parent_registration_attempts` не удалялись. Основное ядро имён/ownership,
+порядок lock и формат identity не переписывались; риски описаны в
+`apps-script-structure.md`.
 
 ## Последующая структурная пачка — 21.10.2026
 
