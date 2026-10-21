@@ -1,0 +1,383 @@
+file	function	start_line	end_line	global_calls_approx	direct_write_methods
+chat-d1-migration.js	d1AdminRequest_	5	10	getWorkerSharedSecret_	-
+chat-d1-migration.js	snapshotActiveProfilesForD1_	12	23	getDataSheet_,buildProfileFromReportRow_,last10_,enrichProfilesWithRelationships_	-
+chat-d1-migration.js	syncD1ProfilesFromReports_	25	29	snapshotActiveProfilesForD1_,d1AdminRequest_	-
+chat-d1-migration.js	syncD1ProfilesFromReports	32	47	ensureReportsD1ProfileSyncTriggers_,ensureLegacyParentAccessRequestsImported_,flushCloudflareParentRegistrationOutbox_,reconcileReportsProfilesToD1_	-
+chat-d1-migration.js	snapshotCurrentReportsForD1_	49	90	snapshotActiveProfilesForD1_,getDataSheet_,last10_,getSheet_,buildParentReportSnapshot_,reportContentVersionForD1_,reportFingerprint_	-
+chat-d1-migration.js	syncD1CurrentReportsToWorker_	92	105	snapshotCurrentReportsForD1_,reportHistoryDate_,d1AdminRequest_,reportNotificationWindowOpen_	-
+chat-d1-migration.js	reportNotificationWindowOpen_	110	116	-	-
+chat-d1-migration.js	reportContentVersionForD1_	121	130	isActualReportText_,stripLeadingNameHeader_,reportFingerprint_	-
+chat-d1-migration.js	syncD1CurrentReportsToWorker	132	139	syncD1CurrentReportsToWorker_	-
+chat-d1-migration.js	reportHistoryDate_	141	143	-	-
+chat-d1-migration.js	reportHistoryShiftDays_	145	149	-	-
+chat-d1-migration.js	reportHistoryPublicationKey_	151	153	-	-
+chat-d1-migration.js	readReportHistoryPublication_	155	159	reportHistoryPublicationKey_	-
+chat-d1-migration.js	recordReportHistoryPublication_	161	172	reportFingerprint_,reportHistoryPublicationKey_,reportHistoryDate_	setProperty
+chat-d1-migration.js	syncReportHistorySourceFingerprintSilently_	175	182	reportHistoryPublicationKey_,reportFingerprint_	setProperty
+chat-d1-migration.js	reportsD1SnapshotSignature_	184	196	-	-
+chat-d1-migration.js	reportsD1SnapshotsDiffer_	198	200	reportsD1SnapshotSignature_	-
+chat-d1-migration.js	syncReportHistoryPublicationFromSource_	202	212	reportHistoryPublicationKey_,reportFingerprint_,recordReportHistoryPublication_	setProperty
+chat-d1-migration.js	reportHistoryPublicationMatches_	214	217	readReportHistoryPublication_	-
+chat-d1-migration.js	reportHistoryKindsForHour_	225	230	-	-
+chat-d1-migration.js	psychologyHistoryText_	232	235	getSheet_	-
+chat-d1-migration.js	captureReportHistoryKind_	237	282	psychologyHistoryText_,snapshotActiveProfilesForD1_,last10_,buildParentReportSnapshot_,reportHistoryDate_,reportHistoryShiftDays_,d1AdminRequest_	-
+chat-d1-migration.js	captureDueReportHistorySnapshots_	284	305	reportHistoryDate_,reportHistoryKindsForHour_,reportHistoryPublicationMatches_,captureReportHistoryKind_	-
+chat-d1-migration.js	captureScheduledReportHistory	307	315	captureDueReportHistorySnapshots_	-
+chat-d1-migration.js	captureReportHistoryNow	317	319	captureScheduledReportHistory	-
+chat-d1-migration.js	syncD1ProfileForPhone_	321	331	last10_,getProfileByPhone_,enrichProfilesWithRelationships_,d1AdminRequest_	-
+chat-d1-migration.js	reportsD1ProfilesSnapshot_	339	365	getDataSheet_,buildProfileFromReportRow_,last10_,enrichProfilesWithRelationships_	-
+chat-d1-migration.js	reportsD1ProfileIdentity_	367	372	-	-
+chat-d1-migration.js	saveReportsD1ProfilesSnapshot_	374	378	-	setProperty
+chat-d1-migration.js	loadReportsD1ProfilesSnapshot_	380	384	-	-
+chat-d1-migration.js	reconcileReportsProfilesToD1NonDestructive_	386	449	loadReportsD1ProfilesSnapshot_,reportsD1ProfilesSnapshot_,d1AdminRequest_,saveReportsD1ProfilesSnapshot_,reportsD1ProfileIdentity_	-
+chat-d1-migration.js	reportsProfileDeletionProtected_	451	459	last10_,reportsD1ProfilesSnapshot_,d1AdminRequest_	-
+chat-d1-migration.js	requestReportsD1ProfileSync_	463	467	-	setProperty
+chat-d1-migration.js	retryPendingReportsD1ProfileSync	469	476	reconcileReportsProfilesToD1_	-
+chat-d1-migration.js	reconcileReportsProfilesToD1_	478	621	requestReportsD1ProfileSync_,getDataSheet_,loadReportsD1ProfilesSnapshot_,reportsD1ProfilesSnapshot_,reconcileReportsProfilesToD1NonDestructive_,d1AdminRequest_,last10_,rawReportChildTargetFromProfileSnapshot_,reportsProfileDeletionProtected_,deleteD1ProfileWithS3Purge_,reportsD1SnapshotsDiffer_,maintainRawReportsAfterProfilesChangeCore_,rawReportTargetsNoLongerActive_,applyRawReportCleanup_,prepareRawReportCleanupForChildren_,purgeInactiveChatMessages_,flushReportsS3PurgeQueue_,saveReportsD1ProfilesSnapshot_	setProperty
+chat-d1-migration.js	auditReportsD1Profiles	623	679	getDataSheet_,reportsD1ProfilesSnapshot_,d1AdminRequest_,last10_,getChatSheet_,getSpreadsheetId_	-
+chat-d1-migration.js	onReportsD1Edit	681	722	processRawReportSourceEdit_,saveRawReportPublication_,recordReportHistoryPublication_,syncPsychologyNotificationState_,syncD1CurrentReportsToWorker_,syncD1ProfilesFromReports_,reconcileReportsProfilesToD1_,setRawReportSourceNote_	-
+chat-d1-migration.js	onReportsD1Change	724	731	reconcileReportsProfilesToD1_	-
+chat-d1-migration.js	installReportsD1ProfileSyncTriggers	733	742	saveReportsD1ProfilesSnapshot_,reportsD1ProfilesSnapshot_,getSpreadsheetId_	-
+chat-d1-migration.js	ensureReportsD1ProfileSyncTriggers_	744	779	getSpreadsheetId_	-
+chat-d1-migration.js	reportsS3PurgeQueue_	785	789	-	-
+chat-d1-migration.js	saveReportsS3PurgeQueue_	791	793	-	setProperty
+chat-d1-migration.js	timewebReportsSyncRequest_	795	811	-	-
+chat-d1-migration.js	flushReportsS3PurgeQueue_	813	844	reportsS3PurgeQueue_,getProfileByPhone_,d1AdminRequest_,saveReportsS3PurgeQueue_,timewebReportsSyncRequest_	-
+chat-d1-migration.js	deleteD1ProfileWithS3Purge_	846	867	last10_,reportsS3PurgeQueue_,d1AdminRequest_,saveReportsS3PurgeQueue_,flushReportsS3PurgeQueue_	-
+chat-d1-migration.js	retryReportsS3PurgeQueue	869	871	flushReportsS3PurgeQueue_	-
+chat-d1-migration.js	verifyReportsS3PurgeQueueSetup	876	878	timewebReportsSyncRequest_	-
+medsi-contacts.js	ensureMedsiContactSyncSheet_	37	46	getSpreadsheet_	setValues
+medsi-contacts.js	getMedsiContactSyncState_	48	58	ensureMedsiContactSyncSheet_,last10_	-
+medsi-contacts.js	getMedsiContactProfiles_	60	78	getDataSheet_,last10_,normalizePhone_,parentRelationshipLabel_,defaultParentRelationship_	-
+medsi-contacts.js	medsiContactGender_	80	88	normRu	-
+medsi-contacts.js	medsiContactFamilyGenderHint_	90	95	normRu	-
+medsi-contacts.js	medsiContactCap_	97	99	-	-
+medsi-contacts.js	medsiContactPhoneE164_	101	104	last10_,normalizePhone_	-
+medsi-contacts.js	medsiContactGenitiveName_	106	124	medsiContactCap_,normRu	-
+medsi-contacts.js	medsiContactGenitiveFamily_	126	144	medsiContactCap_	-
+medsi-contacts.js	buildMedsiContactLabel_	146	155	medsiContactCap_,canonizeChildName_,stripInitialFromName_,medsiContactGender_,defaultParentRelationship_,medsiContactGenitiveName_,medsiContactFamilyGenderHint_,medsiContactGenitiveFamily_	-
+medsi-contacts.js	medsiContactPerson_	157	162	medsiContactPhoneE164_	-
+medsi-contacts.js	updateMedsiContact_	164	170	medsiContactPerson_	-
+medsi-contacts.js	removeMedsiParentContactByPhone_	172	187	last10_,getMedsiContactSyncState_	deleteRow
+medsi-contacts.js	removeMedsiParentContactBestEffort_	189	192	removeMedsiParentContactByPhone_	-
+medsi-contacts.js	syncMedsiParentContacts	195	226	getMedsiContactProfiles_,getMedsiContactSyncState_,buildMedsiContactLabel_,updateMedsiContact_,medsiContactPerson_,removeMedsiParentContactByPhone_	setValues,appendRow
+medsi-contacts.js	syncMedsiParentContactBestEffort_	229	232	syncMedsiParentContacts	-
+medsi-contacts.js	setupMedsiParentContacts	235	242	syncMedsiParentContacts	-
+parent-access.js	normalizeParentAccessId_	5	8	-	-
+parent-access.js	cloudflareParentRegistrationRequest_	10	28	-	-
+parent-access.js	registerParentInCloudflare_	30	45	normalizePhone_,normalizeParentAccessId_,cloudflareParentRegistrationRequest_	-
+parent-access.js	decodeCloudflareParentSession_	47	65	last10_,getWorkerSharedSecret_,secureTextEqual_	-
+parent-access.js	mirrorCloudflareParentRegistration	70	134	last10_,normalizeParentAccessId_,decodeCloudflareParentSession_,withChatWriteLock_,loadReportsD1ProfilesSnapshot_,reportsD1ProfilesSnapshot_,d1AdminRequest_,getReportRowsByPhone_,smartRegisterFromInboxCore,reportsD1SnapshotsDiffer_,maintainRawReportsAfterProfilesChangeCore_,saveReportsD1ProfilesSnapshot_	-
+parent-access.js	flushCloudflareParentRegistrationOutbox_	136	161	d1AdminRequest_,last10_,normalizeParentAccessId_,getReportRowsByPhone_,smartRegisterFromInboxCore	-
+parent-access.js	getParentRegistrationStatus	163	172	normalizePhone_,normalizeParentAccessId_,cloudflareParentRegistrationRequest_	-
+parent-access.js	cloudflareParentAccessRequest_	174	192	-	-
+parent-access.js	parentAccessTimestamp_	194	199	-	-
+parent-access.js	ensureLegacyParentAccessRequestsImported_	204	247	getSpreadsheet_,last10_,normalizeParentAccessId_,parentAccessTimestamp_,syncD1ProfileForPhone_,d1AdminRequest_	setProperty
+parent-access.js	parentReauthorizationActor_	249	259	last10_,getMedsiContactProfiles_,medsiContactCap_,defaultParentRelationship_,canonizeChildName_,stripInitialFromName_,parentChildGenitive_	-
+parent-access.js	requestParentReauthorization	261	283	last10_,normalizeParentAccessId_,ensureLegacyParentAccessRequestsImported_,cloudflareParentAccessRequest_,getReportRowsByPhone_,syncD1ProfileForPhone_	-
+parent-access.js	getParentReauthorizationStatus	285	294	last10_,normalizeParentAccessId_,ensureLegacyParentAccessRequestsImported_,cloudflareParentAccessRequest_	-
+parent-access.js	listPendingParentReauthorizations	296	304	requireTutorSession_,d1AdminRequest_,parentReauthorizationActor_,last10_	-
+parent-access.js	decideParentReauthorization	306	317	requireTutorSession_,d1AdminRequest_,normalizeParentAccessId_	-
+parent-relationships.js	parentRelationshipLabel_	4	9	-	-
+parent-relationships.js	defaultParentRelationship_	11	14	medsiContactGender_	-
+parent-relationships.js	parentChildGenitive_	16	24	medsiContactGender_,medsiContactFamilyGenderHint_,medsiContactGenitiveName_,medsiContactGenitiveFamily_	-
+parent-relationships.js	inheritedChildFamily_	28	40	medsiContactGender_	-
+parent-relationships.js	parentRelationshipForPhone_	42	46	getReportRowsByPhone_,parentRelationshipLabel_,defaultParentRelationship_	-
+parent-relationships.js	enrichProfilesWithRelationships_	48	66	getDataSheet_,last10_,parentRelationshipLabel_,defaultParentRelationship_,parentChildGenitive_	setValue
+parent-relationships.js	initializeParentRelationships	68	75	getDataSheet_,syncD1ProfilesFromReports_	setValue
+tutor-auth.js	getTutorAccessCredentials_	11	17	-	-
+tutor-auth.js	getTutorSessionVersion_	19	27	-	setProperty
+tutor-auth.js	tutorSessionKey_	29	32	-	-
+tutor-auth.js	tutorSessionSigningKey_	34	36	-	-
+tutor-auth.js	signTutorSessionPayload_	38	42	tutorSessionSigningKey_	-
+tutor-auth.js	createTutorSessionToken_	44	50	getTutorSessionVersion_,signTutorSessionPayload_	-
+tutor-auth.js	isSignedTutorSessionValid_	52	68	getTutorAccessCredentials_,signTutorSessionPayload_,getTutorSessionVersion_	-
+tutor-auth.js	clearLegacyTutorSessionProperties_	70	78	-	deleteProperty,setProperty
+tutor-auth.js	isTutorSessionValid_	80	96	isSignedTutorSessionValid_,tutorSessionKey_,getTutorSessionVersion_	-
+tutor-auth.js	requireTutorSession_	99	103	isTutorSessionValid_	-
+tutor-auth.js	verifyTutorAccess	106	121	getTutorAccessCredentials_,clearLegacyTutorSessionProperties_,createTutorSessionToken_,getTutorD1Session_	-
+tutor-auth.js	verifyTutorSession	124	127	isTutorSessionValid_,getTutorD1Session_	-
+tutor-auth.js	getTutorD1Session_	131	139	createD1ChatSession_	-
+tutor-auth.js	revokeAllTutorSessions_	145	148	-	setProperty
+Медси бот.js	getRequiredScriptProperty_	26	30	-	-
+Медси бот.js	getSpreadsheetId_	32	34	getRequiredScriptProperty_	-
+Медси бот.js	getWorkerSharedSecret_	36	38	getRequiredScriptProperty_	-
+Медси бот.js	getSpreadsheet_	40	42	getSpreadsheetId_	-
+Медси бот.js	getSheet_	44	47	getSpreadsheet_	-
+Медси бот.js	getDataSheet_	49	51	getSheet_	-
+Медси бот.js	getChatSheet_	53	55	getSheet_	-
+Медси бот.js	buildProfileFromReportRow_	57	70	stripInitialFromName_,normalizePhone_	-
+Медси бот.js	getReportRowsByPhone_	72	84	last10_,getDataSheet_	-
+Медси бот.js	include	87	89	-	-
+Медси бот.js	getChatBackendConfig	91	93	-	-
+Медси бот.js	getD1ChatSession	95	117	last10_,requireTutorSession_,isPhoneActiveInReports_,requireParentAccess_,syncD1ProfileForPhone_,createD1ChatSession_	-
+Медси бот.js	listD1ChatsForEducator	123	141	requireTutorSession_,createD1ChatSession_	-
+Медси бот.js	getD1ThreadForEducator	147	169	requireTutorSession_,last10_,createD1ChatSession_	-
+Медси бот.js	getD1MediaForEducator	172	217	requireTutorSession_	-
+Медси бот.js	sendD1MessageForEducator	219	261	requireTutorSession_,last10_,isPhoneActiveInReports_,createD1ChatSession_	-
+Медси бот.js	getD1ThreadForParent	266	299	last10_,isPhoneActiveInReports_,createD1ChatSession_	-
+Медси бот.js	d1ParentWorkerRequest_	301	318	last10_,createD1ChatSession_	-
+Медси бот.js	getD1ParentUnreadState_	320	322	d1ParentWorkerRequest_	-
+Медси бот.js	markD1ParentMessagesRead_	324	327	last10_,d1ParentWorkerRequest_	-
+Медси бот.js	sendD1MessageForParent	329	367	last10_,isPhoneActiveInReports_,createD1ChatSession_	-
+Медси бот.js	createD1ChatSession_	372	393	getWorkerSharedSecret_,last10_	-
+Медси бот.js	retiredLegacyUiPage_	395	399	-	-
+Медси бот.js	doGet	401	416	sendPushDebugEvent_,retiredLegacyUiPage_	-
+Медси бот.js	doPost	418	459	getWorkerSharedSecret_,syncD1CurrentReportsToWorker,syncD1ProfilesFromReports,auditReportsD1Profiles,appendReportFromWorker_,processParentDeletionFromCloudflare_,captureScheduledReportHistory,handleApiRequest_	-
+Медси бот.js	getApiMethodMap_	461	532	-	-
+Медси бот.js	handleApiRequest_	534	559	getApiMethodMap_	-
+Медси бот.js	checkPhoneExists	561	575	last10_,getDataSheet_	-
+Медси бот.js	getParentAuthSecret_	577	585	-	setProperty
+Медси бот.js	secureTextEqual_	587	594	-	-
+Медси бот.js	issueParentSession_	599	609	last10_,getParentAuthSecret_	-
+Медси бот.js	isParentSessionValid_	611	653	last10_,getWorkerSharedSecret_,secureTextEqual_,getParentAuthSecret_,d1AdminRequest_	-
+Медси бот.js	requireParentAccess_	655	660	isParentSessionValid_	-
+Медси бот.js	verifyParentSession	662	671	last10_,isPhoneActiveInReports_,requireParentAccess_	-
+Медси бот.js	buildParentBootstrap_	673	692	syncD1ProfileForPhone_,hasUnreadEducatorMessages,createD1ChatSession_,getReportUnreadStatus_	-
+Медси бот.js	getParentProfileByPhone	697	713	requireParentAccess_,getProfileByPhone_	-
+Медси бот.js	getParentBootstrap	719	731	getProfileByPhone_,requireParentAccess_,buildParentBootstrap_	-
+Медси бот.js	addNameVariantRow_	734	749	normalizeName_	-
+Медси бот.js	loadNameEquivalents_	751	770	getSheet_,addNameVariantRow_	-
+Медси бот.js	ensureNameEquivalentsLoaded_	779	784	loadNameEquivalents_	-
+Медси бот.js	canonizeChildName_	788	796	stripInitialFromName_,getSuffixToken_	-
+Медси бот.js	normRu	798	804	-	-
+Медси бот.js	capWord	806	810	-	-
+Медси бот.js	isInNameBase	812	817	ensureNameEquivalentsLoaded_	-
+Медси бот.js	isSurnameLike	819	821	-	-
+Медси бот.js	splitNameSmart	824	867	capWord,normRu,isInNameBase,isSurnameLike	-
+Медси бот.js	registerParent	870	874	registerParentInCloudflare_	-
+Медси бот.js	smartRegisterFromInboxCore	876	936	normalizePhone_,splitNameSmart,getDataSheet_,last10_,inheritedChildFamily_,cacheRawReportOwnershipProperty_,addFamilyInitialToName_,appendToDatabase_,syncD1ProfileForPhone_	setProperty,appendRow
+Медси бот.js	testCheckRegistrationState	939	985	requireTutorSession_,last10_,getReportRowsByPhone_,getDatabaseSheet_,buildProfileFromReportRow_,normalizePhone_	-
+Медси бот.js	normalizeFamilyName_	988	994	-	-
+Медси бот.js	compareFamiliesSmart_	996	1003	normalizeFamilyName_	-
+Медси бот.js	normalizeName_	1005	1013	-	-
+Медси бот.js	baseNameTrimInitial_	1015	1017	-	-
+Медси бот.js	getAllNameVariantsForBase_	1019	1066	ensureNameEquivalentsLoaded_,baseNameTrimInitial_,normalizeName_	-
+Медси бот.js	last10_	1068	1071	-	-
+Медси бот.js	onEdit	1074	1109	normalizePhone_,stripInitialFromName_,appendToDatabase_	-
+Медси бот.js	stripLeadingNameHeader_	1111	1120	-	-
+Медси бот.js	buildParentReportSnapshot_	1122	1149	onlyDigits_,getReportRowsByPhone_,isActualReportText_,rawReportRowOwnershipAllows_,baseNameTrimInitial_,stripLeadingNameHeader_	-
+Медси бот.js	getReportFor	1151	1174	onlyDigits_,requireParentAccess_,buildParentReportSnapshot_,getReportVersion_	-
+Медси бот.js	getPsychologyReportFor	1176	1205	onlyDigits_,requireParentAccess_,checkPhoneExists,getSheet_,getReportVersion_	-
+Медси бот.js	cleanIncomingText_	1207	1226	-	-
+Медси бот.js	buildReportValidationChildren_	1229	1249	getDataSheet_,normalizeReportChildName_,attachPhonesToReportChildren_,buildReportChildren_	-
+Медси бот.js	childDisplayNameForReportError_	1251	1257	-	-
+Медси бот.js	uniqueStrings_	1259	1269	-	-
+Медси бот.js	makeReportFormatError_	1271	1278	-	-
+Медси бот.js	getReportHeaderCandidatesForValidation_	1280	1341	cleanReportTextForParsing_,getReportHeaderParts_,isInNameBase,normalizeName_,findProbableReportAliasChildren_,isPotentialUnassignedReportHeader_,makeUnknownReportAliasResolution_,makeUnassignedReportHeaderResolution_,resolveReportBlock_,resolveReportBlocksByExclusion_	-
+Медси бот.js	buildReportLineStartLabels_	1343	1379	stripInitialFromName_,getAllNameVariantsForBase_,uniqueStrings_,childDisplayNameForReportError_,reportChildIdentityKey_,getNameBaseKey_,getReportHeaderParts_	-
+Медси бот.js	hasReportHeaderSeparator_	1381	1386	-	-
+Медси бот.js	findMissingReportDelimiters_	1388	1444	buildReportLineStartLabels_,hasReportHeaderSeparator_,escapeRegExp_,reportChildIdentityKey_	-
+Медси бот.js	buildConfirmedReportHeaderLines_	1446	1464	reportChildIdentityKey_	-
+Медси бот.js	reportAmbiguousNameMessage_	1466	1470	-	-
+Медси бот.js	reportDuplicateBlockMessage_	1472	1476	-	-
+Медси бот.js	reportMissingDelimiterMessage_	1478	1486	-	-
+Медси бот.js	validateChildReportFormat_	1488	1573	buildReportValidationChildren_,buildKnownBaseKeys_,buildDistributionContext_,getReportHeaderCandidatesForValidation_,reportResolutionTargets_,reportChildIdentityKey_,childDisplayNameForReportError_,uniqueStrings_,makeReportFormatError_,reportDuplicateBlockMessage_	-
+Медси бот.js	normalizeReportSubmissionId_	1578	1581	-	-
+Медси бот.js	reportSubmissionPropertyKey_	1583	1585	-	-
+Медси бот.js	readReportSubmission_	1587	1597	reportSubmissionPropertyKey_	-
+Медси бот.js	writeReportSubmission_	1599	1605	reportSubmissionPropertyKey_	setProperty
+Медси бот.js	cleanupReportSubmissions_	1607	1626	-	deleteProperty,setProperty
+Медси бот.js	claimReportSubmission_	1628	1666	readReportSubmission_,writeReportSubmission_	-
+Медси бот.js	getReportSubmissionStatus	1668	1681	requireTutorSession_,normalizeReportSubmissionId_,readReportSubmission_	-
+Медси бот.js	saveRawReportPublication_	1685	1701	rememberRawReportPublicationOwnership_	setValue,setProperty
+Медси бот.js	appendReport	1703	1816	getWorkerSharedSecret_,requireTutorSession_,cleanupReportSubmissions_,getSheet_,cleanIncomingText_,prepareRawReportSourceText_,normalizeReportSubmissionId_,reportFingerprint_,claimReportSubmission_,saveRawReportPublication_,writeReportSubmission_,recordReportHistoryPublication_,syncPsychologyNotificationState_,syncD1CurrentReportsToWorker_,distributeChildReports,setRawReportSourceNote_,rawReportValidationNote_,readReportSubmission_	-
+Медси бот.js	appendReportFromWorker_	1821	1823	appendReport,getWorkerSharedSecret_	-
+Медси бот.js	testAppendReportToTestSheet	1826	1955	requireTutorSession_,cleanIncomingText_,getSpreadsheet_	setValues,appendRow
+Медси бот.js	testValidateAndWriteReport	1959	2116	requireTutorSession_,cleanIncomingText_,validateChildReportFormat_,getSpreadsheet_	setValues,appendRow
+Медси бот.js	ensureChatSheet_	2120	2166	getSpreadsheet_	setValues
+Медси бот.js	ensureChatIndexSheet_	2168	2212	getSpreadsheet_	setValues
+Медси бот.js	ensureChatPinsSheet_	2216	2232	getSpreadsheet_	setValues
+Медси бот.js	getEducatorChatPins_	2234	2246	ensureChatPinsSheet_,last10_	-
+Медси бот.js	removeEducatorChatPin_	2248	2258	last10_,ensureChatPinsSheet_	deleteRow
+Медси бот.js	setEducatorChatPin	2260	2290	requireTutorSession_,last10_,withChatWriteLock_,ensureChatPinsSheet_,clearGetChatMessagesCache	deleteRow,appendRow
+Медси бот.js	ensureReportStateSheet_	2293	2322	getSpreadsheet_	setValues
+Медси бот.js	isActualReportText_	2324	2330	cleanIncomingText_	-
+Медси бот.js	reportFingerprint_	2332	2337	cleanIncomingText_,isActualReportText_	-
+Медси бот.js	reportContentFingerprintFromVersion_	2339	2341	-	-
+Медси бот.js	buildReportUpdatesByPhone_	2343	2363	normalizePhone_,last10_,reportFingerprint_	-
+Медси бот.js	syncReportNotificationState_	2365	2472	ensureReportStateSheet_,last10_,reportContentFingerprintFromVersion_	clearContent,setValues
+Медси бот.js	initializeReportNotificationState_	2474	2485	getDataSheet_,getSheet_,syncReportNotificationState_,buildReportUpdatesByPhone_	-
+Медси бот.js	syncPsychologyNotificationState_	2487	2492	getDataSheet_,syncReportNotificationState_,buildReportUpdatesByPhone_	-
+Медси бот.js	getReportUnreadStatus_	2494	2520	last10_,ensureReportStateSheet_,initializeReportNotificationState_,getReportUnreadStatusWithoutInit_	-
+Медси бот.js	getReportUnreadStatusWithoutInit_	2522	2539	last10_,ensureReportStateSheet_	-
+Медси бот.js	getReportVersion_	2541	2554	last10_,ensureReportStateSheet_	-
+Медси бот.js	getParentUnreadState	2557	2569	requireParentAccess_,hasUnreadEducatorMessages,getReportUnreadStatus_	-
+Медси бот.js	markReportAsRead	2571	2598	last10_,requireParentAccess_,ensureReportStateSheet_	setValue
+Медси бот.js	ensurePushSubscriptionsSheet_	2600	2639	getSpreadsheet_	setValues
+Медси бот.js	normalizePushRole_	2641	2644	-	-
+Медси бот.js	savePushSubscription	2646	2699	normalizePushRole_,normalizePhone_,last10_,ensurePushSubscriptionsSheet_	setValues,appendRow
+Медси бот.js	deletePushSubscription	2701	2711	markPushSubscriptionError_	-
+Медси бот.js	getPushSubscriptions_	2713	2743	normalizePushRole_,last10_,ensurePushSubscriptionsSheet_	-
+Медси бот.js	markPushSubscriptionError_	2745	2763	ensurePushSubscriptionsSheet_	setValue
+Медси бот.js	getPushWorkerConfig_	2765	2775	getWorkerSharedSecret_	-
+Медси бот.js	sendPushViaWorker_	2777	2824	getPushWorkerConfig_	-
+Медси бот.js	sendPushDebugEvent_	2826	2842	-	-
+Медси бот.js	buildPushSignaturePayload_	2844	2855	normalizePushRole_,last10_	-
+Медси бот.js	signPushPayload_	2857	2860	getWorkerSharedSecret_	-
+Медси бот.js	buildPushClientPayload_	2862	2880	normalizePushRole_,last10_,signPushPayload_,buildPushSignaturePayload_	-
+Медси бот.js	sendPushNotification_	2882	2900	sendPushViaWorker_	-
+Медси бот.js	notifyNewChatMessage_	2902	2945	buildChatPreviewText_,last10_,sendPushNotification_,buildPushClientPayload_	-
+Медси бот.js	getActiveReportPhonesSet_	2947	2964	getDataSheet_,last10_	-
+Медси бот.js	isPhoneActiveInReports_	2966	2980	last10_,getActiveReportPhonesSet_,d1AdminRequest_	-
+Медси бот.js	purgeInactiveChatMessages_	2986	3025	ensureChatSheet_,getDataSheet_,last10_,rebuildChatIndex_,clearGetChatMessagesCache	deleteRow
+Медси бот.js	purgeLegacyChatMessagesForPhone_	3027	3044	last10_,ensureChatSheet_,rebuildChatIndex_,clearGetChatMessagesCache	deleteRow
+Медси бот.js	getReportChildDeletionPreview	3046	3069	requireTutorSession_,last10_,getDataSheet_,normalizeReportChildNames_,normalizePhone_	-
+Медси бот.js	ensureReportInactivityStateSheet_	3071	3081	getSpreadsheet_	setValues
+Медси бот.js	syncReportInactivityState_	3083	3108	ensureReportInactivityStateSheet_,last10_	clearContent,setValues
+Медси бот.js	removeReportInactivityState_	3110	3120	last10_,ensureReportInactivityStateSheet_	deleteRow
+Медси бот.js	getReportInactivityReminder	3122	3152	requireTutorSession_,getDataSheet_,normalizeReportChildNames_,syncReportInactivityState_,ensureReportInactivityStateSheet_,last10_,normalizePhone_	-
+Медси бот.js	acknowledgeReportInactivityReminder	3154	3169	requireTutorSession_,last10_,ensureReportInactivityStateSheet_	setValue
+Медси бот.js	deletionProfileMatchesExpected_	3171	3180	buildProfileFromReportRow_	-
+Медси бот.js	deleteReportChildByPhoneCore_	3182	3293	last10_,withChatWriteLock_,getDataSheet_,deletionProfileMatchesExpected_,rawReportChildTargetFromReportRow_,rawReportTargetsNoLongerActive_,prepareRawReportCleanupForChildren_,deleteD1ProfileWithS3Purge_,applyRawReportCleanup_,purgeLegacyChatMessagesForPhone_,removeReportInactivityState_,removeEducatorChatPin_,rebuildChatIndex_,clearGetChatMessagesCache,removeMedsiParentContactBestEffort_	deleteRow
+Медси бот.js	deleteReportChildByPhone	3295	3302	requireTutorSession_,deleteReportChildByPhoneCore_	-
+Медси бот.js	processParentDeletionFromCloudflare_	3304	3319	deleteReportChildByPhoneCore_	-
+Медси бот.js	getAllChatMessages	3325	3410	requireTutorSession_,ensureChatSheet_,normalizePhone_,last10_,normalizeReaction_,parseReplyContext_,buildDriveImageUrl_,parseVideoPayload_,buildMessageKey_,humanTime_	-
+Медси бот.js	cleanupInactiveChatMessages	3415	3417	purgeInactiveChatMessages_	-
+Медси бот.js	ensureInactiveChatCleanupTrigger_	3419	3430	-	-
+Медси бот.js	getChatPhotosFolder_	3432	3436	-	-
+Медси бот.js	ensureChatCleanupTrigger_	3440	3452	-	-
+Медси бот.js	appendChatMessage_	3454	3503	withChatWriteLock_,ensureChatSheet_,resolveReplyContext_,upsertChatIndexFromMessage_,clearGetChatMessagesCache,buildMessageKey_,humanTime_	appendRow
+Медси бот.js	withChatWriteLock_	3505	3513	-	-
+Медси бот.js	buildVideoPayload_	3515	3521	-	-
+Медси бот.js	parseVideoPayload_	3523	3547	-	-
+Медси бот.js	buildDriveImageUrl_	3549	3553	-	-
+Медси бот.js	buildMessageKey_	3555	3558	-	-
+Медси бот.js	resolveReplyContext_	3560	3599	last10_,ensureChatSheet_,buildMessageKey_,buildChatPreviewText_,parseVideoPayload_	-
+Медси бот.js	parseReplyContext_	3601	3616	-	-
+Медси бот.js	normalizeReaction_	3618	3623	-	-
+Медси бот.js	buildChatPreviewText_	3625	3639	-	-
+Медси бот.js	rebuildChatIndex_	3641	3749	ensureChatSheet_,ensureChatIndexSheet_,normalizePhone_,last10_,buildChatPreviewText_	clearContent,setValues
+Медси бот.js	upsertChatIndexFromMessage_	3751	3820	ensureChatIndexSheet_,normalizePhone_,last10_,buildChatPreviewText_	setValues,deleteRow
+Медси бот.js	setChatIndexReadFlag_	3822	3835	last10_,ensureChatIndexSheet_	setValue
+Медси бот.js	getChatIndexEntryByPhone_	3837	3857	last10_,ensureChatIndexSheet_,normalizePhone_	-
+Медси бот.js	getChatIndexUnreadFlag_	3859	3883	last10_,ensureChatIndexSheet_,rebuildChatIndex_	-
+Медси бот.js	buildLatestChatIndexItems_	3885	3916	last10_	-
+Медси бот.js	cleanupExpiredChatImages	3918	3974	ensureChatSheet_,rebuildChatIndex_,clearGetChatMessagesCache	deleteRow
+Медси бот.js	getProfileByPhone_	3976	4022	last10_,isPhoneActiveInReports_,getDataSheet_,buildProfileFromReportRow_,d1AdminRequest_,ensureChatSheet_,getChatRowsForPhone_,normalizePhone_	-
+Медси бот.js	getChatProfileByPhone_	4024	4062	last10_,getProfileByPhone_,getDataSheet_,buildProfileFromReportRow_,getChatIndexEntryByPhone_,getChatRowsForPhone_,normalizePhone_	-
+Медси бот.js	listParentChats	4064	4115	requireTutorSession_,ensureChatIndexSheet_,rebuildChatIndex_,getActiveReportPhonesSet_,buildLatestChatIndexItems_	-
+Медси бот.js	listUnreadParentChats	4120	4172	requireTutorSession_,ensureChatIndexSheet_,rebuildChatIndex_,getActiveReportPhonesSet_,getEducatorChatPins_,buildLatestChatIndexItems_	-
+Медси бот.js	listReadParentChats	4177	4229	requireTutorSession_,ensureChatIndexSheet_,rebuildChatIndex_,getActiveReportPhonesSet_,getEducatorChatPins_,buildLatestChatIndexItems_	-
+Медси бот.js	hasUnreadParentChats	4231	4256	requireTutorSession_,ensureChatIndexSheet_	-
+Медси бот.js	buildChatMessageFromRow_	4258	4306	normalizeReaction_,parseReplyContext_,buildDriveImageUrl_,parseVideoPayload_,buildMessageKey_,humanTime_	-
+Медси бот.js	getChatRowsForPhone_	4308	4363	last10_,ensureChatSheet_,buildMessageKey_,getChatRowsForPhone_	-
+Медси бот.js	getChatMessages	4365	4373	requireTutorSession_,getChatMessagesCore_	-
+Медси бот.js	getChatMessagesCore_	4375	4412	last10_,isPhoneActiveInReports_,getChatProfileByPhone_,getChatRowsForPhone_,normalizePhone_	-
+Медси бот.js	getParentChatMessages	4414	4417	requireParentAccess_,getChatMessagesCore_	-
+Медси бот.js	getOlderParentChatMessages	4419	4424	getParentChatMessages	-
+Медси бот.js	getOlderChatMessages	4426	4432	requireTutorSession_,getChatMessagesCore_	-
+Медси бот.js	clearGetChatMessagesCache	4434	4458	last10_	-
+Медси бот.js	setChatMessageReaction	4460	4501	last10_,normalizeReaction_,ensureChatSheet_,buildMessageKey_,clearGetChatMessagesCache	setValue
+Медси бот.js	deleteMessage	4503	4551	last10_,requireTutorSession_,isPhoneActiveInReports_,ensureChatSheet_,buildMessageKey_,rebuildChatIndex_,clearGetChatMessagesCache	deleteRow
+Медси бот.js	updateMessage	4553	4604	last10_,cleanIncomingText_,requireTutorSession_,isPhoneActiveInReports_,ensureChatSheet_,buildMessageKey_,rebuildChatIndex_,clearGetChatMessagesCache	setValue
+Медси бот.js	legacyD1MessageResult_	4609	4623	humanTime_	-
+Медси бот.js	sendParentChatMessage	4625	4650	requireParentAccess_,cleanIncomingText_,isPhoneActiveInReports_,getProfileByPhone_,legacyD1MessageResult_,sendD1MessageForParent	-
+Медси бот.js	sendEducatorChatMessage	4652	4678	requireTutorSession_,cleanIncomingText_,isPhoneActiveInReports_,getProfileByPhone_,legacyD1MessageResult_,sendD1MessageForEducator	-
+Медси бот.js	uploadEducatorChatImage	4680	4741	requireTutorSession_,isPhoneActiveInReports_,getProfileByPhone_,getChatPhotosFolder_,cleanIncomingText_,appendChatMessage_,notifyNewChatMessage_,ensureChatCleanupTrigger_,clearGetChatMessagesCache,buildDriveImageUrl_	-
+Медси бот.js	uploadEducatorVideoThumbnail	4743	4786	requireTutorSession_,isPhoneActiveInReports_,getProfileByPhone_,getChatPhotosFolder_,buildDriveImageUrl_	-
+Медси бот.js	sendEducatorVideoMessage	4788	4839	requireTutorSession_,isPhoneActiveInReports_,getProfileByPhone_,cleanIncomingText_,buildVideoPayload_,appendChatMessage_,notifyNewChatMessage_,clearGetChatMessagesCache,buildDriveImageUrl_	-
+Медси бот.js	uploadParentChatImage	4841	4902	requireParentAccess_,isPhoneActiveInReports_,getProfileByPhone_,getChatPhotosFolder_,cleanIncomingText_,appendChatMessage_,notifyNewChatMessage_,ensureChatCleanupTrigger_,clearGetChatMessagesCache,buildDriveImageUrl_	-
+Медси бот.js	uploadChatAttachmentForD1	4904	4919	requireTutorSession_,isPhoneActiveInReports_,getProfileByPhone_,getChatPhotosFolder_,ensureChatCleanupTrigger_,buildDriveImageUrl_	-
+Медси бот.js	notifyD1ChatMessage	4921	4931	requireTutorSession_,getProfileByPhone_,notifyNewChatMessage_	-
+Медси бот.js	listAvailableParentsForChat	4933	4979	requireTutorSession_,purgeInactiveChatMessages_,ensureInactiveChatCleanupTrigger_,getDataSheet_,normalizePhone_,last10_,stripInitialFromName_,enrichProfilesWithRelationships_	-
+Медси бот.js	hasUnreadEducatorMessages	4981	4994	last10_,getD1ParentUnreadState_	-
+Медси бот.js	markEducatorMessagesAsRead	4996	5009	requireParentAccess_,last10_,markD1ParentMessagesRead_	-
+Медси бот.js	markParentMessagesAsReadByEducator	5011	5030	requireTutorSession_,last10_,withChatWriteLock_,markChatMessagesRead_,setChatIndexReadFlag_,clearGetChatMessagesCache	-
+Медси бот.js	markParentMessagesAsUnreadByEducator	5032	5051	requireTutorSession_,last10_,withChatWriteLock_,markChatMessagesReadValue_,setChatIndexReadFlag_,clearGetChatMessagesCache	-
+Медси бот.js	markChatMessagesRead_	5053	5055	markChatMessagesReadValue_	-
+Медси бот.js	markChatMessagesReadValue_	5057	5101	last10_,ensureChatSheet_	setValue
+Медси бот.js	getDatabaseSheet_	5104	5109	getSpreadsheet_	-
+Медси бот.js	findFirstEmptyRowInColA_	5111	5120	-	-
+Медси бот.js	appendToDatabase_	5122	5145	getDatabaseSheet_,last10_,stripInitialFromName_,findFirstEmptyRowInColA_	setValues
+Медси бот.js	normalizePhone_	5147	5152	-	-
+Медси бот.js	onlyDigits_	5154	5156	-	-
+Медси бот.js	nowTs_	5158	5160	-	-
+Медси бот.js	getLatestReport	5162	5167	-	-
+Медси бот.js	splitBlocksByChildren	5169	5323	-	-
+Медси бот.js	cleanReportTextForParsing_	5325	5341	stripRoomNumbers_	-
+Медси бот.js	stripRoomNumbers_	5343	5345	-	-
+Медси бот.js	normalizeSuffixKey_	5347	5359	-	-
+Медси бот.js	isInitialSuffixKey_	5361	5363	-	-
+Медси бот.js	getNameBaseKey_	5365	5370	ensureNameEquivalentsLoaded_,stripInitialFromName_,normalizeName_	-
+Медси бот.js	getReportHeaderParts_	5372	5388	getSuffixToken_,stripInitialFromName_,getNameBaseKey_,normalizeSuffixKey_	-
+Медси бот.js	normalizeReportHeaderPhrase_	5438	5445	-	-
+Медси бот.js	isServiceReportHeader_	5447	5450	normalizeReportHeaderPhrase_	-
+Медси бот.js	isNonNameReportHeader_	5452	5462	normalizeReportHeaderPhrase_,isServiceReportHeader_	-
+Медси бот.js	getReportAliasCandidateKey_	5464	5472	normalizeName_,isNonNameReportHeader_	-
+Медси бот.js	commonPrefixLength_	5474	5481	-	-
+Медси бот.js	levenshteinDistance_	5483	5505	-	-
+Медси бот.js	isProbableReportNameAlias_	5507	5520	commonPrefixLength_,levenshteinDistance_	-
+Медси бот.js	findProbableReportAliasChildren_	5522	5543	getReportAliasCandidateKey_,isProbableReportNameAlias_,reportChildIdentityKey_	-
+Медси бот.js	makeUnknownReportAliasResolution_	5545	5553	-	-
+Медси бот.js	makeUnassignedReportHeaderResolution_	5555	5562	-	-
+Медси бот.js	isPotentialUnassignedReportHeader_	5564	5585	isNonNameReportHeader_,normalizeReportHeaderPhrase_	-
+Медси бот.js	normalizeReportBlockBody_	5587	5597	normalizeReportBlockPunctuation_	-
+Медси бот.js	normalizeReportBlockPunctuation_	5599	5608	-	-
+Медси бот.js	parseReportBlocks_	5610	5678	cleanReportTextForParsing_,getReportHeaderParts_,isInNameBase,normalizeName_,findProbableReportAliasChildren_,isPotentialUnassignedReportHeader_,makeUnknownReportAliasResolution_,makeUnassignedReportHeaderResolution_,normalizeReportBlockBody_	-
+Медси бот.js	buildKnownBaseKeys_	5680	5686	-	-
+Медси бот.js	getFamilyInitialSuffix_	5688	5691	-	-
+Медси бот.js	normalizeReportChildName_	5693	5703	stripInitialFromName_,getSuffixToken_,getFamilyInitialSuffix_	-
+Медси бот.js	addFamilyInitialToName_	5705	5707	normalizeReportChildName_	-
+Медси бот.js	normalizeReportChildNames_	5709	5724	normalizeReportChildName_	setValues
+Медси бот.js	escapeRegExp_	5726	5728	-	-
+Медси бот.js	removeLegacyDistributionLogSheet_	5730	5734	getSpreadsheet_	-
+Медси бот.js	buildReportChildren_	5736	5756	getSuffixToken_,getFamilyInitialSuffix_,getNameBaseKey_,stripInitialFromName_,normalizeName_,normalizeSuffixKey_	-
+Медси бот.js	attachPhonesToReportChildren_	5758	5770	normalizePhone_,last10_	-
+Медси бот.js	buildDistributionContext_	5772	5789	-	-
+Медси бот.js	explicitReportNameGender_	5793	5803	normalizeName_,stripInitialFromName_,medsiContactGender_	-
+Медси бот.js	reportChildGenderEvidence_	5805	5812	explicitReportNameGender_,normalizeFamilyName_	-
+Медси бот.js	reportChildIdentityKey_	5814	5822	normalizeFamilyName_,reportChildGenderEvidence_	-
+Медси бот.js	areSameReportChild_	5824	5828	reportChildIdentityKey_	-
+Медси бот.js	findReportChildrenByFamilyPrefix_	5830	5840	normalizeFamilyName_	-
+Медси бот.js	okReportChildren_	5842	5850	-	-
+Медси бот.js	resolveReportBlock_	5852	5965	explicitReportNameGender_,reportChildGenderEvidence_,areSameReportChild_,okReportChildren_,findReportChildrenByFamilyPrefix_,normalizeFamilyName_	-
+Медси бот.js	reportDisplayNameForChild_	5967	5971	stripInitialFromName_	-
+Медси бот.js	resolveReportBlocksByExclusion_	5976	6018	resolveReportBlock_,uniqueReportChildrenByIdentity_,reportResolutionTargets_,reportChildIdentityKey_,explicitReportNameGender_,reportChildGenderEvidence_,okReportChildren_	-
+Медси бот.js	buildSafeDistribution_	6020	6047	resolveReportBlocksByExclusion_,reportResolutionTargets_,reportDisplayNameForChild_	-
+Медси бот.js	rawReportOwnershipProperty_	6053	6058	-	-
+Медси бот.js	cacheRawReportOwnershipProperty_	6059	6061	-	-
+Медси бот.js	rawReportOwnershipKey_	6066	6070	reportFingerprint_,normalizeReportBlockBody_	-
+Медси бот.js	rawReportOwnerIdentity_	6072	6074	reportFingerprint_,reportChildIdentityKey_	-
+Медси бот.js	rawReportOwnerContactKey_	6076	6081	last10_,rawReportOwnershipProperty_	-
+Медси бот.js	rawReportOwnerMatches_	6083	6089	uniqueStrings_,rawReportOwnerContactKey_	-
+Медси бот.js	applyRawReportOwnershipGuard_	6091	6163	resolveReportBlocksByExclusion_,rawReportOwnershipKey_,reportResolutionTargets_,rawReportOwnershipProperty_,explicitReportNameGender_,isActualReportText_,comparableReportBody_,normalizeReportBlockBody_,uniqueStrings_,rawReportOwnerMatches_,rawReportOwnerContactKey_,cacheRawReportOwnershipProperty_	setProperty
+Медси бот.js	rawReportRowOwnershipAllows_	6167	6176	buildReportChildren_,normalizeReportChildName_,last10_,rawReportOwnershipKey_,comparableReportBody_,rawReportOwnershipProperty_,rawReportOwnerMatches_	-
+Медси бот.js	assertReportDistributionRosterUnchanged_	6178	6187	last10_,normalizeReportChildName_,normalizeFamilyName_	-
+Медси бот.js	rememberRawReportPublicationOwnership_	6189	6203	buildReportValidationChildren_,buildDistributionContext_,buildKnownBaseKeys_,parseReportBlocks_,rawReportOwnershipKey_,applyRawReportOwnershipGuard_	-
+Медси бот.js	buildReportChildrenFromProfileSnapshot_	6205	6244	last10_,buildReportChildren_,normalizeReportChildName_	-
+Медси бот.js	uniqueReportChildrenByIdentity_	6246	6253	reportChildIdentityKey_	-
+Медси бот.js	formatRawReportNameToken_	6255	6264	-	-
+Медси бот.js	canonicalRawReportLabelForChild_	6266	6313	formatRawReportNameToken_,stripInitialFromName_,normalizeFamilyName_,uniqueReportChildrenByIdentity_,reportChildIdentityKey_	-
+Медси бот.js	canonicalRawReportLabelForHeader_	6315	6328	formatRawReportNameToken_	-
+Медси бот.js	classifyRawReportHeader_	6330	6366	isInNameBase,normalizeName_,findProbableReportAliasChildren_,isPotentialUnassignedReportHeader_,makeUnknownReportAliasResolution_,makeUnassignedReportHeaderResolution_,resolveReportBlock_	-
+Медси бот.js	reportResolutionTargets_	6368	6373	-	-
+Медси бот.js	mapPreviousResolutionToCurrentChildren_	6375	6413	reportResolutionTargets_,last10_,uniqueReportChildrenByIdentity_,reportChildIdentityKey_	-
+Медси бот.js	comparableReportBody_	6415	6419	normalizeReportBlockBody_,stripLeadingNameHeader_	-
+Медси бот.js	rawReportBlockWasPreviouslyDistributed_	6421	6447	comparableReportBody_,last10_,getDataSheet_,isActualReportText_	-
+Медси бот.js	canonicalizeRawChildReport_	6449	6606	cleanIncomingText_,stripRoomNumbers_,buildReportValidationChildren_,buildKnownBaseKeys_,buildDistributionContext_,getReportHeaderParts_,classifyRawReportHeader_,resolveReportBlocksByExclusion_,normalizeReportBlockBody_,reportResolutionTargets_,reportChildIdentityKey_,last10_,canonicalRawReportLabelForChild_,mapPreviousResolutionToCurrentChildren_,canonicalRawReportLabelForHeader_,uniqueStrings_	-
+Медси бот.js	getLatestReportCell_	6608	6612	-	-
+Медси бот.js	setRawReportSourceNote_	6614	6619	-	-
+Медси бот.js	rawReportValidationNote_	6621	6624	-	-
+Медси бот.js	prepareRawReportSourceText_	6626	6651	canonicalizeRawChildReport_,validateChildReportFormat_	-
+Медси бот.js	processRawReportSourceEdit_	6653	6675	getLatestReportCell_,prepareRawReportSourceText_,setRawReportSourceNote_,saveRawReportPublication_,distributeChildReports,rawReportValidationNote_	-
+Медси бот.js	redistributeChildReportKindMaintenanceCore_	6677	6724	getDataSheet_,getSheet_,normalizeReportChildNames_,attachPhonesToReportChildren_,buildReportChildren_,buildKnownBaseKeys_,buildDistributionContext_,parseReportBlocks_,getLatestReport,applyRawReportOwnershipGuard_,buildSafeDistribution_,stripInitialFromName_,prepareReportForParent_,assertReportDistributionRosterUnchanged_,setRawReportSourceNote_	setValues
+Медси бот.js	maintainRawReportsAfterProfilesChangeCore_	6726	6795	buildReportChildrenFromProfileSnapshot_,buildReportValidationChildren_,getSheet_,getLatestReportCell_,canonicalizeRawChildReport_,rawReportBlockWasPreviouslyDistributed_,validateChildReportFormat_,setRawReportSourceNote_,syncReportHistorySourceFingerprintSilently_,redistributeChildReportKindMaintenanceCore_,rawReportValidationNote_,syncD1CurrentReportsToWorker_	setValue
+Медси бот.js	prepareReportForParent_	6798	6804	escapeRegExp_	-
+Медси бот.js	stripInitialFromName_	6806	6811	-	-
+Медси бот.js	getSuffixToken_	6813	6818	-	-
+Медси бот.js	rawReportChildTargetFromReportRow_	6827	6841	normalizeReportChildName_,getReportHeaderParts_,normalizeFamilyName_,getFamilyInitialSuffix_	-
+Медси бот.js	rawReportChildTargetFromProfileSnapshot_	6843	6862	rawReportChildTargetFromReportRow_	-
+Медси бот.js	rawReportHeaderMatchesTarget_	6864	6873	-	-
+Медси бот.js	rawReportHeaderIdentifiesOnlyTarget_	6875	6889	rawReportHeaderMatchesTarget_	-
+Медси бот.js	rawReportTargetsNoLongerActive_	6891	6901	-	-
+Медси бот.js	removeRawReportBlocksForChildren_	6903	6935	getReportHeaderParts_,rawReportHeaderIdentifiesOnlyTarget_	-
+Медси бот.js	prepareRawReportCleanupForChildren_	6937	6957	getSheet_,removeRawReportBlocksForChildren_	-
+Медси бот.js	applyRawReportCleanup_	6959	6978	syncReportHistorySourceFingerprintSilently_,getLatestReport	setValue
+Медси бот.js	distributeChildReports	6980	7070	withReportWriteLock_,removeLegacyDistributionLogSheet_,getDataSheet_,getSheet_,getLatestReport,syncReportHistoryPublicationFromSource_,normalizeReportChildNames_,attachPhonesToReportChildren_,buildReportChildren_,buildKnownBaseKeys_,buildDistributionContext_,parseReportBlocks_,applyRawReportOwnershipGuard_,buildSafeDistribution_,stripInitialFromName_,prepareReportForParent_,assertReportDistributionRosterUnchanged_,setRawReportSourceNote_,syncReportNotificationState_,buildReportUpdatesByPhone_,syncReportInactivityState_,syncD1CurrentReportsToWorker_	setValues
+Медси бот.js	withReportWriteLock_	7072	7080	-	-
+Медси бот.js	pluralizeDaysRu_	7082	7090	-	-
+Медси бот.js	humanTime_	7092	7116	-	-
+Медси бот.js	testDriveAccess	7122	7134	getChatPhotosFolder_	-
+Медси бот.js	testUrlFetchAuthorization	7136	7146	sendPushDebugEvent_	-
+Медси бот.js	testFetchDirect	7148	7151	-	-

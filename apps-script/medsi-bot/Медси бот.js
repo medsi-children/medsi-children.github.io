@@ -6720,7 +6720,7 @@ function redistributeChildReportKindMaintenanceCore_(kindRaw) {
   assertReportDistributionRosterUnchanged_(dataSheet, children, count);
   dataSheet.getRange(2, targetColumn, count, 1).setValues(output);
   if (distribution.ownershipBlockedRows) setRawReportSourceNote_(sourceSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
-  return { ok:true, rows:count };
+  return { ok:true, rows:count, ownershipBlockedRows:Number(distribution.ownershipBlockedRows || 0) };
 }
 
 function maintainRawReportsAfterProfilesChangeCore_(previousSnapshotRaw, reasonRaw) {
@@ -6775,7 +6775,10 @@ function maintainRawReportsAfterProfilesChangeCore_(previousSnapshotRaw, reasonR
     const distributed = redistributeChildReportKindMaintenanceCore_(kind);
     if (distributed && distributed.ok) {
       result.redistributed += 1;
-      setRawReportSourceNote_(cell, rawReportValidationNote_(validation));
+      // Structural validation can pass while the ownership guard blocks a
+      // previous admission. Preserve that guard's note instead of clearing it.
+      if (distributed.ownershipBlockedRows) result.blocked += 1;
+      else setRawReportSourceNote_(cell, rawReportValidationNote_(validation));
     }
   });
 
