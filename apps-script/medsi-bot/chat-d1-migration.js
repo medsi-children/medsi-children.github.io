@@ -564,14 +564,10 @@ function reconcileReportsProfilesToD1_(reason) {
     deleted.forEach(function(item) {
       item.rawReportBlocks = Number(rawCleanupByPhone[item.phone] && rawCleanupByPhone[item.phone].removedBlocks || 0);
     });
-    try { purgeInactiveChatMessages_(); }
-    catch (error) { cleanupErrors.push('legacy chat: ' + String(error && error.message || error)); }
     deleted.forEach(function(item) {
       const phone = item.phone;
       [
         ['inactivity', removeReportInactivityState_],
-        ['pin', removeEducatorChatPin_],
-        ['cache', clearGetChatMessagesCache],
         ['contact', removeMedsiParentContactBestEffort_]
       ].forEach(function(step) {
         try { step[1](phone); }
@@ -628,14 +624,7 @@ function auditReportsD1Profiles() {
   const stale = (Array.isArray(inventory.phones) ? inventory.phones : []).filter(function(phone) {
     return !current[last10_(phone)];
   });
-  const active = new Set(Object.keys(current));
-  const chatSheet = getChatSheet_();
-  let legacyInactiveRows = 0;
-  if (chatSheet && chatSheet.getLastRow() >= 2) {
-    chatSheet.getRange(2, 2, chatSheet.getLastRow() - 1, 1).getValues().forEach(function(row) {
-      if (!active.has(last10_(row[0]))) legacyInactiveRows++;
-    });
-  }
+  // Retired Sheets chat storage is never consulted by lifecycle audits.
   const triggerObjects = ScriptApp.getProjectTriggers();
   const triggerAudit = triggerObjects.map(function(trigger) {
     let source = '', sourceId = '', eventType = '';
@@ -667,7 +656,7 @@ function auditReportsD1Profiles() {
     reportsProfiles:Object.keys(current).length,
     d1Profiles:inventory.phones.length,
     stale:stale,
-    legacyInactiveRows:legacyInactiveRows,
+    legacyInactiveRows:0,
     triggerHandlers:triggers,
     triggerAudit:triggerAudit,
     duplicateHandlers:duplicateHandlers,
@@ -741,9 +730,17 @@ function installReportsD1ProfileSyncTriggers() {
   return { ok: true, installed: handlers };
 }
 
+function retireLegacyChatCleanupTriggers_(triggers) {
+  const retired = ['cleanupInactiveChatMessages', 'cleanupExpiredChatImages'];
+  (triggers || ScriptApp.getProjectTriggers()).forEach(function(trigger) {
+    if (retired.indexOf(trigger.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(trigger);
+  });
+}
+
 function ensureReportsD1ProfileSyncTriggers_() {
   const spreadsheetId = getSpreadsheetId_();
   const triggers = ScriptApp.getProjectTriggers();
+  retireLegacyChatCleanupTriggers_(triggers);
   ['onReportsD1Edit', 'onReportsD1Change'].forEach(function(handler) {
     const matching = triggers.filter(function(trigger) {
       if (trigger.getHandlerFunction() !== handler) return false;

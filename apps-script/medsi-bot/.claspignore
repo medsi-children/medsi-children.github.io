@@ -1,6 +1,5 @@
 **/*
 !appsscript.json
-!chat-adapter.html
 !chat-d1-migration.js
 !medsi-contacts.js
 !parent-access.js

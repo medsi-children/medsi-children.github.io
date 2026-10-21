@@ -46,7 +46,7 @@ test('legacy registration corrects only an inherited surname; explicit surname i
     const x=apps(), saved=[];
     x.getDataSheet_=()=>({getLastRow:()=>1,appendRow:row=>saved.push(row)});
     x.appendToDatabase_=()=>{};
-    x.smartRegisterFromInboxCore('89990000001','Анна Иванова',child,true);
+    x.smartRegisterFromInboxCore_('89990000001','Анна Иванова',child,true);
     assert.equal(saved[0][3],expected);
   }
 });

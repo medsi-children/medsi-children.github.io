@@ -91,7 +91,7 @@ function mirrorCloudflareParentRegistration(phoneRaw, attemptIdRaw, parentSessio
       // A row created or deliberately edited by staff wins; never overwrite it
       // with the initial registration form contents.
       if (!getReportRowsByPhone_(phone10).length) {
-        smartRegisterFromInboxCore('8' + phone10, item.parent_name, item.child_name, true);
+        smartRegisterFromInboxCore_('8' + phone10, item.parent_name, item.child_name, true);
       }
       let reportMaintenance = { ok:true, skipped:true };
       const currentSnapshot = typeof reportsD1ProfilesSnapshot_ === 'function'
@@ -142,7 +142,7 @@ function flushCloudflareParentRegistrationOutbox_() {
     if (!phone10 || !attemptId) return;
     try {
       if (!getReportRowsByPhone_(phone10).length) {
-        smartRegisterFromInboxCore('8' + phone10, item.parent_name, item.child_name, true);
+        smartRegisterFromInboxCore_('8' + phone10, item.parent_name, item.child_name, true);
       }
       acknowledged.push(attemptId);
     } catch (e) {
