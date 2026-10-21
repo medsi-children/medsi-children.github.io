@@ -631,3 +631,27 @@ test('ownership guards share one Properties read per execution instead of one pe
   for(let i=0;i<20;i++) f.distribute('Миша Б — Текст номер '+i+'.',[target],true);
   assert.equal(reads,1);
 });
+
+test('publication refuses a known foreign block before overwriting the raw source', () => {
+  const x = api([['Саша','Александр, Александра']]); const f=ownershipFixture(x);
+  const girl=child(x,'Саша Б','Бурова','89990000001');girl.index=0;
+  const boy=child(x,'Саша Б','Березкин','89990000002');boy.index=0;
+  const old='Саша Б — Синтетический текст прежнего ребёнка.';
+  f.distribute(old,[girl],true);
+  x.buildReportValidationChildren_=()=>[boy];
+  x.LockService={getUserLock:()=>({waitLock(){},releaseLock(){}})};
+  let value='Current valid source';
+  const cell={getValue:()=>value,setValue:next=>{value=next}};
+  assert.throws(()=>x.saveRawReportPublication_('evening',cell,old,Date.now(),undefined,old), /Отчёт не сохранён/);
+  assert.equal(value,'Current valid source');
+});
+
+test('parent snapshot used by current reports and history cannot expose a mismatched owner', () => {
+  const x=api(); const f=ownershipFixture(x);
+  const original=child(x,'Миша Б','Быков','89990000001');original.index=0;
+  f.distribute('Миша Б — Проверочный текст.',[original],true);
+  const wrong=['89990000002','','Миша Б','Быков','','Миша: Проверочный текст.'];
+  const snapshot=x.buildParentReportSnapshot_('89990000002','evening',false,[wrong]);
+  assert.equal(snapshot.hasReport,false);
+  assert.equal(snapshot.text,'');
+});
