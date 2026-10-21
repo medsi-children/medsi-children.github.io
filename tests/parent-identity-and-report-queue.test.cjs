@@ -15,7 +15,7 @@ function apps() {
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value)})},
     LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}}),getUserLock:()=>({waitLock(){},releaseLock(){}})}};
   vm.createContext(context);
-  ['report-rules.js','Медси бот.js','medsi-contacts.js','parent-relationships.js'].forEach(file=>vm.runInContext(read('apps-script/medsi-bot/'+file),context));
+  ['report-rules.js','report-names.js','report-parser.js','Медси бот.js','medsi-contacts.js','parent-relationships.js'].forEach(file=>vm.runInContext(read('apps-script/medsi-bot/'+file),context));
   return context;
 }
 test('full child name uses child gender and produces a full genitive label',()=>{

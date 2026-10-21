@@ -27,6 +27,9 @@ test('simple onEdit can start without spreadsheet-scope access', () => {
     PropertiesService: { getScriptProperties: () => ({ getProperty: () => 'synthetic-sheet' }) }
   };
   vm.createContext(context);
+  for (const file of ['report-names.js', 'report-parser.js']) {
+    vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context);
+  }
   vm.runInContext(fs.readFileSync(path.join(root, 'Медси бот.js'), 'utf8'), context);
   context.onEdit({ range: { getSheet: () => ({ getName: () => 'MORNING' }), getRow: () => 1, getColumn: () => 1 } });
   assert.equal(spreadsheetReads, 0);
@@ -49,6 +52,9 @@ test('report publication uses a dedicated user lock', () => {
     SpreadsheetApp: { openById: () => ({ getSheetByName: () => null }) }
   };
   vm.createContext(context);
+  for (const file of ['report-names.js', 'report-parser.js']) {
+    vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context);
+  }
   vm.runInContext(fs.readFileSync(path.join(root, 'Медси бот.js'), 'utf8'), context);
   let cellValue = 'raw';
   const cell = { getValue: () => cellValue, setValue: value => { cellValue = value; } };
@@ -71,6 +77,9 @@ test('report distribution lock serializes work without the global chat lock', ()
     Logger: { log() {} }
   };
   vm.createContext(context);
+  for (const file of ['report-names.js', 'report-parser.js']) {
+    vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context);
+  }
   vm.runInContext(fs.readFileSync(path.join(root, 'Медси бот.js'), 'utf8'), context);
   assert.equal(context.withReportWriteLock_(() => 'done'), 'done');
   assert.equal(acquired, 1);

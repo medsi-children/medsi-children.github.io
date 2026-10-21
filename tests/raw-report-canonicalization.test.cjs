@@ -33,6 +33,9 @@ function api(nameVariantRows = []) {
   };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../apps-script/medsi-bot/report-rules.js'), 'utf8'), context);
+  for (const file of ['report-names.js', 'report-parser.js']) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../apps-script/medsi-bot', file), 'utf8'), context);
+  }
   vm.runInContext(source, context);
   return context;
 }
