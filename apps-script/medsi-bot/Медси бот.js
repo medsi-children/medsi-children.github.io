@@ -900,6 +900,8 @@ function smartRegisterFromInboxCore(phoneRaw, parentNameRaw, childNameRaw, defer
   // infer the grammatical form from the child's first name in that case only.
   const familyForStore = childLast || inheritedChildFamily_(childFirst, parentLast);
 
+  // A repeated admission with the same contact starts a new ownership epoch.
+  PropertiesService.getScriptProperties().setProperty('REPORT_ADMISSION_' + phone10, Utilities.getUuid());
   sh.appendRow([
     phone,
     parentFirst,
@@ -1127,7 +1129,7 @@ function buildParentReportSnapshot_(phoneRaw, kindRaw, includeMissingRaw, rowsOv
   rows.forEach(function(r) {
     const rawChild = String(r[2] || '');
     const reportText = kind === 'morning' ? r[4] : r[5];
-    if (!isActualReportText_(reportText)) {
+    if (!isActualReportText_(reportText) || !rawReportRowOwnershipAllows_(kind, r)) {
       if (includeMissingRaw === true) reports.push('Отчёта пока нет. Пожалуйста, попробуйте позже 🙏');
       return;
     }
@@ -1677,7 +1679,7 @@ function getReportSubmissionStatus(submissionIdRaw, tutorTokenRaw) {
 
 // Report retries carry the original submission time. A retry of an old
 // queued request must not overwrite a newer website or manual publication.
-function saveRawReportPublication_(kind, cell, text, publicationAt, expectedRaw) {
+function saveRawReportPublication_(kind, cell, text, publicationAt, expectedRaw, authoredRaw) {
   // Report publication/distribution has its own lock so long profile syncs
   // cannot prevent a report from being saved or canonicalized.
   const lock = LockService.getUserLock();
@@ -1688,6 +1690,7 @@ function saveRawReportPublication_(kind, cell, text, publicationAt, expectedRaw)
     const key = 'RAW_REPORT_PUBLICATION_AT_' + kind;
     const previousAt = Number(properties.getProperty(key) || 0);
     if (Number(publicationAt) < previousAt) return false;
+    rememberRawReportPublicationOwnership_(kind, text, authoredRaw === undefined ? expectedRaw : authoredRaw);
     cell.setValue(text);
     properties.setProperty(key, String(publicationAt));
     return true;
@@ -1747,7 +1750,7 @@ function appendReport(param, tutorTokenRaw) {
     const submittedAt = Number(param && param.submittedAt);
     const publicationAt = Number.isFinite(submittedAt) && submittedAt > 0 && submittedAt <= Date.now() + 60000
       ? submittedAt : (Number(claim.state && claim.state.startedAt) || Date.now());
-    if (!saveRawReportPublication_(typeRaw, sheet.getRange(1, 1), text, publicationAt)) {
+    if (!saveRawReportPublication_(typeRaw, sheet.getRange(1, 1), text, publicationAt, undefined, raw)) {
       const superseded = {ok:true, superseded:true, submissionId:submissionId, message:'Уже сохранён более свежий отчёт.'};
       if (submissionId) writeReportSubmission_(submissionId, {status:'completed',type:typeRaw,fingerprint:fingerprint,result:superseded,updatedAt:Date.now()});
       return superseded;
@@ -5782,12 +5785,36 @@ function buildDistributionContext_(children, parsedReports) {
   return byBase;
 }
 
+// NAME_VARIANTS links spellings, not a licence to cross explicit male/female
+// forms. Neutral nicknames (Саша, Женя, Валя) provide no gender evidence.
+function explicitReportNameGender_(nameRaw) {
+  const name = normalizeName_(stripInitialFromName_(nameRaw));
+  if (['саша', 'саня', 'шура', 'женя', 'валя'].indexOf(name) >= 0) return '';
+  if (typeof medsiContactGender_ === 'function') {
+    const gender = medsiContactGender_(name);
+    if (gender === 'male' || gender === 'female') return gender;
+  }
+  if (['александр', 'евгений', 'валентин'].indexOf(name) >= 0) return 'male';
+  if (['александра', 'евгения', 'валентина'].indexOf(name) >= 0) return 'female';
+  return '';
+}
+
+function reportChildGenderEvidence_(child) {
+  const explicit = explicitReportNameGender_(child && (child.fullName || child.baseName));
+  if (explicit) return explicit;
+  const family = normalizeFamilyName_(child && child.family);
+  if (/(ова|ева|ина|ына|ская|цкая|ая|яя)$/.test(family)) return 'female';
+  if (/(ов|ев|ин|ын|ский|цкий|ый|ий)$/.test(family)) return 'male';
+  return '';
+}
+
 function reportChildIdentityKey_(child) {
   if (!child) return '';
   return [
     child.baseKey || '',
     child.suffixKey || '',
-    normalizeFamilyName_(child.family || '')
+    normalizeFamilyName_(child.family || ''),
+    reportChildGenderEvidence_(child)
   ].join('|');
 }
 
@@ -5828,6 +5855,18 @@ function resolveReportBlock_(block, contextByBase) {
   };
 
   let candidates = ctx.registered.filter(child => child.baseKey === block.baseKey);
+  const headerGender = explicitReportNameGender_(block.baseRaw || block.rawName);
+  if (headerGender) {
+    const compatible = candidates.filter(function(child) {
+      const gender = reportChildGenderEvidence_(child);
+      return !gender || gender === headerGender;
+    });
+    if (candidates.length && !compatible.length) {
+      return { status:'ambiguous', child:null,
+        reason:'Мужская и женская формы имени не взаимозаменяемы; проверьте ребёнка и фамилию.' };
+    }
+    candidates = compatible;
+  }
 
   // NAME_VARIANTS makes all linked spellings equivalent for identity matching.
   // Do not narrow by the spelling written in the raw report: an exact-name
@@ -5965,7 +6004,10 @@ function resolveReportBlocksByExclusion_(blocks, contextByBase) {
     });
     if (duplicate) return;
     const registered = contextByBase[baseKey] && contextByBase[baseKey].registered || [];
-    const remaining = registered.filter(function(child) { return !used[reportChildIdentityKey_(child)]; });
+    const remaining = registered.filter(function(child) {
+      const gender = explicitReportNameGender_(blocks[bare[0]].baseRaw || blocks[bare[0]].rawName);
+      return !used[reportChildIdentityKey_(child)] && (!gender || !reportChildGenderEvidence_(child) || gender === reportChildGenderEvidence_(child));
+    });
     if (uniqueReportChildrenByIdentity_(remaining).length !== 1) return;
     resolutions[bare[0]] = okReportChildren_(remaining, 'Единственный оставшийся ребёнок после явных заголовков отчёта.');
   });
@@ -6001,6 +6043,145 @@ function buildSafeDistribution_(reportType, parsed, contextByBase) {
   return { byRow };
 }
 
+
+// Ownership is keyed by normalized body + alias group, deliberately excluding
+// the mutable initial/prefix/display spelling. Store hashes and contact keys,
+// never report bodies. A new admission cannot inherit a previous owner's block.
+function rawReportOwnershipKey_(kind, block) {
+  return 'RAW_REPORT_OWNER_' + kind + '_' + reportFingerprint_(
+    String(block.baseKey || '') + '\n' + normalizeReportBlockBody_(block.body)
+  );
+}
+
+function rawReportOwnerIdentity_(child) {
+  return reportFingerprint_(reportChildIdentityKey_(child));
+}
+
+function rawReportOwnerContactKey_(child) {
+  const phone = last10_(child && (child.phone10 || child.phone));
+  if (!phone) return '';
+  const admission = PropertiesService.getScriptProperties().getProperty('REPORT_ADMISSION_' + phone) || 'legacy';
+  return phone + '|' + admission;
+}
+
+function rawReportOwnerMatches_(owner, targets) {
+  if (!owner || owner.blocked || !targets.length) return false;
+  const identities = uniqueStrings_(targets.map(rawReportOwnerIdentity_));
+  return identities.length === 1 && identities[0] === owner.identity && targets.some(function(child) {
+    return (owner.phones || []).indexOf(rawReportOwnerContactKey_(child)) >= 0;
+  });
+}
+
+function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution, previousReports, allowNew) {
+  const props = PropertiesService.getScriptProperties();
+  const resolutions = resolveReportBlocksByExclusion_(parsed.blocks, contextByBase);
+  const groups = {};
+  parsed.blocks.forEach(function(block, index) {
+    const key = rawReportOwnershipKey_(kind, block);
+    (groups[key] || (groups[key] = [])).push(index);
+  });
+  const writes = {};
+  const blockedRows = {};
+  Object.keys(groups).forEach(function(key) {
+    const indices = groups[key];
+    const index = indices[0];
+    const block = parsed.blocks[index];
+    const resolution = resolutions[index];
+    const targets = resolution.status === 'ok' ? reportResolutionTargets_(resolution) : [];
+    let owner = null;
+    const raw = props.getProperty(key);
+    if (raw) {
+      try { owner = JSON.parse(raw); }
+      catch (_) { owner = { blocked:true }; }
+    }
+    const authored = allowNew && allowNew.headers && allowNew.headers[key];
+    const explicitlyClarified = authored && authored.hasSuffix &&
+      (String(authored.suffixKey || '').length >= 2 || explicitReportNameGender_(authored.baseRaw));
+    // Only a deliberately clarified, newly submitted heading may release an
+    // unowned quarantine. Canonicalizer-generated initials are not evidence.
+    if (owner && owner.blocked && explicitlyClarified && targets.length && indices.length === 1) owner = null;
+    // Ambiguous blocks remain quarantined even when a later discharge makes
+    // the same short heading look unique. Only a new, identifiable block is safe.
+    if (!owner) {
+      const hasExistingAssignment = targets.some(function(child) {
+        const previous = previousReports && previousReports[child.index];
+        return isActualReportText_(previous) && comparableReportBody_(previous) === normalizeReportBlockBody_(block.body);
+      });
+      const phones = uniqueStrings_(targets.map(rawReportOwnerContactKey_).filter(Boolean));
+      const identities = uniqueStrings_(targets.map(rawReportOwnerIdentity_));
+      owner = targets.length && phones.length && identities.length === 1 && indices.length === 1 && (allowNew || hasExistingAssignment)
+        ? { identity:identities[0], phones:phones, at:Date.now() }
+        : { blocked:true, at:Date.now() };
+      writes[key] = JSON.stringify(owner);
+    }
+    indices.forEach(function(blockIndex) {
+      const res = resolutions[blockIndex];
+      const assigned = reportResolutionTargets_(res);
+      if (res.status === 'ok' && rawReportOwnerMatches_(owner, assigned)) {
+        // Another parent may join the same active child. Extend only while an
+        // original owner contact is still present, never solely by short name.
+        const phones = uniqueStrings_((owner.phones || []).concat(assigned.map(function(child) {
+          return rawReportOwnerContactKey_(child);
+        }).filter(Boolean)));
+        if (phones.length !== (owner.phones || []).length) {
+          owner.phones = phones;
+          writes[key] = JSON.stringify(owner);
+        }
+        return;
+      }
+      assigned.forEach(function(child) { blockedRows[child.index] = true; });
+    });
+  });
+  // Persist the ownership decision before writing any REPORTS cell. A property
+  // failure must stop distribution, not silently fall back to name-only routing.
+  Object.keys(writes).forEach(function(key) { props.setProperty(key, writes[key]); });
+  Object.keys(blockedRows).forEach(function(row) { delete distribution.byRow[row]; });
+  distribution.ownershipBlockedRows = Object.keys(blockedRows).length;
+  if (Object.keys(writes).length || Object.keys(blockedRows).length) {
+    Logger.log('RAW_REPORT_OWNERSHIP_GUARD ' + JSON.stringify({ kind:kind, recorded:Object.keys(writes).length, blockedRows:Object.keys(blockedRows).length }));
+  }
+  return distribution;
+}
+
+// Final read barrier: even a concurrent staff row move cannot expose a body
+// whose saved owner does not match this contact/child in REPORTS.
+function rawReportRowOwnershipAllows_(kind, row) {
+  const child = buildReportChildren_([normalizeReportChildName_(row[2], row[3])], [row[3]])[0];
+  child.phone10 = last10_(row[0]);
+  const text = row[kind === 'morning' ? 4 : 5];
+  const key = rawReportOwnershipKey_(kind, { baseKey:child.baseKey, body:comparableReportBody_(text) });
+  const raw = PropertiesService.getScriptProperties().getProperty(key);
+  if (!raw) return false;
+  try { return rawReportOwnerMatches_(JSON.parse(raw), [child]); }
+  catch (_) { return false; }
+}
+
+function assertReportDistributionRosterUnchanged_(sheet, children, count) {
+  if (Math.max(sheet.getLastRow() - 1, 0) !== count) throw new Error('Список детей изменился; распределение будет повторено.');
+  const current = sheet.getRange(2, 1, count, 4).getValues();
+  if (current.some(function(row, index) {
+    const child = children[index];
+    return last10_(row[0]) !== last10_(child.phone10 || child.phone) ||
+      normalizeReportChildName_(row[2], row[3]) !== child.fullName ||
+      normalizeFamilyName_(row[3]) !== normalizeFamilyName_(child.family);
+  })) throw new Error('Строки REPORTS изменились; распределение будет повторено.');
+}
+
+function rememberRawReportPublicationOwnership_(kind, text, authoredRaw) {
+  if (['morning', 'evening'].indexOf(kind) < 0) return;
+  const children = buildReportValidationChildren_();
+  if (!children.length) return;
+  const context = buildDistributionContext_(children, []);
+  const known = buildKnownBaseKeys_(children);
+  const parsed = parseReportBlocks_(text, known, context);
+  const authored = parseReportBlocks_(String(authoredRaw || ''), known, context);
+  const headers = {};
+  authored.blocks.forEach(function(block) { headers[rawReportOwnershipKey_(kind, block)] = block; });
+  const guarded = applyRawReportOwnershipGuard_(kind, parsed, context, { byRow:{} }, [], { headers:headers });
+  if (guarded.ownershipBlockedRows) {
+    throw new Error('Отчёт не сохранён: один из блоков связан с другим ребёнком или прошлым поступлением. Проверьте текст и полную фамилию; старый отчёт нельзя передавать новому ребёнку.');
+  }
+}
 
 function buildReportChildrenFromProfileSnapshot_(snapshotRaw) {
   const snapshot = snapshotRaw || {};
@@ -6313,6 +6494,17 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
 
     if (currentResolution && currentResolution.status === 'ok') {
       const targets = reportResolutionTargets_(currentResolution);
+      const previous = item.previousClass && item.previousClass.resolution;
+      const previousTargets = previous && previous.status === 'ok' ? reportResolutionTargets_(previous) : [];
+      if (previousTargets.length && !targets.some(function(target) {
+        return previousTargets.some(function(old) {
+          return reportChildIdentityKey_(target) === reportChildIdentityKey_(old) &&
+            last10_(target.phone10 || target.phone) === last10_(old.phone10 || old.phone);
+        });
+      })) {
+        unresolved.push(String(item.header.raw || '').trim());
+        return;
+      }
       label = canonicalRawReportLabelForChild_(targets[0], currentContext);
     } else if (
       currentResolution &&
@@ -6491,7 +6683,9 @@ function redistributeChildReportKindMaintenanceCore_(kindRaw) {
   const knownBaseKeys = buildKnownBaseKeys_(children);
   const contextByBase = buildDistributionContext_(children, []);
   const parsed = parseReportBlocks_(getLatestReport(sourceSheet, 1) || '', knownBaseKeys, contextByBase);
-  const distribution = buildSafeDistribution_(kind, parsed, contextByBase);
+  const distribution = applyRawReportOwnershipGuard_(kind, parsed, contextByBase,
+    buildSafeDistribution_(kind, parsed, contextByBase),
+    dataSheet.getRange(2, kind === 'morning' ? 5 : 6, count, 1).getValues().map(function(row) { return row[0]; }), false);
   const MISSING = 'Пока ещё нет отчёта 🙏';
   const output = [];
 
@@ -6504,7 +6698,9 @@ function redistributeChildReportKindMaintenanceCore_(kindRaw) {
   }
 
   const targetColumn = kind === 'morning' ? 5 : 6;
+  assertReportDistributionRosterUnchanged_(dataSheet, children, count);
   dataSheet.getRange(2, targetColumn, count, 1).setValues(output);
+  if (distribution.ownershipBlockedRows) setRawReportSourceNote_(sourceSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
   return { ok:true, rows:count };
 }
 
@@ -6800,8 +6996,10 @@ function distributeChildReports(triggerKindRaw) {
   const parsedMorning = parseReportBlocks_(morningText, knownBaseKeys, contextByBase);
   const parsedEvening = parseReportBlocks_(eveningText, knownBaseKeys, contextByBase);
 
-  const morningDistribution = buildSafeDistribution_('morning', parsedMorning, contextByBase);
-  const eveningDistribution = buildSafeDistribution_('evening', parsedEvening, contextByBase);
+  const morningDistribution = applyRawReportOwnershipGuard_('morning', parsedMorning, contextByBase,
+    buildSafeDistribution_('morning', parsedMorning, contextByBase), previousReports.map(function(row) { return row[0]; }), false);
+  const eveningDistribution = applyRawReportOwnershipGuard_('evening', parsedEvening, contextByBase,
+    buildSafeDistribution_('evening', parsedEvening, contextByBase), previousReports.map(function(row) { return row[1]; }), false);
 
   const MISSING = "Пока ещё нет отчёта 🙏";
   const morningOut = [];
@@ -6828,8 +7026,12 @@ function distributeChildReports(triggerKindRaw) {
 
   }
 
+  assertReportDistributionRosterUnchanged_(dataSheet, children, count);
   dataSheet.getRange(2, 5, count, 1).setValues(morningOut);
+  assertReportDistributionRosterUnchanged_(dataSheet, children, count);
   dataSheet.getRange(2, 6, count, 1).setValues(eveningOut);
+  if (morningDistribution.ownershipBlockedRows) setRawReportSourceNote_(morningSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
+  if (eveningDistribution.ownershipBlockedRows) setRawReportSourceNote_(eveningSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
   // Один пакетный снимок после распределения. Повторные запуски с тем же
   // содержимым не меняют версию и не создают ложных уведомлений.
   syncReportNotificationState_(

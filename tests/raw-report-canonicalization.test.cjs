@@ -430,7 +430,7 @@ test('NAME_VARIANTS spellings resolve by surname suffix and bare aliases stay am
   assert.deepEqual(Object.keys(ambiguousDistribution.byRow), []);
 });
 
-test('a linked name variant can resolve to another registered spelling by surname initial', () => {
+test('explicit male and female forms never cross even when NAME_VARIANTS links them', () => {
   const x = api([['Александр', 'Саша, Александра']]);
   const alexander = child(x, 'Александр', 'Петров', '89990000011');
   const alexandra = child(x, 'Александра', 'Иванова', '89990000012');
@@ -444,7 +444,7 @@ test('a linked name variant can resolve to another registered spelling by surnam
     context
   );
   const distributed = x.buildSafeDistribution_('morning', parsed, context);
-  assert.equal(distributed.byRow[1], 'Александра: Отчёт Александры.');
+  assert.equal(distributed.byRow[1], undefined);
 });
 
 test('shared Katya and Sasha aliases use the surname initial, including Latin K', () => {
@@ -477,4 +477,145 @@ test('shared Katya and Sasha aliases use the surname initial, including Latin K'
   const distributed = x.buildSafeDistribution_('morning', aliases, context);
   assert.equal(distributed.byRow[1], 'Екатерина: Отчёт Екатерины.');
   assert.equal(distributed.byRow[3], 'Александра: Отчёт Александры.');
+});
+
+
+function ownershipFixture(x) {
+  const crypto = require('node:crypto');
+  const props = new Map([['MEDSI_SPREADSHEET_ID','synthetic-sheet']]);
+  x.reportFingerprint_ = text => crypto.createHash('sha256').update(String(text)).digest('hex');
+  x.PropertiesService = { getScriptProperties:() => ({
+    getProperty:key => props.get(key) || '', setProperty:(key,value) => props.set(key,value)
+  }) };
+  function distribute(raw, children, allowNew, previous = []) {
+    const context = x.buildDistributionContext_(children, []);
+    const parsed = x.parseReportBlocks_(raw, x.buildKnownBaseKeys_(children), context);
+    return x.applyRawReportOwnershipGuard_('evening', parsed, context,
+      x.buildSafeDistribution_('evening', parsed, context), previous, allowNew);
+  }
+  return {props,distribute};
+}
+
+test('two Sasha B children: a neutral initial is blocked, explicit forms or family prefixes disambiguate', () => {
+  const x = api([['Саша', 'Александр, Александра']]);
+  const girl = child(x, 'Александра Б', 'Быкова', '89990000001');
+  const boy = child(x, 'Александр Б', 'Баженов', '89990000002');
+  girl.index = 0; boy.index = 1;
+  const children = [girl,boy];
+  const ctx = x.buildDistributionContext_(children, []);
+  const parse = raw => x.parseReportBlocks_(raw, x.buildKnownBaseKeys_(children), ctx);
+  assert.deepEqual(Object.keys(x.buildSafeDistribution_('evening', parse('Саша Б — Текст.'), ctx).byRow), []);
+  assert.equal(x.buildSafeDistribution_('evening', parse('Александр Б — Текст мальчика.'), ctx).byRow[1], 'Александр: Текст мальчика.');
+  assert.equal(x.buildSafeDistribution_('evening', parse('Александра Б — Текст девочки.'), ctx).byRow[0], 'Александра: Текст девочки.');
+  assert.equal(x.buildSafeDistribution_('evening', parse('Саша Ба — Текст мальчика.'), ctx).byRow[1], 'Александр: Текст мальчика.');
+  assert.equal(x.buildSafeDistribution_('evening', parse('Саша Бы — Текст девочки.'), ctx).byRow[0], 'Александра: Текст девочки.');
+});
+
+test('a discharged Sasha report never transfers to a new admission after its heading becomes unique', () => {
+  const x = api([['Саша', 'Александр, Александра']]);
+  const f = ownershipFixture(x);
+  const girl = child(x, 'Саша Б', 'Быкова', '89990000001');
+  const boy = child(x, 'Саша Б', 'Баженов', '89990000002');
+  girl.index = 0; boy.index = 0;
+  const raw = 'Саша Б — Старый синтетический отчёт.';
+  assert.ok(f.distribute(raw, [girl], true).byRow[0]);
+  assert.equal(f.distribute(raw, [boy], false).byRow[0], undefined);
+  assert.equal(f.distribute(raw, [boy], true).byRow[0], undefined); // Reposting the old body is not a new owner.
+  assert.ok(f.distribute('Саша Б — Новый синтетический отчёт.', [boy], true).byRow[0]);
+});
+
+test('ambiguous block stays quarantined after discharge; an authored family prefix releases it', () => {
+  const x = api([['Саша', 'Александр, Александра']]);
+  const f = ownershipFixture(x);
+  const girl = child(x, 'Саша Б', 'Быкова', '89990000001');
+  const boy = child(x, 'Саша Б', 'Баженов', '89990000002');
+  girl.index = 0; boy.index = 1;
+  const raw = 'Саша Б — Неустановленная принадлежность.';
+  f.distribute(raw, [girl,boy], false);
+  assert.equal(f.distribute(raw, [boy], false).byRow[1], undefined);
+  assert.equal(f.distribute(raw, [boy], true).byRow[1], undefined);
+  x.buildReportValidationChildren_ = () => [boy];
+  x.rememberRawReportPublicationOwnership_('evening', raw, 'Саша Ба — Неустановленная принадлежность.');
+  assert.ok(f.distribute(raw, [boy], false).byRow[1]);
+});
+
+test('changing initials, aliases or roster order does not change report ownership', () => {
+  const x = api([['Катя', 'Екатерина']]);
+  const f = ownershipFixture(x);
+  const original = child(x, 'Катя Б', 'Быкова', '89990000001'); original.index = 0;
+  assert.ok(f.distribute('Катя Бы — Общий текст.', [original], true).byRow[0]);
+  const renamed = child(x, 'Екатерина Б', 'Быкова', '89990000001'); renamed.index = 7;
+  assert.ok(f.distribute('Екатерина Б — Общий текст.', [renamed], false).byRow[7]);
+});
+
+test('same full name with a different parent contact is a new admission, not the old report owner', () => {
+  const x = api(); const f = ownershipFixture(x);
+  const first = child(x, 'Миша Б', 'Быков', '89990000001'); first.index = 0;
+  const second = child(x, 'Миша Б', 'Быков', '89990000002'); second.index = 0;
+  const raw = 'Миша Б — Совпадающие имя и фамилия.';
+  f.distribute(raw, [first], true);
+  assert.equal(f.distribute(raw, [second], false).byRow[0], undefined);
+});
+
+test('bootstrap trusts only an existing matching assignment, never an empty newly registered row', () => {
+  const x = api(); const f = ownershipFixture(x);
+  const target = child(x, 'Миша Б', 'Быков', '89990000001'); target.index = 0;
+  assert.equal(f.distribute('Миша Б — Чужой старый текст.', [target], false, ['Пока ещё нет отчёта 🙏']).byRow[0], undefined);
+  assert.ok(f.distribute('Миша Б — Уже известный текст.', [target], false, ['Миша: Уже известный текст.']).byRow[0]);
+});
+
+test('canonical maintenance cannot rename a previous owner into a new child', () => {
+  const x = api([['Саша', 'Александр, Александра']]);
+  const girl = child(x, 'Саша Б', 'Быкова', '89990000001');
+  const boy = child(x, 'Александр Б', 'Баженов', '89990000002');
+  const result = x.canonicalizeRawChildReport_('Саша Б — Старый текст.', { children:[boy], previousChildren:[girl] });
+  assert.match(result.text, /^Саша Б [—-] Старый текст\.$/);
+  assert.equal(result.unresolved.length, 1);
+});
+
+
+test('final parent read barrier rejects another admission even if the wrong text is in its REPORTS row', () => {
+  const x = api([['Саша', 'Александр, Александра']]); const f = ownershipFixture(x);
+  const girl = child(x, 'Саша Б', 'Быкова', '89990000001'); girl.index = 0;
+  const raw = 'Саша Б — Синтетический приватный текст.';
+  f.distribute(raw, [girl], true);
+  assert.equal(x.rawReportRowOwnershipAllows_('evening', ['89990000001','','Саша Б','Быкова','','Саша: Синтетический приватный текст.']), true);
+  assert.equal(x.rawReportRowOwnershipAllows_('evening', ['89990000002','','Александр Б','Баженов','','Александр: Синтетический приватный текст.']), false);
+});
+
+test('a second parent of the same active child can see an existing owned report', () => {
+  const x = api(); const f = ownershipFixture(x);
+  const mom = child(x, 'Миша Б', 'Быков', '89990000001'); mom.index = 0;
+  const dad = child(x, 'Миша Б', 'Быков', '89990000002'); dad.index = 1;
+  const raw = 'Миша Б — Общий семейный текст.';
+  f.distribute(raw, [mom], true);
+  assert.ok(f.distribute(raw, [mom,dad], false).byRow[1]);
+  assert.equal(x.rawReportRowOwnershipAllows_('evening', ['89990000002','','Миша Б','Быков','','Миша: Общий семейный текст.']), true);
+});
+
+test('roster reordering before write cancels distribution instead of writing into the wrong row', () => {
+  const x = api(); const target = child(x, 'Миша Б', 'Быков', '89990000001'); target.index = 0;
+  const sheet = {getLastRow:()=>2,getRange:()=>({getValues:()=>[['89990000002','','Миша Б','Быков']]})};
+  assert.throws(()=>x.assertReportDistributionRosterUnchanged_(sheet,[target],1), /REPORTS изменились/);
+});
+
+
+test('a body beginning with its own colon heading keeps the same ownership fingerprint', () => {
+  const x = api(); const f = ownershipFixture(x);
+  const target = child(x, 'Миша Б', 'Быков', '89990000001'); target.index = 0;
+  const body = 'Настроение: описание. Аппетит: описание.';
+  assert.ok(f.distribute('Миша Б — '+body, [target], false, ['Миша: '+body]).byRow[0]);
+  assert.equal(x.rawReportRowOwnershipAllows_('evening', ['89990000001','','Миша Б','Быков','','Миша: '+body]), true);
+});
+
+
+test('re-admission under the same phone and full name does not inherit the old admission report', () => {
+  const x = api(); const f = ownershipFixture(x);
+  const target = child(x, 'Миша Б', 'Быков', '89990000001'); target.index = 0;
+  const raw = 'Миша Б — Прошлое поступление.';
+  f.props.set('REPORT_ADMISSION_9990000001', 'first-admission');
+  assert.ok(f.distribute(raw,[target],true).byRow[0]);
+  f.props.set('REPORT_ADMISSION_9990000001', 'second-admission');
+  assert.equal(f.distribute(raw,[target],false).byRow[0], undefined);
+  assert.equal(x.rawReportRowOwnershipAllows_('evening',['89990000001','','Миша Б','Быков','','Миша: Прошлое поступление.']),false);
 });

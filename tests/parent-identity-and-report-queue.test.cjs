@@ -8,6 +8,9 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 function apps() {
   const properties = new Map([['MEDSI_SPREADSHEET_ID','synthetic']]);
   const context = {Logger:{log(){}},
+    Utilities:{getUuid:()=>require('node:crypto').randomUUID(),DigestAlgorithm:{SHA_256:'sha256'},Charset:{UTF_8:'utf8'},
+      computeDigest:(_,text)=>Array.from(require('node:crypto').createHash('sha256').update(text).digest()),
+      base64EncodeWebSafe:bytes=>Buffer.from(bytes).toString('base64url')},
     SpreadsheetApp:{openById:()=>({getSheetByName:()=>({getDataRange:()=>({getValues:()=>[[]]})})})},
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value)})},
     LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}}),getUserLock:()=>({waitLock(){},releaseLock(){}})}};
@@ -58,7 +61,7 @@ test('failed report claims can retry; completed and active claims stay idempoten
 });
 test('manual source processing reads A1 and clears an old error after valid distribution',()=>{
   const x=apps(); let note='Old error',distributed=false;
-  x.buildReportValidationChildren_=()=>x.buildReportChildren_(['Лиза И.'],['Иванова']);
+  x.buildReportValidationChildren_=()=>{const children=x.buildReportChildren_(['Лиза И.'],['Иванова']);children[0].phone10='9990000001';return children;};
   x.distributeChildReports=()=>{distributed=true};
   const cell={getValue:()=> 'Лиза И.: Синтетический текст.',setValue(){},setNote:value=>{note=value},clearNote:()=>{note=''}};
   const sheet={getLastRow:()=>2,getRange:(r)=>{assert.equal(r,1);return cell}};
@@ -195,7 +198,7 @@ test('missing initial is inferred only when exactly one distinct child remains',
   }
 });
 test('older background submission cannot overwrite a newer manual publication',()=>{
-  const x=apps();let value='';const cell={setValue:text=>{value=text}};
+  const x=apps();x.buildReportValidationChildren_=()=>[];let value='';const cell={setValue:text=>{value=text}};
   assert.equal(x.saveRawReportPublication_('morning',cell,'New synthetic',200),true);
   assert.equal(x.saveRawReportPublication_('morning',cell,'Old retry synthetic',100),false);
   assert.equal(value,'New synthetic');
