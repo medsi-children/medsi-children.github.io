@@ -383,12 +383,12 @@ function loadReportsD1ProfilesSnapshot_() {
   try { return JSON.parse(raw); } catch (_) { return null; }
 }
 
-function reconcileReportsProfilesToD1NonDestructive_(reason) {
+function reconcileReportsProfilesToD1NonDestructive_(reason, deferSnapshot) {
   const previous = loadReportsD1ProfilesSnapshot_();
   const current = reportsD1ProfilesSnapshot_();
   if (!previous) {
     d1AdminRequest_('/admin/reconcile', 'post', { profiles: Object.keys(current).map(function(phone) { return current[phone]; }), full: false });
-    saveReportsD1ProfilesSnapshot_(current);
+    if (!deferSnapshot) saveReportsD1ProfilesSnapshot_(current);
     return { ok: true, initialized: true, profiles: Object.keys(current).length, reason: reason || '' };
   }
 
@@ -424,7 +424,7 @@ function reconcileReportsProfilesToD1NonDestructive_(reason) {
   });
   const removedProfiles = {};
   deletionsPending.forEach(function(phone) { removedProfiles[phone] = previous[phone]; });
-  saveReportsD1ProfilesSnapshot_(current);
+  if (!deferSnapshot) saveReportsD1ProfilesSnapshot_(current);
   const result = {
     ok: true,
     reason: reason || '',
@@ -441,9 +441,9 @@ function reconcileReportsProfilesToD1NonDestructive_(reason) {
     ok: result.ok,
     reason: result.reason,
     upserted: result.upserted,
-    moved: result.moved,
-    deletionsPending: result.deletionsPending,
-    ambiguous: result.ambiguous
+    movedCount: result.moved.length,
+    deletionsPendingCount: result.deletionsPending.length,
+    ambiguousCount: result.ambiguous.length
   }));
   return result;
 }
@@ -458,32 +458,37 @@ function reportsProfileDeletionProtected_(phoneRaw) {
   });
 }
 
+// Separate request/ack tokens avoid losing an edit arriving while a pass is
+// finishing. Never delete the request: a late acknowledgement cannot erase it.
+function requestReportsD1ProfileSync_() {
+  const token = Utilities.getUuid();
+  PropertiesService.getScriptProperties().setProperty('REPORTS_D1_SYNC_REQUEST', token);
+  return token;
+}
+
+function retryPendingReportsD1ProfileSync() {
+  const props = PropertiesService.getScriptProperties();
+  const requested = props.getProperty('REPORTS_D1_SYNC_REQUEST');
+  if (!requested || requested === props.getProperty('REPORTS_D1_SYNC_COMPLETED')) {
+    return { ok:true, skipped:true };
+  }
+  return reconcileReportsProfilesToD1_('pending-retry');
+}
+
 function reconcileReportsProfilesToD1_(reason) {
+  if (reason !== 'pending-retry') requestReportsD1ProfileSync_();
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) return { ok:true, skipped:true, message:'Profile sync is already running.' };
+  let previousSnapshot = null;
+  let current = null;
   try {
+    const props = PropertiesService.getScriptProperties();
+    const requestToken = props.getProperty('REPORTS_D1_SYNC_REQUEST');
     const sheet = getDataSheet_();
     if (!sheet) throw new Error('Лист REPORTS не найден; удаление профилей остановлено.');
-    const previousSnapshot = loadReportsD1ProfilesSnapshot_();
-    const current = reportsD1ProfilesSnapshot_();
-    let reportMaintenance = { ok:true, skipped:true };
-    if (previousSnapshot && reportsD1SnapshotsDiffer_(previousSnapshot, current)) {
-      try {
-        reportMaintenance = maintainRawReportsAfterProfilesChangeCore_(previousSnapshot, 'reports:' + String(reason || ''));
-      } catch (error) {
-        reportMaintenance = { ok:false, message:String(error && error.message || error) };
-        Logger.log('REPORT_IDENTITY_MAINTENANCE_FAILED ' + reportMaintenance.message);
-      }
-    }
-    const maintenanceFailed = reportMaintenance.ok === false;
-    const sync = reconcileReportsProfilesToD1NonDestructive_(reason);
-    // The D1 profile upsert may still be safe when raw-report maintenance
-    // failed, but the old snapshot must remain pending so the next scheduled
-    // pass retries the name/header repair instead of treating it as complete.
-    if (maintenanceFailed && previousSnapshot) {
-      saveReportsD1ProfilesSnapshot_(previousSnapshot);
-      Logger.log('REPORTS_D1_PROFILE_SNAPSHOT_RETRY_PENDING');
-    }
+    previousSnapshot = loadReportsD1ProfilesSnapshot_();
+    current = reportsD1ProfilesSnapshot_();
+    const sync = reconcileReportsProfilesToD1NonDestructive_(reason, true);
     // If staff removed a just-mirrored registration before its outbox ACK
     // completed, cancel that pending create before lifecycle reconciliation.
     const removedPhones = Object.keys(sync.removedProfiles || {});
@@ -512,6 +517,34 @@ function reconcileReportsProfilesToD1_(reason) {
       .filter(Boolean);
     const rawCleanupByPhone = {};
 
+    // Limit one pass so an unexpectedly empty sheet cannot erase every chat.
+    stale.slice(0, 3).forEach(function(phone) {
+      try {
+        // Recheck only REPORTS and unmirrored registrations. A generic profile
+        // lookup falls back to D1 and would protect the stale record itself.
+        if (reportsProfileDeletionProtected_(phone)) return;
+        const result = deleteD1ProfileWithS3Purge_(phone, true);
+        deleted.push({
+          phone:phone,
+          purgeComplete:!!(result.purge && result.purge.ok && !result.purge.deferred),
+          rawReportBlocks:Number(rawCleanupByPhone[phone] && rawCleanupByPhone[phone].removedBlocks || 0)
+        });
+      } catch (error) {
+        failed.push({ phone:phone, message:String(error && error.message || error) });
+      }
+    });
+    // Active directory changes reach D1 before slower report/media work.
+    // Retain the previous snapshot until maintenance succeeds, so failures
+    // can retry identity cleanup even after the D1 profile has disappeared.
+    let reportMaintenance = { ok:true, skipped:true };
+    if (previousSnapshot && reportsD1SnapshotsDiffer_(previousSnapshot, current)) {
+      try {
+        reportMaintenance = maintainRawReportsAfterProfilesChangeCore_(previousSnapshot, 'reports:' + String(reason || ''));
+      } catch (error) {
+        reportMaintenance = { ok:false };
+        Logger.log('REPORT_IDENTITY_MAINTENANCE_FAILED');
+      }
+    }
     // Raw report cleanup is independent from the D1 inventory.  This also
     // covers a deletion initiated by the educator panel: that panel closes
     // D1 first, so the following onChange must not skip raw cleanup simply
@@ -528,21 +561,8 @@ function reconcileReportsProfilesToD1_(reason) {
         cleanupErrors.push('raw reports ' + phone + ': ' + String(error && error.message || error));
       }
     });
-    // Limit one pass so an unexpectedly empty sheet cannot erase every chat.
-    stale.slice(0, 3).forEach(function(phone) {
-      try {
-        // Recheck only REPORTS and unmirrored registrations. A generic profile
-        // lookup falls back to D1 and would protect the stale record itself.
-        if (reportsProfileDeletionProtected_(phone)) return;
-        const result = deleteD1ProfileWithS3Purge_(phone);
-        deleted.push({
-          phone:phone,
-          purgeComplete:!!(result.purge && result.purge.ok),
-          rawReportBlocks:Number(rawCleanupByPhone[phone] && rawCleanupByPhone[phone].removedBlocks || 0)
-        });
-      } catch (error) {
-        failed.push({ phone:phone, message:String(error && error.message || error) });
-      }
+    deleted.forEach(function(item) {
+      item.rawReportBlocks = Number(rawCleanupByPhone[item.phone] && rawCleanupByPhone[item.phone].removedBlocks || 0);
     });
     try { purgeInactiveChatMessages_(); }
     catch (error) { cleanupErrors.push('legacy chat: ' + String(error && error.message || error)); }
@@ -560,7 +580,7 @@ function reconcileReportsProfilesToD1_(reason) {
     });
     const purge = flushReportsS3PurgeQueue_();
     const result = {
-      ok:failed.length === 0 && purge.ok,
+      ok:failed.length === 0 && purge.ok && reportMaintenance.ok !== false && cleanupErrors.length === 0,
       reason:reason || '',
       sync:sync,
       reportMaintenance:{
@@ -577,8 +597,24 @@ function reconcileReportsProfilesToD1_(reason) {
       cleanupErrors:cleanupErrors,
       purge:purge
     };
-    Logger.log('REPORTS_D1_PROFILE_LIFECYCLE ' + JSON.stringify(result));
+    if (reportMaintenance.ok !== false && !cleanupErrors.length) {
+      saveReportsD1ProfilesSnapshot_(current);
+    }
+    if (result.ok && stale.length === deleted.length && requestToken) {
+      props.setProperty('REPORTS_D1_SYNC_COMPLETED', requestToken);
+    }
+    // Log aggregate diagnostics only, never the embedded profile snapshots.
+    Logger.log('REPORTS_D1_PROFILE_LIFECYCLE ' + JSON.stringify({
+      ok:result.ok, reason:result.reason, upserted:Number(sync.upserted || sync.profiles || 0),
+      staleFound:stale.length, deletedCount:deleted.length, failedCount:failed.length,
+      cleanupErrorCount:cleanupErrors.length, reportMaintenance:result.reportMaintenance,
+      purgeOk:!!purge.ok,
+      retryPending:props.getProperty('REPORTS_D1_SYNC_REQUEST') !== props.getProperty('REPORTS_D1_SYNC_COMPLETED')
+    }));
     return result;
+  } catch (error) {
+    if (previousSnapshot) saveReportsD1ProfilesSnapshot_(previousSnapshot);
+    throw error;
   } finally {
     lock.releaseLock();
   }
@@ -637,7 +673,7 @@ function auditReportsD1Profiles() {
     duplicateHandlers:duplicateHandlers,
     triggerIssues:triggerIssues,
     profileTriggers:triggers.filter(function(name) {
-      return ['onReportsD1Edit', 'onReportsD1Change', 'syncD1ProfilesFromReports'].indexOf(name) >= 0;
+      return ['onReportsD1Edit', 'onReportsD1Change', 'syncD1ProfilesFromReports', 'retryPendingReportsD1ProfileSync'].indexOf(name) >= 0;
     })
   };
 }
@@ -726,6 +762,13 @@ function ensureReportsD1ProfileSyncTriggers_() {
       ScriptApp.newTrigger(handler).forSpreadsheet(spreadsheetId).onChange().create();
     }
   });
+  const retryTriggers = triggers.filter(function(trigger) {
+    return trigger.getHandlerFunction() === 'retryPendingReportsD1ProfileSync';
+  });
+  retryTriggers.slice(1).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+  if (!retryTriggers.length) {
+    ScriptApp.newTrigger('retryPendingReportsD1ProfileSync').timeBased().everyMinutes(1).create();
+  }
   const syncTriggers = triggers.filter(function(trigger) {
     return trigger.getHandlerFunction() === 'syncD1ProfilesFromReports';
   });
@@ -800,7 +843,7 @@ function flushReportsS3PurgeQueue_() {
   return { ok: failed.length === 0, completed: completed, failed: failed };
 }
 
-function deleteD1ProfileWithS3Purge_(phoneRaw) {
+function deleteD1ProfileWithS3Purge_(phoneRaw, deferPurge) {
   const phone = last10_(phoneRaw);
   if (!phone) throw new Error('Не удалось определить номер родителя для D1.');
   // Revoke profile/chat access first. S3 cleanup is a separate retryable
@@ -819,7 +862,7 @@ function deleteD1ProfileWithS3Purge_(phoneRaw) {
     queue[phone].updatedAt = Date.now();
     saveReportsS3PurgeQueue_(queue);
   }
-  const purge = flushReportsS3PurgeQueue_();
+  const purge = deferPurge ? { ok:true, deferred:true } : flushReportsS3PurgeQueue_();
   return { ok: true, deleted: deleted, purge: purge };
 }
 
