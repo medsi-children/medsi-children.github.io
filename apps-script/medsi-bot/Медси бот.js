@@ -901,7 +901,10 @@ function smartRegisterFromInboxCore(phoneRaw, parentNameRaw, childNameRaw, defer
   const familyForStore = childLast || inheritedChildFamily_(childFirst, parentLast);
 
   // A repeated admission with the same contact starts a new ownership epoch.
-  PropertiesService.getScriptProperties().setProperty('REPORT_ADMISSION_' + phone10, Utilities.getUuid());
+  const admissionKey = 'REPORT_ADMISSION_' + phone10;
+  const admissionToken = Utilities.getUuid();
+  PropertiesService.getScriptProperties().setProperty(admissionKey, admissionToken);
+  cacheRawReportOwnershipProperty_(admissionKey, admissionToken);
   sh.appendRow([
     phone,
     parentFirst,
@@ -6044,6 +6047,19 @@ function buildSafeDistribution_(reportType, parsed, contextByBase) {
 }
 
 
+// Cache one Properties read per execution, not one read per child/block on
+// every minute tick; otherwise the safety check could exhaust the daily quota.
+let RAW_REPORT_OWNERSHIP_PROPERTIES_CACHE_ = null;
+function rawReportOwnershipProperty_(key) {
+  const props = PropertiesService.getScriptProperties();
+  if (typeof props.getProperties !== 'function') return props.getProperty(key); // Minimal test doubles.
+  if (!RAW_REPORT_OWNERSHIP_PROPERTIES_CACHE_) RAW_REPORT_OWNERSHIP_PROPERTIES_CACHE_ = props.getProperties();
+  return RAW_REPORT_OWNERSHIP_PROPERTIES_CACHE_[key] || '';
+}
+function cacheRawReportOwnershipProperty_(key, value) {
+  if (RAW_REPORT_OWNERSHIP_PROPERTIES_CACHE_) RAW_REPORT_OWNERSHIP_PROPERTIES_CACHE_[key] = value;
+}
+
 // Ownership is keyed by normalized body + alias group, deliberately excluding
 // the mutable initial/prefix/display spelling. Store hashes and contact keys,
 // never report bodies. A new admission cannot inherit a previous owner's block.
@@ -6060,7 +6076,7 @@ function rawReportOwnerIdentity_(child) {
 function rawReportOwnerContactKey_(child) {
   const phone = last10_(child && (child.phone10 || child.phone));
   if (!phone) return '';
-  const admission = PropertiesService.getScriptProperties().getProperty('REPORT_ADMISSION_' + phone) || 'legacy';
+  const admission = rawReportOwnershipProperty_('REPORT_ADMISSION_' + phone) || 'legacy';
   return phone + '|' + admission;
 }
 
@@ -6089,7 +6105,7 @@ function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution
     const resolution = resolutions[index];
     const targets = resolution.status === 'ok' ? reportResolutionTargets_(resolution) : [];
     let owner = null;
-    const raw = props.getProperty(key);
+    const raw = rawReportOwnershipProperty_(key);
     if (raw) {
       try { owner = JSON.parse(raw); }
       catch (_) { owner = { blocked:true }; }
@@ -6134,7 +6150,10 @@ function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution
   });
   // Persist the ownership decision before writing any REPORTS cell. A property
   // failure must stop distribution, not silently fall back to name-only routing.
-  Object.keys(writes).forEach(function(key) { props.setProperty(key, writes[key]); });
+  Object.keys(writes).forEach(function(key) {
+    props.setProperty(key, writes[key]);
+    cacheRawReportOwnershipProperty_(key, writes[key]);
+  });
   Object.keys(blockedRows).forEach(function(row) { delete distribution.byRow[row]; });
   distribution.ownershipBlockedRows = Object.keys(blockedRows).length;
   if (Object.keys(writes).length || Object.keys(blockedRows).length) {
@@ -6150,7 +6169,7 @@ function rawReportRowOwnershipAllows_(kind, row) {
   child.phone10 = last10_(row[0]);
   const text = row[kind === 'morning' ? 4 : 5];
   const key = rawReportOwnershipKey_(kind, { baseKey:child.baseKey, body:comparableReportBody_(text) });
-  const raw = PropertiesService.getScriptProperties().getProperty(key);
+  const raw = rawReportOwnershipProperty_(key);
   if (!raw) return false;
   try { return rawReportOwnerMatches_(JSON.parse(raw), [child]); }
   catch (_) { return false; }
