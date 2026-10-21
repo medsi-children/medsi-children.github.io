@@ -16,7 +16,7 @@
     const attempts=readOnly?2:1;let lastError;
     for(let attempt=0;attempt<attempts;attempt++){
       const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs||15000);
-      try{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',signal:controller.signal});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));clearTimeout(timer);return p.result}catch(e){clearTimeout(timer);lastError=e;if(attempt+1<attempts)await delay(350)}
+      try{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',signal:controller.signal});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));clearTimeout(timer);return p.result}catch(e){clearTimeout(timer);lastError=controller.signal.aborted?new Error('TIMEOUT'):e;if(attempt+1<attempts)await delay(350)}
     }
     throw lastError||new Error('TIMEOUT');
   }
@@ -43,7 +43,8 @@
   async function restoreTutorSession(){
     tutorToken=safeGet(TUTOR_KEY).trim();
     if(!tutorToken){showAuth();return}
-    if(loadD1()){showForm();return}
+    const cachedSession=loadD1();
+    if(cachedSession){d1Session=cachedSession;showForm();return}
     try{
       const res=await callApi('verifyTutorSession',[tutorToken],17000);
       if(res&&res.ok){saveD1(extractD1(res));showForm();return}

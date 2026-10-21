@@ -1387,7 +1387,13 @@ async function drainReportQueue(env) {
 // in the table.
 async function reconcileProfiles(request, env) {
   const payload = await body(request) || {};
-  const profiles = Array.isArray(payload.profiles) ? payload.profiles.slice(0, 500) : [];
+  // A truncated or malformed full snapshot must never become a deletion list.
+  // Reject it before the first write; the caller can safely retry the sync.
+  if (!Array.isArray(payload.profiles) || payload.profiles.length > 500 ||
+      payload.profiles.some(item => !item || !phone10(item.phone))) {
+    return json({ ok:false, code:'INVALID_PROFILE_SNAPSHOT', message:'Expected a complete profile array of at most 500 valid entries' }, 400);
+  }
+  const profiles = payload.profiles;
   const full = payload.full === true;
   const deletingRows = await env.CHAT_DB.prepare(`
     SELECT phone10

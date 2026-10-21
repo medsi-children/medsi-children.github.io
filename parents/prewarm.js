@@ -70,7 +70,7 @@
         if(url.includes('script.google.com/macros/s/')&&body){
           const payload=JSON.parse(body);
           if(payload&&payload.action==='api'&&allowed.has(String(payload.method||''))){
-            return RAW_FETCH('/__session/apps-script',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),cache:'no-store'});
+            return RAW_FETCH('/__session/apps-script',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),cache:'no-store',signal:init.signal});
           }
         }
       }catch(_){}

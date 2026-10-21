@@ -9,7 +9,7 @@ function environment(fetch){
   const elements=new Map(),storage=new Map(),timers=new Map(),intervals=new Map();let timerId=0,intervalId=0;
   const noop=()=>{};
   const node=()=>({classList:{add:noop,remove:noop,toggle:noop,contains:()=>false},style:{},dataset:{},addEventListener:noop,setAttribute:noop,scrollTo:noop,replaceChildren:noop,appendChild:noop,querySelector:()=>null,value:'',textContent:''});
-  const ctx={console,AbortController,fetch,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},document:{getElementById:id=>{if(!elements.has(id))elements.set(id,node());return elements.get(id)},createElement:node,addEventListener:noop,body:node(),hidden:false},window:{scrollTo:noop,addEventListener:noop},navigator:{},alert:message=>{throw new Error('Unexpected alert: '+message)},requestAnimationFrame:noop,setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++intervalId;intervals.set(id,{fn,ms});return id},clearInterval:id=>intervals.delete(id)};
+  const ctx={console,AbortController,fetch,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},document:{getElementById:id=>{if(!elements.has(id))elements.set(id,node());return elements.get(id)},createElement:node,addEventListener:noop,body:node(),hidden:false},window:{fetch,scrollTo:noop,addEventListener:noop},navigator:{},alert:message=>{throw new Error('Unexpected alert: '+message)},requestAnimationFrame:noop,setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++intervalId;intervals.set(id,{fn,ms});return id},clearInterval:id=>intervals.delete(id)};
   vm.createContext(ctx);return {ctx,elements,storage,timers,intervals};
 }
 function parent(fetch){
@@ -73,14 +73,17 @@ test('rejected read token is renewed once and the read resumes',async()=>{
   for(const timer of [...env.timers.values()])if(timer.ms===400)timer.fn();
   assert.ok((await result).ok);assert.equal(renewals,1);assert.deepEqual(tokens,['synthetic','renewed']);
 });
-test('parent chat core is loaded directly without the ten second script watchdog',()=>{
+test('parent boot loads the chat dependencies in order after the menu is ready',async()=>{
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-  const transport=html.indexOf('<script src="/chat-overlay/transport.js?v=20260916-parent-chat-fast"></script>');
-  const prewarm=html.indexOf('<script src="/parents/prewarm.js?v=20260916-parent-chat-fast"></script>');
-  const chat=html.indexOf('<script src="/parents/chat-screen.js?v=20260916-parent-chat-fast"></script>');
-  const app=html.indexOf('<script src="/parents/full-web.js?v=20260916-parent-chat-fast"></script>');
-  assert.ok(transport>=0&&prewarm>transport&&chat>prewarm&&app>chat);
-  assert.doesNotMatch(html,/LOAD_TIMEOUT/);
+  const loaded=[];
+  const window={MedsiParentApp:{ready:true,helpersReady(){}}};
+  const document={getElementById:()=>({classList:{add(){},remove(){}}}),createElement:()=>({remove(){}}),head:{appendChild(script){loaded.push(script.src.split('?')[0]);queueMicrotask(()=>script.onload?.());}}};
+  const context={window,document,setTimeout:()=>1,clearTimeout(){},Promise};
+  const inline=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].filter(match=>!/^<script[^>]*\bsrc=/.test(match[0])).map(match=>match[1]);
+  inline.forEach(code=>vm.runInNewContext(code,context));
+  for(let i=0;i<8;i++)await tick();
+  const core=['/parents/full-web.js','/chat-overlay/transport.js','/parents/prewarm.js','/parents/chat-screen.js'].map(file=>loaded.indexOf(file));
+  assert.ok(core.every(index=>index>=0)&&core.every((index,i)=>i===0||index>core[i-1]));
 });
 test('empty chat renders after the first request failed and a background read recovered',async()=>{
   const env=environment();let offline=true;
@@ -112,20 +115,19 @@ test('previously loaded history remains available for display after its freshnes
   const env=environment();const saved={res:{ok:true,messages:[{messageKey:'example',text:'synthetic'}]},at:Date.now()-120000};
   env.ctx.sessionStorage={getItem:()=>JSON.stringify(saved),setItem:()=>{},removeItem:()=>{}};
   const noop=async()=>({ok:true});env.ctx.window.fetch=noop;
-  env.ctx.window.MedsiOverlayTransport={thread:noop,sendMessage:noop,edit:noop,remove:noop,react:noop};
+  env.ctx.window.MedsiOverlayTransport={thread:noop,sendMessage:noop,edit:noop,remove:noop,react:noop,markRead:noop,markUnread:noop,pin:noop,upload:noop};
   vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);
   assert.equal(env.ctx.window.MedsiParentPrewarm.peek('0000000000').messages[0].messageKey,'example');
 });
-test('a valid parent treats a temporary D1 410 as an empty pending thread',async()=>{
+test('a valid parent treats a temporary D1 410 as retryable synchronization, never as an empty chat',async()=>{
   const env=environment(async()=>response({ok:true,result:{ok:true,parentSession:'auth'}}));
   env.ctx.sessionStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};
   env.storage.set('medsi_parent_auth_session_v1','auth');
   const closed=async()=>{throw Object.assign(new Error('profile missing'),{status:410,code:'CHAT_CLOSED'})};
   const noop=async()=>({ok:true});
-  env.ctx.window.MedsiOverlayTransport={thread:closed,sendMessage:noop,edit:noop,remove:noop,react:noop};
+  env.ctx.window.MedsiOverlayTransport={thread:closed,sendMessage:noop,edit:noop,remove:noop,react:noop,markRead:noop,markUnread:noop,pin:noop,upload:noop};
   vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);
-  const result=await env.ctx.window.MedsiOverlayTransport.thread(session,'0000000000','',100,{fresh:true});
-  assert.deepEqual(Array.from(result.messages),[]);
+  await assert.rejects(()=>env.ctx.window.MedsiOverlayTransport.thread(session,'0000000000','',100,{fresh:true}),error=>error.code==='PROFILE_SYNC_PENDING'&&Number(error.status)===503);
 });
 test('a bootstrap-confirmed missing parent keeps the D1 410 closed-chat signal',async()=>{
   const env=environment(async()=>response({ok:true,result:{ok:false,code:'NOT_FOUND'}}));
@@ -133,7 +135,7 @@ test('a bootstrap-confirmed missing parent keeps the D1 410 closed-chat signal',
   env.storage.set('medsi_parent_auth_session_v1','auth');
   const closed=async()=>{throw Object.assign(new Error('profile missing'),{status:410,code:'CHAT_CLOSED'})};
   const noop=async()=>({ok:true});
-  env.ctx.window.MedsiOverlayTransport={thread:closed,sendMessage:noop,edit:noop,remove:noop,react:noop};
+  env.ctx.window.MedsiOverlayTransport={thread:closed,sendMessage:noop,edit:noop,remove:noop,react:noop,markRead:noop,markUnread:noop,pin:noop,upload:noop};
   vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);
   await assert.rejects(()=>env.ctx.window.MedsiOverlayTransport.thread(session,'0000000000','',100,{fresh:true}),error=>Number(error.status)===410);
 });
@@ -143,7 +145,16 @@ test('saved D1 session starts a parent thread prewarm in the background',async()
   env.storage.set('medsi_parent_phone','0000000000');
   env.storage.set('medsi_d1_parent_session_v1',JSON.stringify({phone:'0000000000',session}));
   const thread=async()=>{calls++;return {ok:true,messages:[]}},noop=async()=>({ok:true});
-  env.ctx.window.MedsiOverlayTransport={thread,sendMessage:noop,edit:noop,remove:noop,react:noop};
+  env.ctx.window.MedsiOverlayTransport={thread,sendMessage:noop,edit:noop,remove:noop,react:noop,markRead:noop,markUnread:noop,pin:noop,upload:noop};
   vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);await tick();
   assert.equal(calls,1);
+});
+test('parent session bridge preserves the original cancellation signal',async()=>{
+  let received;
+  const env=environment(async(url,options)=>{received={url,options};return response({ok:true})});
+  vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);
+  const controller=new AbortController();
+  await env.ctx.window.fetch('https://script.google.com/macros/s/synthetic/exec',{body:JSON.stringify({action:'api',method:'getD1ChatSession',args:[]}),signal:controller.signal});
+  assert.equal(received.url,'/__session/apps-script');
+  assert.equal(received.options.signal,controller.signal);
 });

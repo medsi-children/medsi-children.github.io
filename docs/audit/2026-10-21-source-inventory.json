@@ -1,0 +1,1806 @@
+{
+  "date": "2026-10-21",
+  "baselineCommit": "09c73ec",
+  "scope": "Tracked repository at audit start plus new verification scripts; pre-existing untracked prototypes excluded; hashes reflect reviewed working sources before audit publication.",
+  "files": [
+    {
+      "path": ".github/workflows/apply-report-history-0010.yml",
+      "status": "versioned",
+      "bytes": 1468,
+      "lines": 43,
+      "sha256": "b0fecd5e903cb5e4146492d6a8791f91a0827cda20f7c5feaa898b8457e610d0"
+    },
+    {
+      "path": ".github/workflows/audit-report-delivery.yml",
+      "status": "versioned",
+      "bytes": 1630,
+      "lines": 23,
+      "sha256": "bd81bf534b5683b7c1775d35303e5f141392afaece153f4c5c68d0c65b60c35c"
+    },
+    {
+      "path": ".github/workflows/deploy-cloudflare.yml",
+      "status": "versioned",
+      "bytes": 1308,
+      "lines": 41,
+      "sha256": "098b1a54f4984d0982e150268cb1687f6fc311999324a491a8b78c4d1843990b"
+    },
+    {
+      "path": ".github/workflows/release-apps-script.yml",
+      "status": "versioned",
+      "bytes": 2537,
+      "lines": 77,
+      "sha256": "5d6704baa0a7ede4f8751f83dfbc6b658a8cf9a25968f88f21780fd41aa1b58a"
+    },
+    {
+      "path": ".github/workflows/release-cloudflare-workers.yml",
+      "status": "versioned",
+      "bytes": 3921,
+      "lines": 108,
+      "sha256": "9c6682a4bd80d2e9b066a7687258d81395c1bcfc0cec31dec80b2ddb3f7e31a6"
+    },
+    {
+      "path": ".github/workflows/verify.yml",
+      "status": "versioned",
+      "bytes": 380,
+      "lines": 23,
+      "sha256": "64b6dee76fddbf64d8558132973b42a621e4c78b7af62fc4b62a5d6ff21083cf"
+    },
+    {
+      "path": ".gitignore",
+      "status": "versioned",
+      "bytes": 329,
+      "lines": 16,
+      "sha256": "bdbde2e3726b50d3edc102c4581044ad4932a9222727e3e13d55253e13b8c8c9"
+    },
+    {
+      "path": "AGENTS.md",
+      "status": "versioned",
+      "bytes": 3029,
+      "lines": 43,
+      "sha256": "5292e062db1c55c7ec0f3c94ba42572ab4943ddc419ee5991e4935bfe132a970"
+    },
+    {
+      "path": "apple-touch-icon.png",
+      "status": "versioned",
+      "bytes": 9886,
+      "lines": null,
+      "sha256": "da436352ec6f1c98f325f6efc1d5383416f1ccaadb292a64da5ad5edd02d47d5"
+    },
+    {
+      "path": "apple-touch-icon2.png",
+      "status": "versioned",
+      "bytes": 9868,
+      "lines": null,
+      "sha256": "1273dc70bd74bffeaa624199ff0a3f6e2c7e9cb3437aea2b3cbb803640228b3e"
+    },
+    {
+      "path": "apps-script/medsi-bot/.claspignore",
+      "status": "versioned",
+      "bytes": 179,
+      "lines": 10,
+      "sha256": "0e97fcf005a3116e7d4729adebde648a9cd39c65382c237d6441f80938ccc03c"
+    },
+    {
+      "path": "apps-script/medsi-bot/.gitignore",
+      "status": "versioned",
+      "bytes": 49,
+      "lines": 3,
+      "sha256": "afcc1fa6b483cdc233d4d024c549ade2c0464be0db288897cc48745852a77534"
+    },
+    {
+      "path": "apps-script/medsi-bot/appsscript.json",
+      "status": "versioned",
+      "bytes": 641,
+      "lines": 25,
+      "sha256": "015ad80106bc610b43df1d43f1cf13b01b6171ef45813935b9a7cccd98cf4e44"
+    },
+    {
+      "path": "apps-script/medsi-bot/chat-adapter.html",
+      "status": "versioned",
+      "bytes": 14056,
+      "lines": 277,
+      "sha256": "d1c80086d68f6b9a9e634cbad7a8c95084373681f8d40e73ff7d25405dfc53a2"
+    },
+    {
+      "path": "apps-script/medsi-bot/chat-d1-migration.js",
+      "status": "versioned",
+      "bytes": 38407,
+      "lines": 878,
+      "sha256": "da5f9193c615af566ec099912e19b0b7e58cf1afddee5da75b2f701e0cda7de0"
+    },
+    {
+      "path": "apps-script/medsi-bot/medsi-contacts.js",
+      "status": "versioned",
+      "bytes": 13917,
+      "lines": 242,
+      "sha256": "c0a46b3a6d40062e84514abe29a19963424cd938b225f0ddb16c657a94da3d7e"
+    },
+    {
+      "path": "apps-script/medsi-bot/parent-access.js",
+      "status": "versioned",
+      "bytes": 15318,
+      "lines": 317,
+      "sha256": "4f321ada84ac07dc064e0329ab43e3aaafcdd053bd84dbd6d267607df779f78c"
+    },
+    {
+      "path": "apps-script/medsi-bot/parent-relationships.js",
+      "status": "versioned",
+      "bytes": 3564,
+      "lines": 75,
+      "sha256": "797e5f7b18addb4c8ff552273a4c001a54d4356ed32ad8725106000e2a49b812"
+    },
+    {
+      "path": "apps-script/medsi-bot/report-rules.js",
+      "status": "versioned",
+      "bytes": 8509,
+      "lines": 159,
+      "sha256": "226f582acd6ea30d77a95929e3bf2b7c51639e5ef401ffe973f4bbb6cac61406"
+    },
+    {
+      "path": "apps-script/medsi-bot/script-properties.example.json",
+      "status": "versioned",
+      "bytes": 132,
+      "lines": 4,
+      "sha256": "90c46a5a9281fefb72b5a4451c2cc5a83fc4e717c984cff9b341a1e620dfe981"
+    },
+    {
+      "path": "apps-script/medsi-bot/tutor-auth.js",
+      "status": "versioned",
+      "bytes": 6558,
+      "lines": 148,
+      "sha256": "495748d6ab8b9ee53193f6611eab59bcde4a59659bbb01a7aafa2c77ab1a26e7"
+    },
+    {
+      "path": "apps-script/medsi-bot/Медси бот.js",
+      "status": "versioned",
+      "bytes": 254204,
+      "lines": 7148,
+      "sha256": "5757d4cdfb66b340028ab1cd63074e909c98ccfeca6be895b2bdab82fba14887"
+    },
+    {
+      "path": "archive/README.md",
+      "status": "archive",
+      "bytes": 888,
+      "lines": 9,
+      "sha256": "9b9e382e777998ac986e75d8beedcd97036d0e453b303729743b164831bf4a81"
+    },
+    {
+      "path": "archive/apps-script-legacy-ui/README.md",
+      "status": "archive",
+      "bytes": 882,
+      "lines": 10,
+      "sha256": "906cc87bf4bf6a288aeb62f6a01d8580e6c53381890d9df953f29cfd32c32f7e"
+    },
+    {
+      "path": "archive/apps-script-legacy-ui/children.html",
+      "status": "archive",
+      "bytes": 179025,
+      "lines": 6002,
+      "sha256": "d330363fab8d48e082308df61158729e68fac732eaafc175273fe7f5e8ab1dc2"
+    },
+    {
+      "path": "archive/apps-script-legacy-ui/educators.html",
+      "status": "archive",
+      "bytes": 310609,
+      "lines": 9632,
+      "sha256": "a5e7b7cf15af9d046d481d9b9aa2eebb95aebf1182fb199354091da8cf5a129a"
+    },
+    {
+      "path": "archive/apps-script-legacy-ui/psychology.html",
+      "status": "archive",
+      "bytes": 9127,
+      "lines": 378,
+      "sha256": "0518eb94ff705fd116b205eafba937e898aea6724c88fdbd65ddab5c0596a620"
+    },
+    {
+      "path": "archive/apps-script-legacy/chat-d1-migration-legacy.js",
+      "status": "archive",
+      "bytes": 96851,
+      "lines": 2906,
+      "sha256": "f76e78499fa819c815df6748e268b93983d57696102c9b477ead6acfae2980d5"
+    },
+    {
+      "path": "archive/appscript-recovery-tools/README.md",
+      "status": "archive",
+      "bytes": 691,
+      "lines": 5,
+      "sha256": "ac695fabef8ebd337e57d4ba6571897d523658160d2b39d9a07dacee6e1e6d0c"
+    },
+    {
+      "path": "archive/appscript-recovery-tools/chat_rollback.html",
+      "status": "archive",
+      "bytes": 3488,
+      "lines": 1,
+      "sha256": "9128f97ede33c571c45edd78b529e05ec07ab61144b57914071815ab4e02cdc5"
+    },
+    {
+      "path": "archive/appscript-recovery-tools/delete_parent.html",
+      "status": "archive",
+      "bytes": 11023,
+      "lines": 119,
+      "sha256": "08d0b00d9793dd63b73e0c78cc210907cef3de9f7029a4fca2aa240f7463d9b8"
+    },
+    {
+      "path": "archive/appscript-recovery-tools/index.html",
+      "status": "archive",
+      "bytes": 12350,
+      "lines": 135,
+      "sha256": "e0f91187762c3fdbbe583d121cd0d53792c60847860057d1d73673e48bf2aaf8"
+    },
+    {
+      "path": "archive/appscript-recovery-tools/register_parent.html",
+      "status": "archive",
+      "bytes": 10866,
+      "lines": 50,
+      "sha256": "aa57fdef83a3f6c552861bc45a80ef541e93a2826ffae99d5b348a4cb3c1709d"
+    },
+    {
+      "path": "archive/appscript-recovery-tools/report_validation.html",
+      "status": "archive",
+      "bytes": 8499,
+      "lines": 43,
+      "sha256": "5e3b2df36edf7093b0d5780c3c385cbb4769d1dbe72d3b33190892578e49c15d"
+    },
+    {
+      "path": "archive/educator-context-assistant-2026-10-15/README.md",
+      "status": "archive",
+      "bytes": 1298,
+      "lines": 13,
+      "sha256": "e1f89f58e17ced0a701c94076562748ab864caa46e0d170ecf7081d2b7717f05"
+    },
+    {
+      "path": "archive/educator-context-assistant-2026-10-15/context-assistant.css",
+      "status": "archive",
+      "bytes": 4225,
+      "lines": 16,
+      "sha256": "8028b62370f392439821fe07ae74ad96eacfa2ad5da204265e7efd47b6541ce9"
+    },
+    {
+      "path": "archive/educator-context-assistant-2026-10-15/context-assistant.js",
+      "status": "archive",
+      "bytes": 10476,
+      "lines": 116,
+      "sha256": "790c52938ca16ce3a8f1ac249cea95c289fcc066fdd9202351cb2a6f2c491da9"
+    },
+    {
+      "path": "archive/github-ui-before-timeweb-2026-09-04/NEW_WEB_CANDIDATE.md",
+      "status": "archive",
+      "bytes": 829,
+      "lines": 20,
+      "sha256": "9423187585180d24218e23c4825b0140bd574e7587d294a26d4521adcbdcb4f1"
+    },
+    {
+      "path": "archive/github-ui-before-timeweb-2026-09-04/README.md",
+      "status": "archive",
+      "bytes": 2109,
+      "lines": 36,
+      "sha256": "19715a64f332ec6ddf347b087f5331bb047474d2e54d1b3bd472c9aca961c096"
+    },
+    {
+      "path": "archive/github-ui-before-timeweb-2026-09-04/legacy-production/index.html",
+      "status": "archive",
+      "bytes": 8725,
+      "lines": 211,
+      "sha256": "a8f3ac4fa1cb2b2608c2eea0f5a379cf3118780cd67a04987c3d0e6df2cf71ed"
+    },
+    {
+      "path": "archive/github-ui-before-timeweb-2026-09-04/legacy-production/tutors.html",
+      "status": "archive",
+      "bytes": 10230,
+      "lines": 287,
+      "sha256": "9f23fed83c4a3617233bb779131d97b4450123ad2b026c0668eb228f064669cf"
+    },
+    {
+      "path": "archive/retired-production-assets-2026-09-07/README.md",
+      "status": "archive",
+      "bytes": 524,
+      "lines": 7,
+      "sha256": "2ef45de01bd8f64c13d6902ab631ef2a455d5a47225673fb5c3e87693c382542"
+    },
+    {
+      "path": "archive/retired-production-assets-2026-09-07/background.png",
+      "status": "archive",
+      "bytes": 203478,
+      "lines": null,
+      "sha256": "862315aac75a20e380899aebe78433b3e507602e33eb72be343be277f7c85d60"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/chat-screen.css",
+      "status": "archive",
+      "bytes": 5462,
+      "lines": 34,
+      "sha256": "68435bf4f484845cc6bee904f60c1c7a584fdb342c756d87fb2aa31f5cc2ea6c"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/chat-screen.js",
+      "status": "archive",
+      "bytes": 10811,
+      "lines": 147,
+      "sha256": "2ce56c98b36a3e56a7d720cfa0799db4d25f61b3c92c37b4f058d59dd5b18eda"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/final-polish.css",
+      "status": "archive",
+      "bytes": 2172,
+      "lines": 15,
+      "sha256": "8e8c1c453461b21cc47fc9bb2f7c33ad90fd2597def9256b132089dfccc47d29"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/final-polish.js",
+      "status": "archive",
+      "bytes": 2345,
+      "lines": 30,
+      "sha256": "40f292c927c7258616c5ef8f0e35b11ec608e67daa394a4ea035d24e4e25b88b"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/full-web.css",
+      "status": "archive",
+      "bytes": 16763,
+      "lines": 1,
+      "sha256": "83a35f69b544d4173182b839b607bed98cccc9cb2a13b053aa5034e49189f55e"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/full-web.js",
+      "status": "archive",
+      "bytes": 14893,
+      "lines": 68,
+      "sha256": "05fd546991c41a4b214bb8dd5a8c000db16f02730702d19d41465c81b7646ecb"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/index.html",
+      "status": "archive",
+      "bytes": 15811,
+      "lines": 66,
+      "sha256": "5ec97b88b3ea5b1ce6291aaa56681de322e6e2f7878a6b46155e40a228fcb1c6"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/legacy-entry.html",
+      "status": "archive",
+      "bytes": 15811,
+      "lines": 66,
+      "sha256": "5ec97b88b3ea5b1ce6291aaa56681de322e6e2f7878a6b46155e40a228fcb1c6"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/parent-polish.js",
+      "status": "archive",
+      "bytes": 1494,
+      "lines": 34,
+      "sha256": "d7527df0776ad1f3f309b118516dfc15865ee7da72ce56df0442179fa6e0eaaa"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/prewarm.js",
+      "status": "archive",
+      "bytes": 2718,
+      "lines": 20,
+      "sha256": "c1064b4be4c858ebcefd73d3a18940d70331dfbd9479a9027a9751cd13c31700"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/psychology-format.css",
+      "status": "archive",
+      "bytes": 3079,
+      "lines": 1,
+      "sha256": "fd509fa968f6f13f0fc2841bf9a5dd2a2ac951dc13c3bf72ba25e779784853bc"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/parents/psychology-format.js",
+      "status": "archive",
+      "bytes": 7898,
+      "lines": 19,
+      "sha256": "10bf8b28b067544ce0875dcbe96b5ac6804d8e214b25c8804746fa316fbc4a6d"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/psychology/app.js",
+      "status": "archive",
+      "bytes": 2130,
+      "lines": 36,
+      "sha256": "ad0538484633ad1a572bc711d3da0ddf6718c3da8afe2e89d1fe8207be4d2cb6"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/psychology/index.html",
+      "status": "archive",
+      "bytes": 2066,
+      "lines": 46,
+      "sha256": "370e4be90042d255edd97705edfb1e62461c9aa0f384f7fa1c4da83e38514bab"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/psychology/legacy-entry.html",
+      "status": "archive",
+      "bytes": 2066,
+      "lines": 46,
+      "sha256": "370e4be90042d255edd97705edfb1e62461c9aa0f384f7fa1c4da83e38514bab"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/psychology/style.css",
+      "status": "archive",
+      "bytes": 3340,
+      "lines": 1,
+      "sha256": "0a374817f93364b07e65f49d126f206413eb4494fb0bbb8f9fc49ea6f47d4710"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/tutors/chat-prewarm.js",
+      "status": "archive",
+      "bytes": 6231,
+      "lines": 167,
+      "sha256": "bd218b8da2e6f3dbcbffaf14dab112a2c6f23dbe1a934e9f0399bf238e8976c6"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/tutors/final-polish.css",
+      "status": "archive",
+      "bytes": 4244,
+      "lines": 40,
+      "sha256": "d55dc71920e8f778c5e078c60e3774280b99dac0f95a818c4b2b2422332cfa67"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/tutors/final-polish.js",
+      "status": "archive",
+      "bytes": 6260,
+      "lines": 109,
+      "sha256": "6bbd76e3f9ef9139aa6eabaa5fc4f60f13f60f89669040e0ffc6ab617d947055"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/tutors/full-web-fixes.css",
+      "status": "archive",
+      "bytes": 8468,
+      "lines": 76,
+      "sha256": "842f887a89835168bac74fc7cd17201d9df973240c43b8a06e4e37a2d5431cb0"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/tutors/full-web-polish.js",
+      "status": "archive",
+      "bytes": 2227,
+      "lines": 45,
+      "sha256": "6508add366683254168688ab9402d032521b2424d78479585089dd73591615a2"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/tutors/full-web.css",
+      "status": "archive",
+      "bytes": 11117,
+      "lines": 1,
+      "sha256": "63c1af6436395a8abde07188a9e11f05616e17decc54bb2cf70a2b4e6f235d8b"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/tutors/full-web.js",
+      "status": "archive",
+      "bytes": 15955,
+      "lines": 206,
+      "sha256": "6e2a3d7e66f3552ca15c067732fc4b634a7d2defd8195198eb76059e61460298"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/tutors/index.html",
+      "status": "archive",
+      "bytes": 8595,
+      "lines": 137,
+      "sha256": "efc878b6c41a6feeaa048cb901a79a5027e141fb6686d78dadb881af10004a66"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/tutors/layout-stability.css",
+      "status": "archive",
+      "bytes": 1401,
+      "lines": 42,
+      "sha256": "607669083cfb78a4945428fa553626c2ed04b862a310add9a65207838be2e5f9"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/tutors/layout-stability.js",
+      "status": "archive",
+      "bytes": 3283,
+      "lines": 87,
+      "sha256": "a065829dc00ff547c7d2b4f1db936bfabf6b448385f4e180aeff2e0555cf2b36"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/tutors/legacy-entry.html",
+      "status": "archive",
+      "bytes": 8571,
+      "lines": 137,
+      "sha256": "50648ecc1c794c81458d5e3c51933d402e089511bba2620d1c9e8a6739918a6e"
+    },
+    {
+      "path": "archive/ui-prototypes-before-production-2026-09/upload-check/index.html",
+      "status": "archive",
+      "bytes": 4742,
+      "lines": 179,
+      "sha256": "475393b85bf7ddfb33edd536c32ac59ffbb76f21918d3bdb9581f1d64d37c35a"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f319.svg",
+      "status": "versioned",
+      "bytes": 622,
+      "lines": 1,
+      "sha256": "aafb5b77ba9325aa6139eb5229ed862fd93b44bfc91e34801998c1dd9fde72d8"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f44c.svg",
+      "status": "versioned",
+      "bytes": 1117,
+      "lines": 1,
+      "sha256": "7f3e89c0a159b68c9f83bbbee96909699bd6c38e19cd7c5196709de4b94f52b7"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f44d.svg",
+      "status": "versioned",
+      "bytes": 1663,
+      "lines": 1,
+      "sha256": "0f2b2ef249afadcfcd3cd9e1dcc7ba612f595135cd70c6663267380ea4d3331e"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f48a.svg",
+      "status": "versioned",
+      "bytes": 411,
+      "lines": 1,
+      "sha256": "36e355d4222d9dbb1bc7dd1ed92768e26b3a4a63e41e0a1de4d78f8a6750f556"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f499.svg",
+      "status": "versioned",
+      "bytes": 368,
+      "lines": 1,
+      "sha256": "743d9b9cd1540d75b086829bc7da965356f1d72b3cb3281434e9e4ecad28617b"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f4ac.svg",
+      "status": "versioned",
+      "bytes": 423,
+      "lines": 1,
+      "sha256": "3cd2e0204c15fc63a774987307640088a7125ff99ac5748776ffabc0531ee466"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f4de.svg",
+      "status": "versioned",
+      "bytes": 391,
+      "lines": 1,
+      "sha256": "75c52e1c16937c12b0237d384089300a6d05d8e12d390995674abe2e56886445"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f4e6.svg",
+      "status": "versioned",
+      "bytes": 1556,
+      "lines": 1,
+      "sha256": "35a41947f54c96134d1c364c7eef3d692d3af0be37874a86a94c22bdc6d464bf"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f4f1.svg",
+      "status": "versioned",
+      "bytes": 184,
+      "lines": 1,
+      "sha256": "331d62f00a03f10e07dc3a7660891469b6b76e57d78b57a865645a5ae5378486"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f525.svg",
+      "status": "versioned",
+      "bytes": 822,
+      "lines": 1,
+      "sha256": "4fa646a4dbc10513ddeb70561789483638faf456e15186f4eb7291c5c455cbb6"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f558.svg",
+      "status": "versioned",
+      "bytes": 373,
+      "lines": 1,
+      "sha256": "0ef275e7f02bc111d6f20f38ad13ca6952b5c8f19e56c141eb9a78647bcdfd03"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f5fa.svg",
+      "status": "versioned",
+      "bytes": 5682,
+      "lines": 1,
+      "sha256": "b77fd1cd1c0e226cc02a9e52157529eb38267cc6a9a5b544e10488c606741eb5"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f601.svg",
+      "status": "versioned",
+      "bytes": 1129,
+      "lines": 1,
+      "sha256": "590acfc514de2929a27b078ddb0fbd161f5a172c3d6bf0a9fb527c17de627ffc"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f64f.svg",
+      "status": "versioned",
+      "bytes": 1519,
+      "lines": 1,
+      "sha256": "8507d163d2a5c3e4ae298f241d74883e6481b720e78543c08291102ec738b433"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f6ab.svg",
+      "status": "versioned",
+      "bytes": 363,
+      "lines": 1,
+      "sha256": "944021b82910d817ea42325845115eb9041a254936fa4374df83b12830f2e43c"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f917.svg",
+      "status": "versioned",
+      "bytes": 2570,
+      "lines": 1,
+      "sha256": "b54b9c6db7ef1328acb939f4d5fe03040f6d28fd6a706180278d2a51e9a0435d"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f970.svg",
+      "status": "versioned",
+      "bytes": 2384,
+      "lines": 1,
+      "sha256": "303d516f1985e3bc62aa92d1a55c2140a14435b255a32b4c3bc776a2395f056d"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/1f9e0.svg",
+      "status": "versioned",
+      "bytes": 5320,
+      "lines": 1,
+      "sha256": "74941007c155caffc21e0cf1da9935688adc5a13b49704a69d1c8b682ae81293"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/2600.svg",
+      "status": "versioned",
+      "bytes": 759,
+      "lines": 1,
+      "sha256": "8f08ac47cae81db8f28d8845c09d0dade8c42d152449a0e11de302e6b2f17661"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/2705.svg",
+      "status": "versioned",
+      "bytes": 482,
+      "lines": 1,
+      "sha256": "1f026beb67630abcdbc341651b1c17591aa76261296a9fb118793765964eb4e9"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/2753.svg",
+      "status": "versioned",
+      "bytes": 388,
+      "lines": 1,
+      "sha256": "c5dcee581f8c61de91f96e6260db49d3c4bc49522ff6f23bd1efaee225678cc8"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/2764.svg",
+      "status": "versioned",
+      "bytes": 368,
+      "lines": 1,
+      "sha256": "09a743ee0c32ca57c9be64b13b29c396310d1dd309cb4d7d3be722e47db95f27"
+    },
+    {
+      "path": "chat-overlay/assets/twemoji/README.md",
+      "status": "versioned",
+      "bytes": 750,
+      "lines": 10,
+      "sha256": "b9074be919e61b556719e2fa5c808cf6b623c57a61679b889d534dd61908850c"
+    },
+    {
+      "path": "chat-overlay/bottom-lock.js",
+      "status": "versioned",
+      "bytes": 5709,
+      "lines": 176,
+      "sha256": "12225b7bd9fce43ffa6d71cadb294c7dae8d7360208678f29e27832c205ec7a4"
+    },
+    {
+      "path": "chat-overlay/chat-list-ui.css",
+      "status": "versioned",
+      "bytes": 6182,
+      "lines": 16,
+      "sha256": "f569652a847346e58223336f6c75e451b12f1c9c8e27ac86f85bad8426454cd9"
+    },
+    {
+      "path": "chat-overlay/chat-list-ui.js",
+      "status": "versioned",
+      "bytes": 6909,
+      "lines": 30,
+      "sha256": "18a747bf9ab9fd6692ded8edf54d9ccbecd68364a675835894aeefa5adb30508"
+    },
+    {
+      "path": "chat-overlay/chat-motion-ui.css",
+      "status": "versioned",
+      "bytes": 1494,
+      "lines": 9,
+      "sha256": "d7490677ae757b536a7aafc40f24da1950f43f4f7156a13d19e2228731ab2a46"
+    },
+    {
+      "path": "chat-overlay/chat-motion.js",
+      "status": "versioned",
+      "bytes": 2065,
+      "lines": 34,
+      "sha256": "5495e6bc6a2741609c197aaf7e6249e4b281ad78c614ba89cdbcd0144616531c"
+    },
+    {
+      "path": "chat-overlay/chat-peek.css",
+      "status": "versioned",
+      "bytes": 2749,
+      "lines": 17,
+      "sha256": "43e31e997c633ff335bb066a167f6f57fea039f15d610ddbe87de180d975c499"
+    },
+    {
+      "path": "chat-overlay/chat-peek.js",
+      "status": "versioned",
+      "bytes": 5487,
+      "lines": 119,
+      "sha256": "3c445cadc90b25635c871594f4eb3a6b36b375b099e4323a6f9e5844d8866145"
+    },
+    {
+      "path": "chat-overlay/chat-surface-ui.css",
+      "status": "versioned",
+      "bytes": 963,
+      "lines": 4,
+      "sha256": "47f158f20eac5289d1d4fcb0db8ea1d7a2dd9a4c07200f3300be629c203d85b9"
+    },
+    {
+      "path": "chat-overlay/composer-ui.css",
+      "status": "versioned",
+      "bytes": 9524,
+      "lines": 59,
+      "sha256": "b382d25fd223550480d674e36c78a4321272e9d690e40c95dd9168e73533df9c"
+    },
+    {
+      "path": "chat-overlay/composer-ui.js",
+      "status": "versioned",
+      "bytes": 6186,
+      "lines": 36,
+      "sha256": "91dc15bc73eceeeb1d98c4483d6a542ed8fa5c728550b455bce5004d058e34f6"
+    },
+    {
+      "path": "chat-overlay/educator-chat-test.js",
+      "status": "versioned",
+      "bytes": 45799,
+      "lines": 404,
+      "sha256": "f3341a89ebbff01d42a60e4bde1a88fc1420e58d4963b88c1b7d5067939422e4"
+    },
+    {
+      "path": "chat-overlay/educator-chat.js",
+      "status": "versioned",
+      "bytes": 45799,
+      "lines": 404,
+      "sha256": "f3341a89ebbff01d42a60e4bde1a88fc1420e58d4963b88c1b7d5067939422e4"
+    },
+    {
+      "path": "chat-overlay/educator-exact-test.css",
+      "status": "versioned",
+      "bytes": 22776,
+      "lines": 541,
+      "sha256": "f442790edd35bfb9fedc33cc9a4aa4d6b8f8fa5eec3877a326c30b4e8029a888"
+    },
+    {
+      "path": "chat-overlay/educator-exact.css",
+      "status": "versioned",
+      "bytes": 22776,
+      "lines": 541,
+      "sha256": "f442790edd35bfb9fedc33cc9a4aa4d6b8f8fa5eec3877a326c30b4e8029a888"
+    },
+    {
+      "path": "chat-overlay/educator-new-chat.js",
+      "status": "versioned",
+      "bytes": 8630,
+      "lines": 155,
+      "sha256": "fb966d5751bda35a136fd3f9d3311e5c616632ed4f813d9690a7e0dd6c24627a"
+    },
+    {
+      "path": "chat-overlay/fast-cache.js",
+      "status": "versioned",
+      "bytes": 2423,
+      "lines": 67,
+      "sha256": "f2a5866049831e49082703d65379a5e427da2b9c3fd4c9df48081693c9aeaa27"
+    },
+    {
+      "path": "chat-overlay/gesture-navigation.js",
+      "status": "versioned",
+      "bytes": 8110,
+      "lines": 195,
+      "sha256": "d11f9a2021bc32a407810d6c3a1f1b6cb3260459638b8d4731a998bb1b4a2111"
+    },
+    {
+      "path": "chat-overlay/interaction-fix.js",
+      "status": "versioned",
+      "bytes": 12221,
+      "lines": 277,
+      "sha256": "6943be4748543aedddbcac9f97ed27e7e85587ef3998f2b201d289d3806f3d15"
+    },
+    {
+      "path": "chat-overlay/media-preload.js",
+      "status": "versioned",
+      "bytes": 2908,
+      "lines": 85,
+      "sha256": "4e8ba93281d31b2c6f1dbbec7d350306ea05a974906caeed04ce0ea82a84bb13"
+    },
+    {
+      "path": "chat-overlay/media-ui.css",
+      "status": "versioned",
+      "bytes": 1359,
+      "lines": 7,
+      "sha256": "2a0bfefb207e7465ceb8f7fb6752a327955664df46767810672c8b3d79c3a904"
+    },
+    {
+      "path": "chat-overlay/menu-twemoji.js",
+      "status": "versioned",
+      "bytes": 3054,
+      "lines": 65,
+      "sha256": "bb4d64e5d8c5f67a2d8ca49954395356fcc716315fb1c78d0b59980672f3df24"
+    },
+    {
+      "path": "chat-overlay/message-emoji.js",
+      "status": "versioned",
+      "bytes": 1898,
+      "lines": 43,
+      "sha256": "b4a2e209156732a57018502125941508f6721682cabe339d8f148ee477b888e8"
+    },
+    {
+      "path": "chat-overlay/message-enhancements.js",
+      "status": "versioned",
+      "bytes": 15324,
+      "lines": 365,
+      "sha256": "7200d0c9f79ee64780294f8c9795b4ece32a03ff5987d7a52cc20af169f9e6c9"
+    },
+    {
+      "path": "chat-overlay/message-long-press.js",
+      "status": "versioned",
+      "bytes": 7258,
+      "lines": 206,
+      "sha256": "60eed934b650ea57f9b4d74f8901bad596d05bcc9ec341f5ed5e5e2619b39762"
+    },
+    {
+      "path": "chat-overlay/overlay-core.js",
+      "status": "versioned",
+      "bytes": 6461,
+      "lines": 177,
+      "sha256": "de9531a06f8fe56df6b716046451800b711242d2f3afd983861482bcb47c2ffc"
+    },
+    {
+      "path": "chat-overlay/overlay-fixes.css",
+      "status": "versioned",
+      "bytes": 7008,
+      "lines": 225,
+      "sha256": "72994091f59b03d598bdc0495534614ca27f79965d2b7a3f7bf6a90a7c7ccd62"
+    },
+    {
+      "path": "chat-overlay/overlay.css",
+      "status": "versioned",
+      "bytes": 15384,
+      "lines": 32,
+      "sha256": "14479a0d643d7741fa1142b5557e6babffd5eb00b6d218bad40d9851bdf23b94"
+    },
+    {
+      "path": "chat-overlay/parent-chat.js",
+      "status": "versioned",
+      "bytes": 11299,
+      "lines": 33,
+      "sha256": "bf9883665ca1e8f207388575e8d24336facb9fd69d071a8c79fe30a0d67f9a8a"
+    },
+    {
+      "path": "chat-overlay/parent-compat.css",
+      "status": "versioned",
+      "bytes": 6358,
+      "lines": 11,
+      "sha256": "2c8d6f2eac350e59007aa1ef9b488bbdbfe704f4c5b733acae7f1d75ce634dff"
+    },
+    {
+      "path": "chat-overlay/preload.js",
+      "status": "versioned",
+      "bytes": 3235,
+      "lines": 100,
+      "sha256": "37c751e28190c7851d5621affdad62d2d1841f0a8831229e4fae8b16c8e8c78b"
+    },
+    {
+      "path": "chat-overlay/reaction-icons.js",
+      "status": "versioned",
+      "bytes": 3569,
+      "lines": 86,
+      "sha256": "48d153be17dfd5d46b67a723f2bc35973ec13523e629052ac22c2bdb8093565a"
+    },
+    {
+      "path": "chat-overlay/session-client.js",
+      "status": "versioned",
+      "bytes": 947,
+      "lines": 27,
+      "sha256": "6d6a53c206a66d6d8027d52c890b4b4a39e30d8571d85150ebbc429243ec7693"
+    },
+    {
+      "path": "chat-overlay/transport.js",
+      "status": "versioned",
+      "bytes": 18099,
+      "lines": 430,
+      "sha256": "df7293f121183f62ea19bbb22aa2ebd0a86bd94011478aaf68339c60d5b7faa1"
+    },
+    {
+      "path": "chat-overlay/tutor-start-shell.css",
+      "status": "versioned",
+      "bytes": 4370,
+      "lines": 11,
+      "sha256": "495dd831edbee201f3769e52212460e5ef6334e96c70ee655e51532d3781a940"
+    },
+    {
+      "path": "chat-overlay/tutor-start-shell.js",
+      "status": "versioned",
+      "bytes": 2835,
+      "lines": 25,
+      "sha256": "de17eb1f91f061e657f93d72e45b7f86b5f8afbfcc4ab1edbbd7a7df27210c21"
+    },
+    {
+      "path": "chat-overlay/upload-ux.js",
+      "status": "versioned",
+      "bytes": 4663,
+      "lines": 91,
+      "sha256": "0779ee46ea16ddb95475b172ef67e7aa68dfc2c26b99af0718901604e004f18a"
+    },
+    {
+      "path": "chat-overlay/video-link-preview.js",
+      "status": "versioned",
+      "bytes": 5929,
+      "lines": 103,
+      "sha256": "f966b21105bbddc1a1b938fcecd6373925e40c75e640b11e5be6faee9321fdb6"
+    },
+    {
+      "path": "chat-overlay/video-link.js",
+      "status": "versioned",
+      "bytes": 12990,
+      "lines": 126,
+      "sha256": "1476903607450c7988f2b0a2214cb9833481f96473843ab9c4329b994066b4ad"
+    },
+    {
+      "path": "database/schema.sql",
+      "status": "versioned",
+      "bytes": 2024,
+      "lines": 54,
+      "sha256": "0553d9277206d26fd91bf47c52e28513cf111d98b2bb0945e7d2c24f57c9ecdd"
+    },
+    {
+      "path": "diag.html",
+      "status": "versioned",
+      "bytes": 1682,
+      "lines": 34,
+      "sha256": "ce6362b04960d43ee2fb313041bca0f26cc6fcc9a050a5a5d45996844475bc92"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "status": "versioned",
+      "bytes": 8313,
+      "lines": 126,
+      "sha256": "7245c0a910ba6ed3a49dfea75891816136946e2f6b373022674680671d44e0e4"
+    },
+    {
+      "path": "docs/GIT_MAP.md",
+      "status": "versioned",
+      "bytes": 1621,
+      "lines": 23,
+      "sha256": "bc03140ef43cfb1335d249878a7a1a145152390d94a122ad267fd524cb86cbcd"
+    },
+    {
+      "path": "docs/LEGACY_DECOMMISSION_PLAN.md",
+      "status": "versioned",
+      "bytes": 5581,
+      "lines": 128,
+      "sha256": "b77fecb563b9a0892bd4ef89394455fb0a704b283ce1b1d1070fe30b2c9f2bc6"
+    },
+    {
+      "path": "docs/LEGACY_MEDIA_MIGRATION_PROTOCOL.md",
+      "status": "versioned",
+      "bytes": 3541,
+      "lines": 49,
+      "sha256": "87e2af88ccceb9f066a616fa53854a8ff4c3ec6737094e0ea9756cbc5866c542"
+    },
+    {
+      "path": "docs/PRODUCTION_MIGRATION_PLAN.md",
+      "status": "versioned",
+      "bytes": 9234,
+      "lines": 136,
+      "sha256": "0f7959031798f6e6b0a1ab9c0456f8181f575e9b292a7b51a9e806b8e0570605"
+    },
+    {
+      "path": "docs/REPORT_RULES.md",
+      "status": "versioned",
+      "bytes": 3594,
+      "lines": 40,
+      "sha256": "3bec076e6b714f091bcb019f6302506196b2970362281a1fa1386505309a5f29"
+    },
+    {
+      "path": "docs/REPOSITORY_INVENTORY.md",
+      "status": "versioned",
+      "bytes": 3593,
+      "lines": 42,
+      "sha256": "290eed84edb0af1f8a16049f24a4696bdd3970e7c6ad160712e71e3473f5928c"
+    },
+    {
+      "path": "docs/SYSTEM_MAP.md",
+      "status": "versioned",
+      "bytes": 17958,
+      "lines": 274,
+      "sha256": "cdbcebf03ffb8e0b80a025b28176ec95747ae5321a8caebd7155ee77825420da"
+    },
+    {
+      "path": "docs/cloud-control-plane.md",
+      "status": "versioned",
+      "bytes": 3285,
+      "lines": 39,
+      "sha256": "93805da962a1a808a54530fcfa38deae8e9ff4f5a9cf58826d07e4562c9f17a0"
+    },
+    {
+      "path": "docs/new-parent-prototype.md",
+      "status": "versioned",
+      "bytes": 3280,
+      "lines": 13,
+      "sha256": "a62ad88796e7d57a0bedf54317df4f39cbe7ab6d68287a86fa670facda3f0674"
+    },
+    {
+      "path": "docs/release-runbook.md",
+      "status": "versioned",
+      "bytes": 2984,
+      "lines": 41,
+      "sha256": "0ca8a54a97fb9fe832ccfd25b38c4ed2b981ca7b1bb7bdc6e7b2d1dbd4ae9ae0"
+    },
+    {
+      "path": "docs/report-ownership-safety.md",
+      "status": "versioned",
+      "bytes": 6876,
+      "lines": 63,
+      "sha256": "0af96a7c977d16141d5ef6cff05238f96c318254ba954de02727956c01d18891"
+    },
+    {
+      "path": "docs/reports-profile-sync.md",
+      "status": "versioned",
+      "bytes": 3559,
+      "lines": 33,
+      "sha256": "a0cbe975340d00bb5e2bda386813beca697eceed02ee32574a1930edeab9471a"
+    },
+    {
+      "path": "favicon.ico",
+      "status": "versioned",
+      "bytes": 4286,
+      "lines": null,
+      "sha256": "aa6b6b1646608342697e3a3e148800c38fe8f9b437318e7533b373af21c61bac"
+    },
+    {
+      "path": "index.html",
+      "status": "versioned",
+      "bytes": 22785,
+      "lines": 124,
+      "sha256": "c8c191683b07984628f1afecf0acd224e4cd3ee25f0b6b6366371d66d4421b3c"
+    },
+    {
+      "path": "lib/database.js",
+      "status": "versioned",
+      "bytes": 1234,
+      "lines": 44,
+      "sha256": "cc853f8c78e0e201253cf6c999eb57cc2a3575175f0eb08550025a1a3883c124"
+    },
+    {
+      "path": "lib/media-previews.js",
+      "status": "versioned",
+      "bytes": 2385,
+      "lines": 66,
+      "sha256": "d379f92664d473c58318c4ad3a5fe196940219d6f7bcb74b372397bb37c5f615"
+    },
+    {
+      "path": "lib/s3-storage.js",
+      "status": "versioned",
+      "bytes": 6348,
+      "lines": 188,
+      "sha256": "505d81871b930b12f2ec172cc48eea8d4b9eb50c3fbc1fbe262034e8cef11c25"
+    },
+    {
+      "path": "lib/session-preload.js",
+      "status": "versioned",
+      "bytes": 12514,
+      "lines": 322,
+      "sha256": "11e9cd58c895cca5ea52868a7998d9be4c7c584726e08cbfd577550303c86d3f"
+    },
+    {
+      "path": "manifest.json",
+      "status": "versioned",
+      "bytes": 557,
+      "lines": 24,
+      "sha256": "e0fa08242d2aac720021e93d0ea9c2c5ec514a48da0dd2ca794ab8f8b880d8d3"
+    },
+    {
+      "path": "notify-client.js",
+      "status": "versioned",
+      "bytes": 14689,
+      "lines": 428,
+      "sha256": "f6551796e70bd38feca31b2d55a020a2a892a947d609f4919e49a4aef96f1fbb"
+    },
+    {
+      "path": "ops/production-cutover-plan.md",
+      "status": "versioned",
+      "bytes": 5404,
+      "lines": 77,
+      "sha256": "46564120fb7f4a43683deba271700a6aa0bb8939d893462643710a04464b2401"
+    },
+    {
+      "path": "package-lock.json",
+      "status": "versioned",
+      "bytes": 75944,
+      "lines": 2157,
+      "sha256": "7addd8c28459a54533f90a7f3edb1acf7313bcf63ace7c7b62f9dcd10593c7c7"
+    },
+    {
+      "path": "package.json",
+      "status": "versioned",
+      "bytes": 1818,
+      "lines": 31,
+      "sha256": "80231233117b7337ba47b3953804629ff11acf51d45cb393880b3b7ebb943029"
+    },
+    {
+      "path": "parents/blob.webp",
+      "status": "versioned",
+      "bytes": 36348,
+      "lines": null,
+      "sha256": "b85522b33423542cae8842820855a717b2d5e75f652e339eeae4484f28aa8d0e"
+    },
+    {
+      "path": "parents/bot-character.css",
+      "status": "versioned",
+      "bytes": 1750,
+      "lines": 10,
+      "sha256": "b43187f87c30262fccfe5a0a820367682639feb3cfbf15a6f5fb446dca032f4f"
+    },
+    {
+      "path": "parents/bot-chat-runtime.js",
+      "status": "versioned",
+      "bytes": 46231,
+      "lines": 726,
+      "sha256": "122c462893d26d57b052439868f4e883957cf778968276f058ca2f43f00eb685"
+    },
+    {
+      "path": "parents/bot-chat-view.js",
+      "status": "versioned",
+      "bytes": 3745,
+      "lines": 4,
+      "sha256": "6799594fa1102eb0bafdd30d23904ae2025ceab591aa8bcd1d85622c05f690a2"
+    },
+    {
+      "path": "parents/bot-chat.css",
+      "status": "versioned",
+      "bytes": 18616,
+      "lines": 65,
+      "sha256": "1e9a98c5284216b8667fb921477122684275d0afd3bb6b6579c02791e0fdfda0"
+    },
+    {
+      "path": "parents/chat-opening.js",
+      "status": "versioned",
+      "bytes": 933,
+      "lines": 10,
+      "sha256": "5a5443623a484d9143e18b13eee91e11b19fe26068aa22d90ab95172e7934e35"
+    },
+    {
+      "path": "parents/chat-screen-test.js",
+      "status": "versioned",
+      "bytes": 40514,
+      "lines": 463,
+      "sha256": "9bff343b51f0846b71d986f2345039c21d64d1d5928412b526537a96d66609cb"
+    },
+    {
+      "path": "parents/chat-screen.css",
+      "status": "versioned",
+      "bytes": 5400,
+      "lines": 36,
+      "sha256": "a377ad3ef4ca49c9a06db1d2fc228eca5c2181c63362d58efd1fb5f9ebd48526"
+    },
+    {
+      "path": "parents/chat-screen.js",
+      "status": "versioned",
+      "bytes": 40514,
+      "lines": 463,
+      "sha256": "9bff343b51f0846b71d986f2345039c21d64d1d5928412b526537a96d66609cb"
+    },
+    {
+      "path": "parents/chat-ui-test.css",
+      "status": "versioned",
+      "bytes": 5465,
+      "lines": 15,
+      "sha256": "351cadcf6fea8589129be95187dbca6ded824bf3563ed28fd25c1b7dbf19cb7b"
+    },
+    {
+      "path": "parents/chat-ui.css",
+      "status": "versioned",
+      "bytes": 8080,
+      "lines": 24,
+      "sha256": "634cab5a191ad2fc208c5ef90dccc7527cc92e15ce22417f3fa6aea27bdbf17a"
+    },
+    {
+      "path": "parents/dashboard-ui.css",
+      "status": "versioned",
+      "bytes": 5081,
+      "lines": 18,
+      "sha256": "a1828df6819449a0246282c25ea2353ee494ef5599e8b0059a89cff2e2cfd034"
+    },
+    {
+      "path": "parents/full-web.css",
+      "status": "versioned",
+      "bytes": 24247,
+      "lines": 50,
+      "sha256": "a8328ce08800f5593d3d9260e7128cdea84c2e4134df116f8aa0524125848f53"
+    },
+    {
+      "path": "parents/full-web.js",
+      "status": "versioned",
+      "bytes": 47671,
+      "lines": 338,
+      "sha256": "04bc4f7564e072bab5ca6a61b0814decace6542be9418e449affd0fcfc6a344e"
+    },
+    {
+      "path": "parents/install-hint.css",
+      "status": "versioned",
+      "bytes": 1261,
+      "lines": 10,
+      "sha256": "abc5f53b038164d33d5108a7ab341bce4a4aefc3c306074d65f51757096c00de"
+    },
+    {
+      "path": "parents/install-hint.js",
+      "status": "versioned",
+      "bytes": 1851,
+      "lines": 27,
+      "sha256": "dacb1bad9400865d4d2967b1c47d28699b93a1b4b4797c427ea692eb3635c866"
+    },
+    {
+      "path": "parents/prewarm.js",
+      "status": "versioned",
+      "bytes": 12131,
+      "lines": 194,
+      "sha256": "3b96c0b611e0c7b9ff56dad548a0fc921a66945b6f013f12ddd22291f9906547"
+    },
+    {
+      "path": "parents/psychology-format.css",
+      "status": "versioned",
+      "bytes": 3079,
+      "lines": 1,
+      "sha256": "fd509fa968f6f13f0fc2841bf9a5dd2a2ac951dc13c3bf72ba25e779784853bc"
+    },
+    {
+      "path": "parents/psychology-format.js",
+      "status": "versioned",
+      "bytes": 10208,
+      "lines": 37,
+      "sha256": "7dec47599e4461a057c7c158dfc4960b7ce3a974fd720f172cd10fb203570703"
+    },
+    {
+      "path": "parents/push-gateway.js",
+      "status": "versioned",
+      "bytes": 777,
+      "lines": 25,
+      "sha256": "3085bcfacae6643e57e478c58842fbd1fcf42412b3fb7d49c9ffc9ced25bcc68"
+    },
+    {
+      "path": "parents/report-disclaimer.js",
+      "status": "versioned",
+      "bytes": 1656,
+      "lines": 9,
+      "sha256": "ea56f8fce1dd5d4346c6dde25a4da848aa92ca0189bdceb2a88864af87fe82ba"
+    },
+    {
+      "path": "parents/smart-bot-widget.css",
+      "status": "versioned",
+      "bytes": 5225,
+      "lines": 60,
+      "sha256": "35ddb252d392985a2867ea805761090cb208a2e29fd8f9923a72ef88ffb21496"
+    },
+    {
+      "path": "parents/smart-bot-widget.js",
+      "status": "versioned",
+      "bytes": 17936,
+      "lines": 355,
+      "sha256": "a3a6171a0252722470c7d3e89b8d20aeeb50031ba1aa3b9d210912ee72a42a99"
+    },
+    {
+      "path": "parents/smart-bot.js",
+      "status": "versioned",
+      "bytes": 11130,
+      "lines": 120,
+      "sha256": "c13ebbd386fed0f68bb8f51d3175513dbea7e008ed0b73f7f4e129fd09d1e800"
+    },
+    {
+      "path": "parents_test.html",
+      "status": "versioned",
+      "bytes": 22783,
+      "lines": 124,
+      "sha256": "a98a4c3ba74e4b55d11fc6d32f4dcbe66a38db10dcf9a5fc95e3f30aaac242f9"
+    },
+    {
+      "path": "psychology.html",
+      "status": "versioned",
+      "bytes": 2779,
+      "lines": 55,
+      "sha256": "5a592d24ecc06c83d086bbf9e09f44c39f68adcdbca90416205c14c7027ab8ea"
+    },
+    {
+      "path": "psychology/app.js",
+      "status": "versioned",
+      "bytes": 8855,
+      "lines": 146,
+      "sha256": "760f2f3f3843bb2fe0ea4c5132f53c4c4abbba676c0d3d946e398ac1ef9483b0"
+    },
+    {
+      "path": "psychology/style.css",
+      "status": "versioned",
+      "bytes": 4163,
+      "lines": 3,
+      "sha256": "f9569f610b45574b33f0f5cbcf8708d15d41c0baaeec6024e964efee7cbc3beb"
+    },
+    {
+      "path": "scripts/sync-report-rules.mjs",
+      "status": "versioned",
+      "bytes": 319,
+      "lines": 5,
+      "sha256": "ccc6d35963518771f1f0fdb304c17c42aa25a28357b3d2ced2eaeb713e5e9140"
+    },
+    {
+      "path": "scripts/verify-smart-bot.mjs",
+      "status": "versioned",
+      "bytes": 2281,
+      "lines": 39,
+      "sha256": "71136f81bfec2494062c07371c720ff055d729d722f74429707f9f92ca47a27f"
+    },
+    {
+      "path": "scripts/verify-source-control.mjs",
+      "status": "versioned",
+      "bytes": 2903,
+      "lines": 66,
+      "sha256": "6688df1d67b8105109469797e8f88a8438e5d233608de3350db3e5f5d15a7f46"
+    },
+    {
+      "path": "scripts/verify-syntax.mjs",
+      "status": "versioned",
+      "bytes": 1266,
+      "lines": 25,
+      "sha256": "928a7b38f0d731febb5433a03486d70559e500c8c7c9422fed433a6b0fef62dc"
+    },
+    {
+      "path": "server.js",
+      "status": "versioned",
+      "bytes": 17401,
+      "lines": 479,
+      "sha256": "d978eb62e131027baca173d809dccecf3d388a52352a0fcebcb9a0884f2d0215"
+    },
+    {
+      "path": "services/cloudflare/chat-gateway/src/index.js",
+      "status": "versioned",
+      "bytes": 93,
+      "lines": 5,
+      "sha256": "f041836c2a0f32b0cc91e94c79e0c1d7341ecb850cd5c26727d9cbf7a74f5e3e"
+    },
+    {
+      "path": "services/cloudflare/chat-gateway/wrangler.toml",
+      "status": "versioned",
+      "bytes": 316,
+      "lines": 9,
+      "sha256": "651c0dfe58b497c4b29bdd9be92dad26063896b5c643023bc93dae363abac49a"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0001_schema.sql",
+      "status": "versioned",
+      "bytes": 763,
+      "lines": 23,
+      "sha256": "c52aee0facc2993e425d741e824cb5521a902effbbfc4371c3b345778185c927"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0002_chat_feature_parity.sql",
+      "status": "versioned",
+      "bytes": 653,
+      "lines": 14,
+      "sha256": "2adb1ecee80bf8adb22676429e777fc479757df0c4e093ca977e945f192f5b75"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0003_report_snapshots.sql",
+      "status": "versioned",
+      "bytes": 372,
+      "lines": 11,
+      "sha256": "05f200d8001d5b81b54f83412bbf80734ac60237f82a86d95547042126e62494"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0004_current_reports.sql",
+      "status": "versioned",
+      "bytes": 361,
+      "lines": 11,
+      "sha256": "416978e8d816043852d56fb1af917e67617c237529807cc1f48fffc7c0c0125b"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0005_report_submission_queue.sql",
+      "status": "versioned",
+      "bytes": 482,
+      "lines": 14,
+      "sha256": "760f1253eec17716dbfab9c253c211451583cf0f27232ac01275b91458136761"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0006_message_idempotency.sql",
+      "status": "versioned",
+      "bytes": 224,
+      "lines": 5,
+      "sha256": "2e2de5032118d80a1a09ffe79d017282b81b95357cac2bf66cc37563486a7b22"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0007_parent_registration.sql",
+      "status": "versioned",
+      "bytes": 1227,
+      "lines": 39,
+      "sha256": "52cdd562a693e7c8250227f2c5bd3d4969933f7de2f9bfdb8bacb413873391fa"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0008_legacy_parent_access.sql",
+      "status": "versioned",
+      "bytes": 679,
+      "lines": 15,
+      "sha256": "a725c838e07722ce704a2568bb601b3810cb2e56c9fbf62b2bae40cfe17d7e87"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0009_report_push_dedup.sql",
+      "status": "versioned",
+      "bytes": 334,
+      "lines": 10,
+      "sha256": "81595fe49ebfb9de29a0ad520a5c49d695e66bbe9695e855c9bc733e7373d891"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0010_report_snapshot_psychology.sql",
+      "status": "versioned",
+      "bytes": 629,
+      "lines": 19,
+      "sha256": "03ef9d358a0555e7e61f49e5273b8f5456ecda15f9d6b2e32c77d10fd15a118b"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0011_parent_relationship.sql",
+      "status": "versioned",
+      "bytes": 170,
+      "lines": 2,
+      "sha256": "2cdf59d2f8aa2691483a10d4694604c42e6a6f8a8802cd40a7c349e6c3d9e8eb"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/migrations/0012_parent_deletion_queue.sql",
+      "status": "versioned",
+      "bytes": 683,
+      "lines": 19,
+      "sha256": "6335312b39c187f58eed964f63d5dca876d69d9650ecfec3557640cccf1dae30"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/src/index.js",
+      "status": "versioned",
+      "bytes": 104588,
+      "lines": 2028,
+      "sha256": "873108f46eda83143a7d99095c490e632cb3b9500cab8233d6e37c678140d91b"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/wrangler.production.toml",
+      "status": "versioned",
+      "bytes": 343,
+      "lines": 7,
+      "sha256": "2e44f1635909602d6fbfd69263c62e3cb4a6bda34ae06cc61a705b73b2eb0cf0"
+    },
+    {
+      "path": "services/cloudflare/chat-worker/wrangler.worker.toml",
+      "status": "versioned",
+      "bytes": 568,
+      "lines": 28,
+      "sha256": "16916a0b23b2aadca7c935c231f97bb6573632bb1a52fc52fb63961efb7562c4"
+    },
+    {
+      "path": "services/cloudflare/push-worker/package-lock.json",
+      "status": "versioned",
+      "bytes": 55113,
+      "lines": 1682,
+      "sha256": "cb49b1b6d44df74434a79fa8976a27890cc4a138f30530dde05b754e9fa4a21f"
+    },
+    {
+      "path": "services/cloudflare/push-worker/package.json",
+      "status": "versioned",
+      "bytes": 331,
+      "lines": 17,
+      "sha256": "db7d5e00d4f27c3d07b3fc2cd478af1e1d766fead3e896bf0b233c9f90448987"
+    },
+    {
+      "path": "services/cloudflare/push-worker/src/index.js",
+      "status": "versioned",
+      "bytes": 13961,
+      "lines": 481,
+      "sha256": "5dd14556943c567a4d592583cd730999ead140b206097304b448a9b1afe6dc60"
+    },
+    {
+      "path": "services/cloudflare/push-worker/wrangler.toml",
+      "status": "versioned",
+      "bytes": 459,
+      "lines": 14,
+      "sha256": "084b1451c4c61c96c804b34529a0a834849f02035b08604b7ee4385dede1b6e6"
+    },
+    {
+      "path": "sw.js",
+      "status": "versioned",
+      "bytes": 2188,
+      "lines": 82,
+      "sha256": "09afb9e08320ac3a8eb90b8b01a754c6f27aaa5e5aa4a3525199389f2fcae3f4"
+    },
+    {
+      "path": "tests/apps-script-report-trigger-locks.test.cjs",
+      "status": "versioned",
+      "bytes": 10740,
+      "lines": 222,
+      "sha256": "ffc7feb96746532ac67dec2a6000dcedf4a089003fac2b45979f439108110ae8"
+    },
+    {
+      "path": "tests/chat-send-retry.test.cjs",
+      "status": "versioned",
+      "bytes": 5903,
+      "lines": 110,
+      "sha256": "51596addae9b076ac7d5bcacbc90edc334e7f4eae82849a5b043942832e7df41"
+    },
+    {
+      "path": "tests/educator-message-delete.test.cjs",
+      "status": "versioned",
+      "bytes": 6540,
+      "lines": 126,
+      "sha256": "ced5bcbe1e74bd9dafd2b88218dda757822499d000997438025a2cdc7ed0d4c4"
+    },
+    {
+      "path": "tests/experimental-assistant-routes.test.cjs",
+      "status": "versioned",
+      "bytes": 2344,
+      "lines": 40,
+      "sha256": "c12574ff5b7808065a592afbb40635851533cffd816f9a0a6760cca088b4f962"
+    },
+    {
+      "path": "tests/frontend-report-validation.test.cjs",
+      "status": "versioned",
+      "bytes": 10417,
+      "lines": 183,
+      "sha256": "63ed2274d28424e816c0df0a460cdf8f0de5b24361ffddf00792c5dde01fbbe9"
+    },
+    {
+      "path": "tests/parent-assistant-offer.test.cjs",
+      "status": "versioned",
+      "bytes": 9557,
+      "lines": 120,
+      "sha256": "b1ab57154dcedba35a59d40dfe4993b7b92ef777491fefa41234017e6bb1e957"
+    },
+    {
+      "path": "tests/parent-chat-send-retry.test.cjs",
+      "status": "versioned",
+      "bytes": 2512,
+      "lines": 54,
+      "sha256": "26c51e2051887a68d09c89076c58b22d9b24db20f3f5923e84491a2c46691f85"
+    },
+    {
+      "path": "tests/parent-identity-and-report-queue.test.cjs",
+      "status": "versioned",
+      "bytes": 33893,
+      "lines": 434,
+      "sha256": "dabdaaba5df84be8cfec55ccc38e41cb8e17f0b7690264c44880c5cb3903de28"
+    },
+    {
+      "path": "tests/parent-recovery.test.cjs",
+      "status": "versioned",
+      "bytes": 13285,
+      "lines": 160,
+      "sha256": "6f38c3acf2954393fc0514e565ca6c527982ddc5e6ce83ba1221609c7854384c"
+    },
+    {
+      "path": "tests/platform-reliability.test.cjs",
+      "status": "versioned",
+      "bytes": 10069,
+      "lines": 130,
+      "sha256": "4369fc2ecaf0b4b565ca22ece65829811f8e8ab6584c3479625a1ee71130878d"
+    },
+    {
+      "path": "tests/raw-report-canonicalization.test.cjs",
+      "status": "versioned",
+      "bytes": 33604,
+      "lines": 657,
+      "sha256": "35f84267b29f1dffd029647d079b84158c2743031e25cccb3a662af245d3a6e0"
+    },
+    {
+      "path": "tests/raw-report-cleanup.test.cjs",
+      "status": "versioned",
+      "bytes": 4244,
+      "lines": 101,
+      "sha256": "eda322caede7d3c21f6f1af11de86b0c1e6237215d05cd51ebfce403c2bb99cb"
+    },
+    {
+      "path": "tests/report-history-refresh.test.cjs",
+      "status": "versioned",
+      "bytes": 5499,
+      "lines": 135,
+      "sha256": "515af0434bfff843f4de7713e3db1cee04a3aff17e3664c43f6d3cd03aa5e6cd"
+    },
+    {
+      "path": "tutors-manifest.json",
+      "status": "versioned",
+      "bytes": 552,
+      "lines": 16,
+      "sha256": "a95260a578d209402500dbce9d498e981474d39a5a8c17566d9753b8af8d0e2e"
+    },
+    {
+      "path": "tutors.html",
+      "status": "versioned",
+      "bytes": 15124,
+      "lines": 213,
+      "sha256": "f727ddde174b3ae037cef664e2084bf8e01393328b90d7d79a1c8e45e8dcdaa7"
+    },
+    {
+      "path": "tutors/access-requests.css",
+      "status": "versioned",
+      "bytes": 3626,
+      "lines": 1,
+      "sha256": "1a8ba18b162358d5f01d30d959e6e09d8ecbf84e61d2533df1dc5e5468d4777f"
+    },
+    {
+      "path": "tutors/access-requests.js",
+      "status": "versioned",
+      "bytes": 7144,
+      "lines": 49,
+      "sha256": "1b534587b4e0e98c2809f9b2b6e1c3f69ea4b8fe3153d2dd7cae52b6254bb081"
+    },
+    {
+      "path": "tutors/assistant.css",
+      "status": "versioned",
+      "bytes": 495,
+      "lines": 8,
+      "sha256": "f70f76526dcb0b401d7d5bf5a4deaf7288eee4c22ff7d0f4451993e3caeccce4"
+    },
+    {
+      "path": "tutors/assistant.js",
+      "status": "versioned",
+      "bytes": 27520,
+      "lines": 282,
+      "sha256": "207130c69249194661e4dcf8f27415d9e719efb4e68342378e1fddcbb329daff"
+    },
+    {
+      "path": "tutors/chat-context-menu.js",
+      "status": "versioned",
+      "bytes": 2827,
+      "lines": 55,
+      "sha256": "adf3c33f9f52526af27f11045b422e601f1ed8c3fdb5e51e0375e20524f0e6bb"
+    },
+    {
+      "path": "tutors/chat-opening.css",
+      "status": "versioned",
+      "bytes": 510,
+      "lines": 4,
+      "sha256": "58542ea78c6e5430431d0ec71a643608996a4c95d92c55f05ffd045bc795d8b0"
+    },
+    {
+      "path": "tutors/chat-opening.js",
+      "status": "versioned",
+      "bytes": 1099,
+      "lines": 29,
+      "sha256": "73c1f0d8faa5106883d839cd094497c261dcaf70f30cde820a1260a72f8e2f70"
+    },
+    {
+      "path": "tutors/chat-prewarm.js",
+      "status": "versioned",
+      "bytes": 7380,
+      "lines": 76,
+      "sha256": "b21d37a85fd14fb3c86c1fa9d4719c19d6319a9833c2aacaafd4c17423222158"
+    },
+    {
+      "path": "tutors/chat-ui.css",
+      "status": "versioned",
+      "bytes": 1722,
+      "lines": 14,
+      "sha256": "415bf35b14d2a257412ba33e8a43e90dd89296a2b2a48dd138e3d658ed562e94"
+    },
+    {
+      "path": "tutors/dashboard-ui.css",
+      "status": "versioned",
+      "bytes": 3233,
+      "lines": 34,
+      "sha256": "55381be5ca33d1e49cb42e5c7db675f45890f5035c72ca41633596ef93ac8fb5"
+    },
+    {
+      "path": "tutors/full-web-fixes.css",
+      "status": "versioned",
+      "bytes": 9164,
+      "lines": 86,
+      "sha256": "3488a0920554b2ea951a2338797ebb7bd27169fb9a834368a435a034b5775a6c"
+    },
+    {
+      "path": "tutors/full-web.css",
+      "status": "versioned",
+      "bytes": 11117,
+      "lines": 1,
+      "sha256": "63c1af6436395a8abde07188a9e11f05616e17decc54bb2cf70a2b4e6f235d8b"
+    },
+    {
+      "path": "tutors/full-web.js",
+      "status": "versioned",
+      "bytes": 24194,
+      "lines": 330,
+      "sha256": "54fef43f19fc1da56e8d831b254568e91f2be281bbc915d5831a4e892913ee70"
+    },
+    {
+      "path": "tutors/layout-stability.css",
+      "status": "versioned",
+      "bytes": 1795,
+      "lines": 49,
+      "sha256": "4a7b92d40c44027253b71b832caf6386c55eb56c3925370326110c3523e5aa3a"
+    },
+    {
+      "path": "tutors/layout-stability.js",
+      "status": "versioned",
+      "bytes": 3283,
+      "lines": 87,
+      "sha256": "a065829dc00ff547c7d2b4f1db936bfabf6b448385f4e180aeff2e0555cf2b36"
+    },
+    {
+      "path": "tutors/live-chat-refresh.js",
+      "status": "versioned",
+      "bytes": 10052,
+      "lines": 223,
+      "sha256": "6af33d6611b0863130a487aa025cf66eb84bb5b24cda2d2efe673298a4c3a381"
+    },
+    {
+      "path": "tutors/medsi-bot-qr.jpg",
+      "status": "versioned",
+      "bytes": 11718,
+      "lines": null,
+      "sha256": "47d2118ec231121b37cd217678e69363c704e58676f8c5c0b8828b5564f49d3e"
+    },
+    {
+      "path": "tutors/medsi-bot-qr.svg",
+      "status": "versioned",
+      "bytes": 86905,
+      "lines": 1308,
+      "sha256": "f2ab422b0083f8e8219556033f1043feaa18f550aac0d8f5abffec94a592f58f"
+    },
+    {
+      "path": "tutors/page-scroll.js",
+      "status": "versioned",
+      "bytes": 693,
+      "lines": 16,
+      "sha256": "5e0e385b69ad7a806c4f33d3d00680ed43f6c8a94228f40276fd71bcf34d251c"
+    },
+    {
+      "path": "tutors/phone-cards-ui.css",
+      "status": "versioned",
+      "bytes": 2105,
+      "lines": 8,
+      "sha256": "804cf3881dc2f536442e8094438b8cace7be501c41ef75d2169b9c33a3174760"
+    },
+    {
+      "path": "tutors/phone-cards-ui.js",
+      "status": "versioned",
+      "bytes": 1917,
+      "lines": 7,
+      "sha256": "ac98893261063df038b609e62a00237056935e3f3c51cf48e5b1a144b7586fcf"
+    },
+    {
+      "path": "tutors/push-auth.js",
+      "status": "versioned",
+      "bytes": 1042,
+      "lines": 32,
+      "sha256": "b64b0cb4fbe0eb5f190235170442ec5866fa24564183fddfff44139289c8941b"
+    },
+    {
+      "path": "tutors/qr-code.css",
+      "status": "versioned",
+      "bytes": 2236,
+      "lines": 14,
+      "sha256": "fb1882f06e5ce1b239a6ba626f7bb694423161afd1ecfcaadc628ee3e9fd1258"
+    },
+    {
+      "path": "tutors/qr-code.js",
+      "status": "versioned",
+      "bytes": 1114,
+      "lines": 19,
+      "sha256": "e70d1ea9c3a52d01d50b0cf48881262e01199de06e962922c535db4f3fcd5b41"
+    },
+    {
+      "path": "tutors/report-ui.css",
+      "status": "versioned",
+      "bytes": 946,
+      "lines": 5,
+      "sha256": "f3bbf90d42676868757865bde11d7c64aa9a6313d54b40ad72991204d54059fa"
+    },
+    {
+      "path": "tutors/report-ui.js",
+      "status": "versioned",
+      "bytes": 402,
+      "lines": 8,
+      "sha256": "ed6138f752c520c3fee979b065f6e450d492b52a50c4f1f008cb076f87536c9e"
+    },
+    {
+      "path": "tutors/report-validation.js",
+      "status": "versioned",
+      "bytes": 8509,
+      "lines": 159,
+      "sha256": "226f582acd6ea30d77a95929e3bf2b7c51639e5ef401ffe973f4bbb6cac61406"
+    },
+    {
+      "path": "tutors/tutor-push-panel.js",
+      "status": "versioned",
+      "bytes": 1816,
+      "lines": 43,
+      "sha256": "3b9a4266acf7e7db3d9da324c5d4e6703a742c2e509f108527000421f6f4cd10"
+    },
+    {
+      "path": "tutors_test.html",
+      "status": "versioned",
+      "bytes": 15134,
+      "lines": 213,
+      "sha256": "2a6613fcaf29aa2cb10842ebda56eaddd688c18f1b91375324c905b4fa72a88d"
+    }
+  ]
+}
