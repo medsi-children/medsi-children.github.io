@@ -47,7 +47,10 @@ test('read-state import is version-bound, idempotent, and keeps stale imports fr
       importId: 'report-state-v1-20261022',
       items: [{ phone: '9990000001', kind: 'morning', unread: true, expectedVersion: 'v2:current' }]
     }), env);
-    assert.equal((await imported.json()).ok, true);
+    const importResult = await imported.json();
+    assert.equal(importResult.ok, true);
+    assert.equal(importResult.received, 1);
+    assert.equal(importResult.verified, 1);
     let state = await (await context.getParentReportUnread(env, { role: 'parent', phone10: '9990000001' })).json();
     assert.equal(state.reportUnread.morning, true);
     await context.markParentReportRead(request({ kind: 'morning', version: 'v2:stale' }), env, { role: 'parent', phone10: '9990000001' });
@@ -103,5 +106,30 @@ test('deleting a profile also deletes its D1 inactivity state', async () => {
     const response = await context.deleteProfilePhone({ json: async () => ({ phone: '89990000003' }) }, env);
     assert.equal((await response.json()).ok, true);
     assert.equal(db.prepare('SELECT count(*) AS n FROM report_inactivity_state WHERE phone10=?').get('9990000003').n, 0);
+  } finally { db.close(); }
+});
+
+test('profile reconciliation seeds reminder age and roster order without resetting an existing reminder', async () => {
+  const { db, context, env } = makeDatabase();
+  try {
+    const request = profiles => ({ json: async () => ({ full:false, profiles }) });
+    await context.reconcileProfiles(request([
+      { phone:'9990000004', parentName:'Synthetic A', childName:'Child A' },
+      { phone:'9990000005', parentName:'Synthetic B', childName:'Child B' }
+    ]), env);
+    const seeded = db.prepare('SELECT phone10,first_seen_at,roster_order,last_prompt_days FROM report_inactivity_state ORDER BY roster_order').all();
+    assert.equal(seeded.length, 2);
+    assert.ok(seeded[0].first_seen_at > 0);
+    assert.equal(seeded[0].roster_order, 0);
+    db.prepare('UPDATE report_inactivity_state SET last_new_report_at=?,last_prompt_days=? WHERE phone10=?')
+      .run(12345, 7, '9990000004');
+    await context.reconcileProfiles(request([
+      { phone:'9990000005', parentName:'Synthetic B', childName:'Child B' },
+      { phone:'9990000004', parentName:'Synthetic A', childName:'Child A' }
+    ]), env);
+    const row = db.prepare('SELECT last_new_report_at,last_prompt_days,roster_order FROM report_inactivity_state WHERE phone10=?').get('9990000004');
+    assert.equal(row.last_new_report_at, 12345);
+    assert.equal(row.last_prompt_days, 7);
+    assert.equal(row.roster_order, 1);
   } finally { db.close(); }
 });

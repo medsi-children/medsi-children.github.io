@@ -55,7 +55,7 @@ test('valid reconciliation still writes profiles and retains explicit empty-snap
   const x=worker();const writes=[];
   const env={CHAT_DB:{prepare(sql){return {bind(){return this},all:async()=>({results:[]}),sql}},batch:async statements=>{writes.push(...statements)}}};
   let response=await x.reconcileProfiles({json:async()=>({profiles:[{phone:'9990000001',parentName:'Synthetic',childName:'Synthetic'}]})},env);
-  assert.equal((await response.json()).active,1);assert.equal(writes.length,2);
+  assert.equal((await response.json()).active,1);assert.equal(writes.length,3);
   response=await x.reconcileProfiles({json:async()=>({full:true,profiles:[]})},env);
   assert.equal((await response.json()).ok,true);
 });

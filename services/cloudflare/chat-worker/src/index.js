@@ -302,17 +302,23 @@ async function syncReportInactivity(request, env) {
 async function importReportReadState(request, env) {
   const payload=await body(request)||{}, items=Array.isArray(payload.items)?payload.items.slice(0,1500):[];
   const importId=String(payload.importId||'').trim();
-  if(!/^report-state-v1-[0-9]{8}$/.test(importId)) return json({ok:false,message:'Некорректный идентификатор импорта.'},400);
+  if(!/^report-state-v1-[0-9]{8}(?:-[A-Za-z0-9_-]{4,16})?$/.test(importId)) return json({ok:false,message:'Некорректный идентификатор импорта.'},400);
   const prior=await env.CHAT_DB.prepare('SELECT import_id FROM report_state_import_runs WHERE import_id=?').bind(importId).all();
   if((prior.results||[]).length) return json({ok:true,received:0,alreadyImported:true});
-  const statements=[];
+  const statements=[], validItems=[];
   for(const item of items){const phone=phone10(item&&item.phone),kind=String(item&&item.kind||'').toLowerCase(),expectedVersion=String(item&&item.expectedVersion||'').slice(0,180);if(!phone||!['morning','evening','psychology'].includes(kind)||!expectedVersion)continue;
+    validItems.push({phone,kind,expectedVersion,unread:item.unread===true});
     statements.push(env.CHAT_DB.prepare(`UPDATE report_current SET read_version=CASE WHEN ? THEN '' ELSE version END
       WHERE phone10=? AND kind=? AND version=? AND read_version IS NOT CASE WHEN ? THEN '' ELSE version END
         AND NOT EXISTS(SELECT 1 FROM report_state_import_runs WHERE import_id=?)`).bind(item.unread===true?1:0,phone,kind,expectedVersion,item.unread===true?1:0,importId));}
   statements.push(env.CHAT_DB.prepare('INSERT OR IGNORE INTO report_state_import_runs(import_id, imported_at) VALUES(?,?)').bind(importId,Date.now()));
   await env.CHAT_DB.batch(statements);
-  return json({ok:true,received:statements.length});
+  let verified=0;
+  for(const item of validItems){
+    const row=await env.CHAT_DB.prepare('SELECT version,read_version FROM report_current WHERE phone10=? AND kind=?').bind(item.phone,item.kind).first();
+    if(row&&row.version===item.expectedVersion&&(item.unread?row.read_version!==row.version:row.read_version===row.version))verified++;
+  }
+  return json({ok:true,received:validItems.length,verified,versionMismatches:validItems.length-verified});
 }
 
 async function registerParent(request, env) {
@@ -1531,7 +1537,9 @@ async function reconcileProfiles(request, env) {
   });
 
   const statements = [];
+  let rosterOrder = 0;
   active.forEach((profile, phone) => {
+    const position = rosterOrder++;
     statements.push(env.CHAT_DB.prepare(`
       DELETE FROM legacy_parent_access
       WHERE phone10 = ?
@@ -1549,6 +1557,12 @@ async function reconcileProfiles(request, env) {
         child_name = excluded.child_name, relationship = excluded.relationship,
         child_genitive = excluded.child_genitive
     `).bind(phone, profile.parentName, profile.childName, profile.relationship, profile.childGenitive));
+    statements.push(env.CHAT_DB.prepare(`
+      INSERT INTO report_inactivity_state (phone10, first_seen_at, roster_order)
+      VALUES (?, ?, ?)
+      ON CONFLICT(phone10) DO UPDATE SET roster_order = excluded.roster_order
+      WHERE report_inactivity_state.roster_order IS NOT excluded.roster_order
+    `).bind(phone, Date.now(), position));
   });
   if (statements.length) await env.CHAT_DB.batch(statements);
 

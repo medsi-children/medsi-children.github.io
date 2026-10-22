@@ -154,7 +154,7 @@ test('report checks run locally before queue acceptance and preserve the submitt
 });
 test('surname and relationship corrections preserve the chat and legacy login identity',async()=>{
   const {DatabaseSync}=require('node:sqlite'),db=new DatabaseSync(':memory:');
-  db.exec("CREATE TABLE chat_profiles(phone10 TEXT PRIMARY KEY,parent_name TEXT,child_name TEXT,relationship TEXT,child_genitive TEXT); CREATE TABLE legacy_parent_access(phone10 TEXT PRIMARY KEY); CREATE TABLE chat_messages(phone10 TEXT,message TEXT);");
+  db.exec("CREATE TABLE chat_profiles(phone10 TEXT PRIMARY KEY,parent_name TEXT,child_name TEXT,relationship TEXT,child_genitive TEXT); CREATE TABLE legacy_parent_access(phone10 TEXT PRIMARY KEY); CREATE TABLE chat_messages(phone10 TEXT,message TEXT); CREATE TABLE report_inactivity_state(phone10 TEXT PRIMARY KEY,first_seen_at INTEGER,last_new_report_at INTEGER DEFAULT 0,last_prompt_days INTEGER DEFAULT 0,roster_order INTEGER DEFAULT 0);");
   db.prepare('INSERT INTO chat_profiles VALUES(?,?,?,?,?)').run('9990000001','Анна','Никита Иванова','Мама','');
   db.prepare('INSERT INTO legacy_parent_access VALUES(?)').run('9990000001');
   db.prepare('INSERT INTO chat_messages VALUES(?,?)').run('9990000001','Synthetic history');
