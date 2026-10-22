@@ -384,13 +384,14 @@
       render(list,{stick,preserveExact:!!opts.background&&!stick,animateInitial:!initialMessagesRendered});
     }else rows=list;
     if((changed||opts.forceRead)&&!chatClosed){
-      t.markRead(state.session,'parent',state.phone).catch(err=>{if(isChatClosedError(err))showClosedChat()});
+      if(!state.readOnly)t.markRead(state.session,'parent',state.phone).catch(err=>{if(isChatClosedError(err))showClosedChat()});
     }
     return list
   }
 
   async function open(next){
     closeAssistantCard(false);assistantBypass='';stopLive();dead=false;chatClosed=false;chatPending=false;state={...next,phone:p10(next&&next.phone)};rows=[];initialMessagesRendered=false;clearError();closeReactionMenu();setBusy(false);if(window.MedsiMediaPreload)window.MedsiMediaPreload.reset();
+    document.body.classList.toggle('parent-preview-chat',!!state.readOnly);
     $('parentChatChild').textContent=state.childName||state.parentName||'Ребёнок';
     $('parentChatPhone').textContent=state.phone?'8'+state.phone:'';
     $('parentChatInput').value=retryDraft&&retryDraft.phone===state.phone?retryDraft.text:'';
@@ -414,14 +415,14 @@
     }
     if(state===active&&!dead&&!chatClosed)scheduleLive(opened?LIVE_REFRESH_MS:1500)
   }
-  function close(){closeAssistantCard(false);assistantBypass='';stopLive();dead=true;state=null;rows=[];chatClosed=false;chatPending=false;setBusy(false);clearError();closeLightbox();closeReactionMenu()}
+  function close(){document.body.classList.remove('parent-preview-chat');closeAssistantCard(false);assistantBypass='';stopLive();dead=true;state=null;rows=[];chatClosed=false;chatPending=false;setBusy(false);clearError();closeLightbox();closeReactionMenu()}
 
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state&&!dead&&!chatClosed)scheduleLive(250)});
   window.addEventListener('online',()=>{if(state&&!dead&&!chatClosed)scheduleLive(250)});
 
   $('parentChatBack').onclick=()=>{if(state&&typeof state.onBack==='function')state.onBack()};
   $('parentChatCompose').onsubmit=async e=>{
-    e.preventDefault();if(!state||busy||chatClosed)return;const text=messageText($('parentChatInput').value);if(!text)return;
+    e.preventDefault();if(!state||state.readOnly||busy||chatClosed)return;const text=messageText($('parentChatInput').value);if(!text)return;
     const isRetry=retryDraft&&retryDraft.phone===state.phone&&retryDraft.text===text;
     if(!isRetry&&assistantBypass!==text){const suggestion=assistantIntent(text);if(suggestion){showAssistantCard(text,suggestion.answer);return}}
     assistantBypass='';
@@ -448,9 +449,9 @@
       }
     }finally{if(state===active&&!dead){setBusy(false);focusComposer()}}
   };
-  $('parentChatAttach').onclick=()=>{if(!chatClosed)$('parentChatFile').click()};
+  $('parentChatAttach').onclick=()=>{if(state&&!state.readOnly&&!chatClosed)$('parentChatFile').click()};
   $('parentChatFile').onchange=async()=>{
-    if(!state||busy||chatClosed)return;const input=$('parentChatFile'),f=input.files&&input.files[0];input.value='';if(!f)return;
+    if(!state||state.readOnly||busy||chatClosed)return;const input=$('parentChatFile'),f=input.files&&input.files[0];input.value='';if(!f)return;
     if(!/^image\//i.test(f.type)&&!/^video\//i.test(f.type)){showError('Можно прикреплять только фото или видео.');return}
     const maxBytes=Number(t.maxUploadBytes||100*1024*1024);if(f.size>maxBytes){showError('Размер файла не должен превышать 100 МБ.');return}
     setBusy(true);clearError();

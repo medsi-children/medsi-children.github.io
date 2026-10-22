@@ -514,6 +514,14 @@ function handleApiRequest_(payload) {
   try {
     const method = String(payload && payload.method || '').trim();
     const args = Array.isArray(payload && payload.args) ? payload.args : [];
+    const previewToken = args.find(function(value) { return typeof value === 'string' && value.split('.').length === 2 && value.length > 100; });
+    if (previewToken) {
+      const phone = args.find(function(value) { return /^\+?[0-9 ()-]{10,}$/.test(String(value || '')); });
+      const claims = phone ? decodeCloudflareParentSession_(phone, previewToken) : null;
+      if (claims && claims.preview === true && !['getParentProfileByPhone','getReportFor','getPsychologyReportFor','getParentUnreadState'].includes(method)) {
+        return {ok:false,message:'Предварительный просмотр доступен только для чтения.'};
+      }
+    }
     const methods = getApiMethodMap_();
     const fn = methods[method];
 

@@ -2171,11 +2171,35 @@ export default {
     if (request.method === 'POST' && url.pathname === '/lab/parent-auth/status') {
       return getParentAccessStatus(request, env);
     }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-preview') {
+      const educator = await authorized(request, env);
+      if (!educator || educator.role !== 'educator') return json({ ok:false, message:'Forbidden' }, 403);
+      const payload = await body(request) || {};
+      const phone = phone10(payload.phone);
+      if (!phone || !env.LAB_D1_SESSION_SECRET) return json({ ok:false, message:'Не удалось открыть профиль.' }, 400);
+      const profile = await env.CHAT_DB.prepare('SELECT phone10,parent_name,child_name FROM chat_profiles WHERE phone10=?').bind(phone).first();
+      const generation = await getParentAuthProfile(env, phone);
+      if (!profile || !generation) return json({ ok:false, message:'Активный профиль ребёнка не найден.' }, 404);
+      const expiresAt = Date.now() + 15 * 60 * 1000;
+      const encoded = b64url(new TextEncoder().encode(JSON.stringify({role:'parent',phone10:phone,exp:expiresAt,authGeneration:generation.generation_id,preview:true,version:'cf-parent-preview-v1'})));
+      const token = encoded + '.' + await hmac(env.LAB_D1_SESSION_SECRET, encoded);
+      return json({ok:true,phone:profile.phone10,parentName:profile.parent_name||'',childName:profile.child_name||'',parentSession:token,expiresAt});
+    }
     if (request.method === 'POST' && url.pathname === '/lab/upload-form') {
       return uploadMediaForm(request, env);
     }
     const auth = await authorized(request, env);
     if (!auth) return json({ ok: false, message: 'Unauthorized' }, 401);
+
+    if (auth.preview) {
+      const path = url.pathname;
+      const allowed = request.method === 'GET' && (
+        path === '/lab/profile' || path === '/lab/parent-unread' ||
+        path === '/lab/report-current' || path === '/lab/report-history' ||
+        path === '/lab/threads/' + auth.phone10
+      );
+      if (!allowed) return json({ok:false,message:'Предварительный просмотр доступен только для чтения.'},403);
+    }
 
     if (request.method === 'POST' && url.pathname === '/lab/parent-session/renew') {
       if (auth.role !== 'parent') return json({ ok: false, message: 'Forbidden' }, 403);

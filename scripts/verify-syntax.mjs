@@ -1,11 +1,12 @@
 import {execFileSync, spawnSync} from 'node:child_process';
-import {readFileSync} from 'node:fs';
+import {existsSync,readFileSync} from 'node:fs';
 
 // Parse every versioned executable source, including inline HTML scripts.
 // No application code is executed and no production service is contacted.
 const files=execFileSync('git',['ls-files','-z'],{encoding:'utf8'}).split('\0').filter(Boolean);
 let checked=0;
 for(const file of files){
+  if(!existsSync(file))continue;
   if(file.startsWith('archive/'))continue;
   const units=[];
   if(/\.(?:js|cjs|mjs)$/.test(file))units.push({label:file,code:readFileSync(file,'utf8')});

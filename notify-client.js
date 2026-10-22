@@ -408,6 +408,12 @@
 
   window.MedsiPush = {
     init,
+    async getEnabled() { return !!(await getSubscription()); },
+    async toggle() {
+      const subscription = await getSubscription();
+      if (subscription) { await unsubscribe(); return false; }
+      await subscribe(); return !!(await getSubscription());
+    },
     setIdentity: saveIdentity,
     clearIdentity,
     setPanelVisible: function (visible) {

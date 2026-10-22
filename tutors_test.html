@@ -30,7 +30,6 @@
   <link rel="stylesheet" href="/chat-overlay/chat-list-ui.css?v=20260911-delete-1">
   <link rel="stylesheet" href="/chat-overlay/chat-peek.css?v=20261020-3">
   <link rel="stylesheet" href="/tutors/phone-cards-ui.css?v=20260907-3">
-  <link rel="stylesheet" href="/tutors/access-requests.css?v=20261003-resilient-1">
   <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-2">
   <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261005-1">
   <link rel="stylesheet" href="/tutors/assistant.css?v=20261015-no-context-assistant-1">
@@ -175,21 +174,11 @@
     </article>
   </div>
 
-  <aside id="accessRequestToast" class="access-request-toast hidden" aria-live="polite">
-    <div class="access-request-toast-head"><span>Новая авторизация</span><span id="accessRequestCount" class="access-request-count hidden"></span></div>
-    <p id="accessRequestText"></p>
-    <div class="access-request-code">Код: <strong id="accessRequestCode"></strong></div>
-    <div class="access-request-actions"><button id="accessRequestApprove" class="btn access-approve" type="button">Подтвердить</button><button id="accessRequestDeny" class="btn access-deny" type="button">Отклонить</button></div>
-  </aside>
-  <div id="accessRequestConfirm" class="access-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="accessConfirmTitle">
-    <div class="access-confirm-card"><div id="accessConfirmIcon" class="access-confirm-icon">?</div><h2 id="accessConfirmTitle"></h2><p id="accessConfirmText"></p><div class="access-confirm-actions"><button id="accessConfirmBack" class="btn" type="button">Вернуться</button><button id="accessConfirmApply" class="btn" type="button"></button></div><p id="accessConfirmError" class="status error hidden"></p></div>
-  </div>
   <div id="tutorQrModal" class="tutor-qr-modal hidden" role="dialog" aria-modal="true" aria-label="QR-код для родителей">
     <button id="tutorQrClose" class="tutor-qr-close" type="button" aria-label="Закрыть QR-код">×</button>
     <img src="/tutors/medsi-bot-qr.svg" alt="QR-код для подключения Медси Бота родителями">
   </div>
 
-  <script defer src="/tutors/access-requests.js?v=20261007-cloudflare-1"></script>
   <script defer src="/tutors/report-validation.js?v=20261010-shared-rules-1"></script>
   <script defer src="/tutors/assistant.js?v=20261012-group-therapy-label-1"></script>
   <script defer src="/tutors/qr-code.js?v=20261005-1"></script>
