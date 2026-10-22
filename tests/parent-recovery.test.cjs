@@ -185,3 +185,18 @@ test('educator preview opens the actual parent menu immediately and never renews
   assert.equal(requests.some(r=>r.url==='/__session/apps-script'),false);
   assert.equal(requests.some(r=>r.options&&r.options.method==='POST'),false);
 });
+
+test('preview never installs the saved parent fetch wrapper or prewarms another account',()=>{
+  let calls=0;const env=environment(async()=>{calls++;return response({ok:true})});
+  env.storage.set('medsi_parent_phone','9990000011');
+  env.storage.set('medsi_parent_auth_session_v1','existing-session');
+  env.storage.set('medsi_d1_parent_session_v1',JSON.stringify({phone:'9990000011',session}));
+  env.ctx.document.body.classList.contains=name=>name==='parent-preview-mode';
+  const fetch=env.ctx.window.fetch,before=[...env.storage];
+  vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);
+  assert.equal(env.ctx.window.fetch,fetch);
+  assert.equal(env.ctx.window.__medsiTimewebSessionFetchWrapped,undefined);
+  assert.equal(env.intervals.size,0);
+  assert.equal(calls,0);
+  assert.deepEqual([...env.storage],before);
+});

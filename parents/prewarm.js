@@ -1,5 +1,8 @@
 (function(){
   if(window.MedsiParentPrewarm)return;
+  // Educator preview supplies its own short-lived token. Saved parent caches
+  // must never replace it or warm a different account in the background.
+  if(document.body.classList.contains('parent-preview-mode'))return;
 
   const RAW_FETCH=window.fetch.bind(window);
   const PARENT_SESSION_KEY='medsi_parent_auth_session_v1',PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',D1_KEY='medsi_d1_parent_session_v1',BOOTSTRAP_CHECK_KEY='medsi_parent_bootstrap_check_v1';
