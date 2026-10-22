@@ -45,10 +45,11 @@ function syncD1ProfilesFromReports_(full) {
 }
 
 // Public function: it can be run manually and is also used by the timed trigger.
-function syncD1ProfilesFromReports() {
+function syncD1ProfilesFromReports(event) {
   // Timeweb/D1 is the active chat backend. Registration and chat state are
   // mirrored from REPORTS here without a legacy backend switch.
   ensureReportsD1ProfileSyncTriggers_();
+  if (event && event.triggerUid && typeof reportMaintenanceDaytime_ === 'function' && !reportMaintenanceDaytime_(new Date())) return {ok:true, skipped:true, reason:'night'};
   let registrationSync = { ok:true, synced:0 };
   try { registrationSync = flushCloudflareParentRegistrationOutbox_(); }
   catch (error) {
@@ -388,6 +389,19 @@ function requestReportsD1ProfileSync_() {
 }
 
 function retryPendingReportsD1ProfileSync() {
+  // One automatic schedule migration after publication, even if no reports
+  // arrive and the former full-sync clock is not due yet.
+  if (typeof ensureReportMaintenanceClock_ === 'function' &&
+      PropertiesService.getScriptProperties().getProperty('REPORT_MAINTENANCE_CLOCK_V1') !== 'ready') ensureReportMaintenanceClock_();
+  // This minute job is a cheap durable-queue retry, never a full report poll.
+  // It remains active at night for actual failed deliveries/registrations.
+  if (typeof flushPendingReportPostCommitSync_ === 'function') {
+    const properties = PropertiesService.getScriptProperties();
+    const raw = properties.getProperty('REPORT_POST_COMMIT_REQUEST');
+    let request = {};
+    try { request = JSON.parse(raw || '{}'); } catch (_) {}
+    if (request.token && request.token !== properties.getProperty('REPORT_POST_COMMIT_COMPLETED')) flushPendingReportPostCommitSync_();
+  }
   const props = PropertiesService.getScriptProperties();
   const requested = props.getProperty('REPORTS_D1_SYNC_REQUEST');
   const outboxRequested = props.getProperty('PARENT_REGISTRATION_OUTBOX_REQUEST');
@@ -624,7 +638,19 @@ function onReportsD1Edit(event) {
       const text = String(event.range.getSheet().getRange(1, 1).getValue() || '');
       saveRawReportPublication_('psychology', event.range.getSheet().getRange(1, 1), text, Date.now());
       recordReportHistoryPublication_('psychology', text);
-      syncD1CurrentReportsToWorker_('psychology');
+      if (typeof queueReportPostCommitSync_ === 'function') {
+        queueReportPostCommitSync_([], [], ['psychology']);
+        flushPendingReportPostCommitSync_();
+      } else syncD1CurrentReportsToWorker_('psychology');
+      return;
+    }
+    if (sheetName === 'NAME_VARIANTS') {
+      // A fresh alias table must be visible even if the current execution has
+      // already loaded the dictionary. This is maintenance, not a new report.
+      NAME_DATA = null;
+      NAME_EQUIVALENTS = {};
+      CANON_NAME_MAP = {};
+      distributeChildReports();
       return;
     }
     if (sheetName !== DATA_SHEET_NAME) return;
@@ -632,7 +658,11 @@ function onReportsD1Edit(event) {
       syncD1ProfilesFromReports_(false);
       return;
     }
-    reconcileReportsProfilesToD1_('edit');
+    const reconciled = reconcileReportsProfilesToD1_('edit');
+    const startColumn = event.range.getColumn();
+    const endColumn = startColumn + event.range.getNumColumns() - 1;
+    const affectsReports = [1,3,4,5,6,8,9].some(function(column) { return column >= startColumn && column <= endColumn; });
+    if (affectsReports && !(reconciled && reconciled.reportMaintenance && reconciled.reportMaintenance.redistributed)) distributeChildReports();
   } catch (error) {
     const message = String(error && error.message || error);
     Logger.log('REPORTS_D1_EDIT_SYNC_FAILED ' + message);
@@ -655,7 +685,10 @@ function onReportsD1Change(event) {
   // profile reconciliation for EDIT events holds the global script lock while
   // it calls D1, blocking report publication and distribution.
   if (event && String(event.changeType || '').toUpperCase() === 'EDIT') return;
-  try { reconcileReportsProfilesToD1_('change:' + String(event && event.changeType || 'unknown')); }
+  try {
+    const reconciled = reconcileReportsProfilesToD1_('change:' + String(event && event.changeType || 'unknown'));
+    if (typeof distributeChildReports === 'function' && !(reconciled && reconciled.reportMaintenance && reconciled.reportMaintenance.redistributed)) distributeChildReports();
+  }
   catch (error) { Logger.log('REPORTS_D1_CHANGE_SYNC_FAILED ' + (error && error.message || error)); }
 }
 
@@ -699,6 +732,7 @@ function ensureReportsD1ProfileSyncTriggers_() {
       ScriptApp.newTrigger(handler).forSpreadsheet(spreadsheetId).onChange().create();
     }
   });
+  if (typeof ensureReportMaintenanceClock_ === 'function') ensureReportMaintenanceClock_();
   const retryTriggers = triggers.filter(function(trigger) {
     return trigger.getHandlerFunction() === 'retryPendingReportsD1ProfileSync';
   });
@@ -706,12 +740,12 @@ function ensureReportsD1ProfileSyncTriggers_() {
   if (!retryTriggers.length) {
     ScriptApp.newTrigger('retryPendingReportsD1ProfileSync').timeBased().everyMinutes(1).create();
   }
-  const syncTriggers = triggers.filter(function(trigger) {
-    return trigger.getHandlerFunction() === 'syncD1ProfilesFromReports';
-  });
-  syncTriggers.slice(1).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
-  if (!syncTriggers.length) {
-    ScriptApp.newTrigger('syncD1ProfilesFromReports').timeBased().everyMinutes(10).create();
+  if (typeof ensureReportMaintenanceClock_ !== 'function') {
+    const syncTriggers = triggers.filter(function(trigger) {
+      return trigger.getHandlerFunction() === 'syncD1ProfilesFromReports';
+    });
+    syncTriggers.slice(1).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+    if (!syncTriggers.length) ScriptApp.newTrigger('syncD1ProfilesFromReports').timeBased().everyMinutes(10).create();
   }
 }
 

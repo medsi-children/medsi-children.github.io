@@ -14,10 +14,10 @@ function fixture(children){
   const morning=sheet('MORNING',[['']]),evening=sheet('EVENING',[['']]);
   const variants=sheet('NAME_VARIANTS',[['base','aliases'],['Катя','Екатерина'],['Саша','Александр, Александра'],['Тая','Таисия, Тася']]);
   const sheets={REPORTS:reports,MORNING:morning,EVENING:evening,NAME_VARIANTS:variants};
-  const lock={waitLock(){effects.push('lock')},releaseLock(){effects.push('unlock')}};
-  const context={Logger:{log(){}},SpreadsheetApp:{openById:()=>({getSheetByName:name=>sheets[name]||null})},PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key)||'',getProperties:()=>Object.fromEntries(properties),setProperty:(key,value)=>properties.set(key,value)})},Utilities:{DigestAlgorithm:{SHA_256:'sha256'},Charset:{UTF_8:'utf8'},computeDigest:(_,s)=>Array.from(crypto.createHash('sha256').update(s).digest()),base64EncodeWebSafe:bytes=>Buffer.from(bytes).toString('base64url'),formatDate:()=> '2026-10-22'},LockService:{getUserLock:()=>lock}};
+  const lock={tryLock(){return true},waitLock(){effects.push('lock')},releaseLock(){effects.push('unlock')}};
+  const context={Logger:{log(){}},SpreadsheetApp:{openById:()=>({getSheetByName:name=>sheets[name]||null})},PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key)||'',getProperties:()=>Object.fromEntries(properties),setProperty:(key,value)=>properties.set(key,value)})},Utilities:{getUuid:()=>crypto.randomUUID(),DigestAlgorithm:{SHA_256:'sha256'},Charset:{UTF_8:'utf8'},computeDigest:(_,s)=>Array.from(crypto.createHash('sha256').update(s).digest()),base64EncodeWebSafe:bytes=>Buffer.from(bytes).toString('base64url'),formatDate:()=> '2026-10-22'},LockService:{getUserLock:()=>lock}};
   vm.createContext(context);
-  for(const file of ['report-rules.js','report-names.js','report-parser.js','report-distribution.js','report-history.js','Медси бот.js'])vm.runInContext(fs.readFileSync(path.join(directory,file),'utf8'),context);
+  for(const file of ['report-rules.js','report-names.js','report-parser.js','report-distribution.js','report-scheduler.js','report-history.js','Медси бот.js'])vm.runInContext(fs.readFileSync(path.join(directory,file),'utf8'),context);
   Object.assign(context,{removeLegacyDistributionLogSheet_(){},syncReportHistoryPublicationFromSource_(kind){effects.push('history:'+kind)},syncReportInactivityState_(){effects.push('inactivity')},syncD1CurrentReportsToWorker_(){effects.push('d1')}});
   function publish(kind,text){sheets[kind==='morning'?'MORNING':'EVENING'].rows[0][0]=text;context.rememberRawReportPublicationOwnership_(kind,text,text);}
   function output(){return reports.rows.slice(1).map(row=>[row[0],row[4],row[5]])}
@@ -125,4 +125,47 @@ test('a valid new publication clears the old ownership warning and remains reada
   assert.equal(f.sheets.EVENING.notes.get('1:1')||'','');
   assert.equal(f.context.buildParentReportSnapshot_('89990000002','evening',false).hasReport,true);
   assert.match(f.output()[0][2],/Новый синтетический текст/);
+});
+
+test('unchanged repeated distribution does not parse, write or call Cloudflare again',()=>{
+  const f=fixture([{name:'Катя Г',family:'Громова'}]);
+  f.publish('morning','Катя Г: Синтетический текст.');
+  f.context.distributeChildReports('morning');
+  const writes=f.writes.length,effects=f.effects.filter(x=>x==='d1').length;
+  f.context.computeReportKindPlan_=()=>{throw new Error('unchanged input must not be rebuilt')};
+  assert.equal(f.context.distributeChildReports().skipped,true);
+  assert.equal(f.writes.length,writes);assert.equal(f.effects.filter(x=>x==='d1').length,effects);
+});
+test('alias edits and roster changes invalidate a completed distribution checkpoint',()=>{
+  for(const change of [f=>f.sheets.NAME_VARIANTS.rows.push(['Лиза','Елизавета']),f=>f.reports.rows[1][3]='Другая фамилия']){
+    const f=fixture([{name:'Катя Г',family:'Громова'}]);f.publish('morning','Катя Г: Синтетический текст.');
+    f.context.distributeChildReports('morning');change(f);
+    let calls=0;const compute=f.context.computeReportKindPlan_;
+    f.context.computeReportKindPlan_=(...args)=>{calls++;return compute(...args)};
+    f.context.distributeChildReports();assert.equal(calls,2);
+  }
+});
+test('an explicit new publication of identical text still runs immediately',()=>{
+  const f=fixture([{name:'Катя Г',family:'Громова'}]);f.publish('morning','Катя Г: Синтетический текст.');
+  f.context.distributeChildReports('morning');
+  let calls=0;const compute=f.context.computeReportKindPlan_;
+  f.context.computeReportKindPlan_=(...args)=>{calls++;return compute(...args)};
+  const writes=f.writes.length;f.context.distributeChildReports('morning');assert.equal(calls,2);assert.equal(f.writes.length,writes);
+});
+test('failed delivery retries without recalculating the report or changing its raw text',()=>{
+  const f=fixture([{name:'Катя Г',family:'Громова'}]);f.publish('morning','Катя Г: Синтетический текст.');
+  f.context.syncD1CurrentReportsToWorker_=()=>{throw new Error('offline')};
+  f.context.distributeChildReports('morning');const writes=f.writes.length;
+  f.context.computeReportKindPlan_=()=>{throw new Error('do not rebuild for a delivery retry')};
+  let delivered=0;f.context.syncD1CurrentReportsToWorker_=()=>delivered++;
+  assert.equal(f.context.distributeChildReports().skipped,true);
+  assert.equal(f.writes.length,writes);assert.equal(f.sheets.MORNING.rows[0][0],'Катя Г: Синтетический текст.');assert.equal(delivered,1);
+});
+
+test('a source change during checkpoint capture cannot be recorded as already processed',()=>{
+  const f=fixture([{name:'Катя Г',family:'Громова'}]);f.publish('morning','Катя Г: Синтетический текст.');
+  const fingerprint=f.context.reportDistributionStateFingerprint_;let calls=0;
+  f.context.reportDistributionStateFingerprint_=()=>{const value=fingerprint();if(++calls===2)f.sheets.MORNING.rows[0][0]='Катя Г: Другой синтетический текст.';return value};
+  assert.throws(()=>f.context.distributeChildReports('morning'),/исходный отчёт изменился/i);
+  assert.equal(f.properties.has('REPORT_DISTRIBUTION_CHECKPOINT'),false);
 });

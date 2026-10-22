@@ -1597,8 +1597,10 @@ function appendReport(param, tutorTokenRaw) {
 
     if (targetSheetName === SHEET_PSYCHOLOGY) {
       recordReportHistoryPublication_('psychology', text);
+      if (typeof queueReportPostCommitSync_ === 'function') queueReportPostCommitSync_([], [], ['psychology']);
       try {
-        syncD1CurrentReportsToWorker_('psychology');
+        if (typeof flushPendingReportPostCommitSync_ === 'function') flushPendingReportPostCommitSync_();
+        else syncD1CurrentReportsToWorker_('psychology');
       } catch (error) {
         Logger.log('REPORT_CURRENT_SYNC_AFTER_PSYCHOLOGY_FAILED ' + (error && error.message || error));
       }
@@ -3990,9 +3992,10 @@ function redistributeChildReportKindMaintenanceCore_(kindRaw) {
   const rawText = getLatestReport(sourceSheet, 1) || '';
   const plan = computeReportKindPlan_(kind, rawText, children, contextByBase);
   if (!plan.ok) return plan;
+  const previousRows = dataSheet.getRange(2, kind === 'morning' ? 5 : 6, count, 1).getValues();
   const ownershipPlan = planRawReportOwnershipGuard_(kind, plan.parsed, contextByBase,
     plan.distribution,
-    dataSheet.getRange(2, kind === 'morning' ? 5 : 6, count, 1).getValues().map(function(row) { return row[0]; }),
+    previousRows.map(function(row) { return row[0]; }),
     false, loadRawReportOwnershipRecords_(kind, plan.parsed), Date.now());
   const MISSING = 'Пока ещё нет отчёта 🙏';
   const output = buildReportRowValues_(baseNames, ownershipPlan.distribution.byRow, MISSING);
@@ -4003,7 +4006,7 @@ function redistributeChildReportKindMaintenanceCore_(kindRaw) {
   commitRawReportOwnershipWrites_(ownershipPlan.proposedOwnershipWrites);
   assertReportDistributionRosterUnchanged_(dataSheet, children, count);
   assertReportDistributionSourceUnchanged_(sourceSheet, rawText);
-  dataSheet.getRange(2, targetColumn, count, 1).setValues(output);
+  if (reportColumnValuesChanged_(previousRows, output)) dataSheet.getRange(2, targetColumn, count, 1).setValues(output);
   logRawReportOwnershipPlan_(kind, ownershipPlan);
   if (ownershipPlan.distribution.ownershipBlockedRows) setRawReportSourceNote_(sourceSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
   return { ok:true, rows:count, ownershipBlockedRows:Number(ownershipPlan.distribution.ownershipBlockedRows || 0) };
@@ -4264,6 +4267,11 @@ function applyRawReportCleanup_(plan) {
 }
 
 function distributeChildReports(triggerKindRaw) {
+  // A surviving old minute timer upgrades itself without running a full pass.
+  if (triggerKindRaw && typeof triggerKindRaw === 'object' && triggerKindRaw.triggerUid && typeof ensureReportMaintenanceClock_ === 'function') {
+    ensureReportMaintenanceClock_();
+    return runScheduledMedsiMaintenance(triggerKindRaw);
+  }
   let postCommitSync = null;
   const result = withReportWriteLock_(function() {
   removeLegacyDistributionLogSheet_();
@@ -4276,6 +4284,12 @@ function distributeChildReports(triggerKindRaw) {
   const morningText = getLatestReport(morningSheet, 1) || "";
   const eveningText = getLatestReport(eveningSheet, 1) || "";
   const triggerKind = String(triggerKindRaw || '').toLowerCase();
+  const scheduledSignature = typeof reportDistributionStateFingerprint_ === 'function' ? reportDistributionStateFingerprint_() : '';
+  const checkpointProperties = PropertiesService.getScriptProperties();
+  if (!['morning', 'evening'].includes(triggerKind) && scheduledSignature &&
+      checkpointProperties.getProperty('REPORT_DISTRIBUTION_CHECKPOINT') === scheduledSignature) {
+    return {ok:true, skipped:true, reason:'unchanged'};
+  }
 
   const lastRow = dataSheet.getLastRow();
   const count   = Math.max(lastRow - 1, 0);
@@ -4337,11 +4351,11 @@ function distributeChildReports(triggerKindRaw) {
   assertReportDistributionRosterUnchanged_(dataSheet, children, count);
   assertReportDistributionSourceUnchanged_(morningSheet, morningText);
   assertReportDistributionSourceUnchanged_(eveningSheet, eveningText);
-  dataSheet.getRange(2, 5, count, 1).setValues(morningOut);
+  if (reportColumnValuesChanged_(previousReports.map(function(row) { return [row[0]]; }), morningOut)) dataSheet.getRange(2, 5, count, 1).setValues(morningOut);
   assertReportDistributionRosterUnchanged_(dataSheet, children, count);
   assertReportDistributionSourceUnchanged_(morningSheet, morningText);
   assertReportDistributionSourceUnchanged_(eveningSheet, eveningText);
-  dataSheet.getRange(2, 6, count, 1).setValues(eveningOut);
+  if (reportColumnValuesChanged_(previousReports.map(function(row) { return [row[1]]; }), eveningOut)) dataSheet.getRange(2, 6, count, 1).setValues(eveningOut);
   syncReportHistoryPublicationFromSource_('morning', morningText, triggerKind === 'morning');
   syncReportHistoryPublicationFromSource_('evening', eveningText, triggerKind === 'evening');
   logRawReportOwnershipPlan_('morning', morningOwnershipPlan);
@@ -4359,9 +4373,22 @@ function distributeChildReports(triggerKindRaw) {
     inactivityUpdates: inactivityUpdates,
     changedPublications: changedPublications
   };
+  if (typeof queueReportPostCommitSync_ === 'function') {
+    queueReportPostCommitSync_(inactivityUpdates, changedPublications, undefined, true);
+    const committedSignature = reportDistributionStateFingerprint_();
+    assertReportDistributionRosterUnchanged_(dataSheet, children, count);
+    assertReportDistributionSourceUnchanged_(morningSheet, morningText);
+    assertReportDistributionSourceUnchanged_(eveningSheet, eveningText);
+    checkpointProperties.setProperty('REPORT_DISTRIBUTION_CHECKPOINT', committedSignature);
+  }
+  return {ok:true, changed:true};
   });
   // Сетевые вызовы выполняются после освобождения блокировки записи в отчёты.
   // Если синхронизация задержится, D1 принимает публикации только по версии.
+  if (typeof flushPendingReportPostCommitSync_ === 'function') {
+    flushPendingReportPostCommitSync_();
+    return result;
+  }
   if (postCommitSync) {
     try { syncReportInactivityState_(postCommitSync.inactivityUpdates); }
     catch (error) { Logger.log('REPORT_INACTIVITY_SYNC_AFTER_DISTRIBUTION_FAILED ' + (error && error.message || error)); }

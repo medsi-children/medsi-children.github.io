@@ -23,3 +23,12 @@ function computeReportKindPlan_(kindRaw, rawText, childrenRaw, contextByBase) {
   const distribution = buildSafeDistribution_(kind, parsed, contextByBase || {});
   return { ok:true, kind:kind, parsed:parsed, distribution:distribution };
 }
+
+// Avoid rewriting an entire report column when its displayed values are identical.
+function reportColumnValuesChanged_(previousRaw, nextRaw) {
+  const previous = Array.isArray(previousRaw) ? previousRaw : [];
+  const next = Array.isArray(nextRaw) ? nextRaw : [];
+  return previous.length !== next.length || next.some(function(row, index) {
+    return String(row && row[0] || '') !== String(previous[index] && previous[index][0] || '');
+  });
+}
