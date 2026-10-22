@@ -2116,9 +2116,23 @@ export default {
     const auth = await authorized(request, env);
     if (!auth) return json({ ok: false, message: 'Unauthorized' }, 401);
 
+    if (request.method === 'POST' && url.pathname === '/lab/parent-session/renew') {
+      if (auth.role !== 'parent') return json({ ok: false, message: 'Forbidden' }, 403);
+      if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис авторизации временно недоступен.' }, 503);
+      const session = await issueParentSession(auth.phone10, env.LAB_D1_SESSION_SECRET, env);
+      return json({ ok: true, parentSession: session.token, expiresAt: session.expiresAt });
+    }
+
     if (request.method === 'POST' && url.pathname === '/lab/parent-passkeys/registration/options') {
       const { parentPasskeyRegistrationOptions } = await import('./parent-passkeys.mjs');
       return parentPasskeyRegistrationOptions(request, env, auth);
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-passkeys/status') {
+      if (auth.role !== 'parent') return json({ ok: false, message: 'Forbidden' }, 403);
+      const account = await env.CHAT_DB.prepare('SELECT user_handle FROM parent_auth_profiles WHERE phone10=?').bind(auth.phone10).first();
+      if (!account) return json({ ok: false, message: 'Профиль уже не активен.' }, 410);
+      const credential = await env.CHAT_DB.prepare('SELECT 1 AS present FROM parent_passkeys WHERE user_handle=? AND revoked_at IS NULL LIMIT 1').bind(account.user_handle).first();
+      return json({ ok: true, hasPasskey: !!credential });
     }
     if (request.method === 'POST' && url.pathname === '/lab/parent-passkeys/registration/verify') {
       const { parentPasskeyRegistrationVerify } = await import('./parent-passkeys.mjs');

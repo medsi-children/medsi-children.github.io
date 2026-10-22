@@ -74,11 +74,11 @@ test('removing an active profile revokes its passkeys and outstanding ceremonies
 
 test('new parent sessions bind to a profile generation while existing pre-migration sessions remain compatible', async () => {
   const { db, env } = makeDatabase();
-  const context = { Response, URL, console, Date, TextEncoder, Uint8Array, btoa, atob, crypto: require('node:crypto').webcrypto };
+  const context = { Response, Request, URL, console, Date, TextEncoder, Uint8Array, btoa, atob, crypto: require('node:crypto').webcrypto };
   vm.createContext(context);
   const source = fs.readFileSync(path.join(repo, 'services/cloudflare/chat-worker/src/index.js'), 'utf8')
     .replace('const parentAuthProfileCache = new Map();', 'const parentAuthProfileCache = globalThis.parentAuthProfileCache = new Map();')
-    .replace('export default {', 'const worker = {');
+    .replace('export default {', 'globalThis.worker = {');
   vm.runInContext(source, context);
   env.LAB_D1_SESSION_SECRET = 'test-session-secret';
   try {
@@ -107,6 +107,15 @@ test('new parent sessions bind to a profile generation while existing pre-migrat
     const legacyToken = payload + '.' + await context.hmac(env.LAB_D1_SESSION_SECRET, payload);
     context.parentAuthProfileCache.delete('9990000004');
     assert.ok(await context.authorized(requestFor(legacyToken), env));
+    const renewedResponse = await context.worker.fetch(new Request('https://worker.test/lab/parent-session/renew', {
+      method: 'POST', headers: { 'x-medsi-chat-session': legacyToken, 'content-type': 'application/json' }, body: '{}'
+    }), env, {});
+    const renewed = await renewedResponse.json();
+    assert.equal(renewedResponse.status, 200);
+    const renewedClaims = JSON.parse(Buffer.from(renewed.parentSession.split('.')[0], 'base64url').toString('utf8'));
+    assert.equal(renewedClaims.version, 'cf-parent-v2');
+    assert.equal(renewedClaims.phone10, '9990000004');
+    assert.ok(renewedClaims.exp - Date.now() > 364 * 24 * 60 * 60 * 1000);
   } finally { db.close(); }
 });
 
