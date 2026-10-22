@@ -2140,13 +2140,16 @@ export default {
       const token = env.MEDSI_REPORT_RECOVERY_TOKEN;
       if (!token || !equal(request.headers.get('authorization') || '', 'Bearer ' + token)) return json({ok:false},403);
       const input = await body(request) || {};
-      const response = await fetch(env.APP_SCRIPT_URL, {
-        method:'POST', headers:{'content-type':'text/plain;charset=utf-8'},
-        body:JSON.stringify({action:'d1ReportCurrentSync',authorization:env.CHAT_ADMIN_TOKEN})
-      });
-      const result = await response.json().catch(()=>null);
-      if (!response.ok || !result || !result.ok) {
-        return json({ok:false,stage:'sync',message:result && result.message || 'Sync failed'},502);
+      let result={ok:true,skipped:true,reason:'previously verified against REPORTS'};
+      if(input.skipSync!==true) {
+        const response = await fetch(env.APP_SCRIPT_URL, {
+          method:'POST', headers:{'content-type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({action:'d1ReportCurrentSync',authorization:env.CHAT_ADMIN_TOKEN})
+        });
+        result = await response.json().catch(()=>null);
+        if (!response.ok || !result || !result.ok) {
+          return json({ok:false,stage:'sync',message:result && result.message || 'Sync failed'},502);
+        }
       }
       if (input.notify !== 'morning') return json({ok:true,sync:result});
       const recoveryStartedAt=1792686901510;
