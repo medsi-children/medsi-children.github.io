@@ -230,9 +230,8 @@ async function parentAccessSecretHash(value) {
 }
 
 async function issueParentSession(phone, secret, env, expiresAtOverride) {
-  // The parent's saved browser session should survive ordinary long stays and
-  // the 30-day legacy reauthorization boundary. Profile deletion still revokes
-  // it immediately through the generation check.
+  // Saved sessions survive ordinary long stays. Profile deletion still revokes
+  // them immediately through the profile-generation check.
   const exp = Number(expiresAtOverride) > Date.now()
     ? Number(expiresAtOverride)
     : Date.now() + 365 * 24 * 60 * 60 * 1000;
@@ -246,6 +245,14 @@ async function issueParentSession(phone, secret, env, expiresAtOverride) {
     token: payload + '.' + signature,
     expiresAt: exp
   }));
+}
+
+async function parentHasActivePasskey(env, phone) {
+  const account = await env.CHAT_DB.prepare('SELECT user_handle FROM parent_auth_profiles WHERE phone10=?').bind(phone).first();
+  if (!account) return false;
+  const credential = await env.CHAT_DB.prepare(`SELECT 1 AS present FROM parent_passkeys
+    WHERE user_handle=? AND revoked_at IS NULL LIMIT 1`).bind(account.user_handle).first();
+  return !!credential;
 }
 
 async function markParentReportRead(request, env, auth) {
@@ -460,106 +467,26 @@ async function failParentRegistrationOutbox(request, env) {
   return json({ ok: true });
 }
 
-function parentActorLabel(profile = {}) {
-  const relationship = String(profile.relationship || 'Родитель').trim();
-  const genitive = String(profile.child_genitive || '').trim();
-  if (genitive) return `${relationship} ${genitive}`;
-  const parent = String(profile.parent_name || '').trim();
-  const child = String(profile.child_name || '').trim();
-  return `${relationship}${parent ? `: ${parent}` : ''}${child ? ` · ребёнок: ${child}` : ''}`;
-}
-
-async function notifyEducatorParentAccessBestEffort(env, profile, requestId) {
-  if (!env.PUSH_WORKER || !env.MEDSI_CHAT_PUSH_SECRET) return;
-  const actor = parentActorLabel(profile);
-  const response = await env.PUSH_WORKER.fetch('https://medsi-push-worker.internal/notify', {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${env.MEDSI_CHAT_PUSH_SECRET}`,
-      'content-type': 'application/json'
-    },
-    body: JSON.stringify({
-      role: 'educator', phone: '',
-      notification: {
-        title: 'Медси Бот',
-        body: `${actor} запрашивает авторизацию в Медси Боте`,
-        url: '/tutors?reauth=' + encodeURIComponent(requestId),
-        tag: 'medsi-parent-reauth-' + requestId
-      }
-    })
-  });
-  if (!response.ok) throw new Error(`Educator access push HTTP ${response.status}`);
-}
-
-async function requestParentAccess(request, env, ctx) {
+async function requestParentAccess(request, env) {
   const payload = await body(request) || {};
   const phone = phone10(payload.phone);
-  const requestId = parentAccessRequestId(payload.requestId);
-  const requestSecret = parentAccessSecret(payload.requestSecret);
-  if (!phone || !requestId || !requestSecret) return json({ ok: false, message: 'Проверьте данные запроса.' }, 400);
-  const secretHash = await parentAccessSecretHash(requestSecret);
+  if (!phone) return json({ ok:false, message:'Проверьте номер телефона.' }, 400);
   const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
   if (!profile) return json({ ok: false, code: 'NOT_FOUND', message: 'Этот номер не найден среди активных родителей.' }, 404);
 
-  // A newly registered parent may use phone-only access during the first
-  // 72 hours, unless they already opted into passkey authentication. Use the
-  // immutable completed registration attempt, never a profile edit or retry.
-  const registration = await env.CHAT_DB.prepare(`SELECT MIN(created_at) AS registered_at
-    FROM parent_registration_attempts WHERE phone10=? AND status='COMPLETED'`).bind(phone).first();
-  const account = await env.CHAT_DB.prepare('SELECT user_handle FROM parent_auth_profiles WHERE phone10=?').bind(phone).first();
-  const passkey = account && await env.CHAT_DB.prepare(`SELECT 1 AS present FROM parent_passkeys
-    WHERE user_handle=? AND revoked_at IS NULL LIMIT 1`).bind(account.user_handle).first();
-  const registeredAt = Number(registration && registration.registered_at || 0);
-  const now = Date.now();
-  if (!passkey && registeredAt > 0 && registeredAt <= now && now - registeredAt < 72 * 60 * 60 * 1000) {
+  // Parents who declined a passkey can recover a lost browser session with
+  // their phone number. Passkey users must use that key; educator approval is
+  // no longer part of the login path.
+  if (await parentHasActivePasskey(env, phone)) {
+    return json({ ok:false, code:'PASSKEY_REQUIRED', message:'Для этого аккаунта включён вход с ключом доступа. Войдите с помощью ключа.' }, 409);
+  }
+  {
     if (!env.LAB_D1_SESSION_SECRET) return json({ ok:false, message:'Сервис авторизации временно недоступен.' }, 503);
     const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env);
-    return json({ ok:true, status:'APPROVED', recoveryMode:'registration-grace', phone:'8' + phone,
+    return json({ ok:true, status:'APPROVED', recoveryMode:'phone-only', phone:'8' + phone,
       parentName:profile.parent_name || '', childName:profile.child_name || '',
       parentSession:session.token, d1Session:{ ok:true, ...session } });
   }
-
-  const prior = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at, request_secret_hash FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
-  if (prior) {
-    if (prior.phone10 !== phone) return json({ ok: false, message: 'Запрос относится к другому номеру телефона.' }, 409);
-    if (!equal(String(prior.request_secret_hash || ''), secretHash)) {
-      return json({ ok: false, code: 'NOT_FOUND', message: 'Запрос не найден. Начните вход заново.' }, 404);
-    }
-    if (prior.status === 'PENDING' && Number(prior.expires_at) <= Date.now()) {
-      await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE request_id=? AND status='PENDING'").bind(Date.now(), requestId).run();
-      prior.status = 'EXPIRED';
-    }
-    return json({ ok: true, requestId, code: prior.code, status: prior.status,
-      createdAt: new Date(Number(prior.created_at)).toISOString(),
-      expiresAt: new Date(Number(prior.expires_at)).toISOString(), created: false });
-  }
-
-  const recent = await env.CHAT_DB.prepare(`SELECT COUNT(*) AS total FROM parent_access_requests
-    WHERE phone10 = ? AND created_at > ?`).bind(phone, Date.now() - 15 * 60 * 1000).first();
-  if (Number(recent && recent.total || 0) >= 3) {
-    return json({ ok: false, code: 'RATE_LIMITED', message: 'Слишком много запросов. Подождите немного и попробуйте ещё раз.' }, 429);
-  }
-
-  const createdAt = Date.now(), expiresAt = createdAt + 2 * 60 * 60 * 1000;
-  const randomCode = crypto.getRandomValues(new Uint32Array(1))[0] % 10000;
-  const code = String(randomCode).padStart(4, '0');
-  const inserted = await env.CHAT_DB.prepare(`INSERT INTO parent_access_requests
-    (request_id, phone10, code, status, created_at, updated_at, expires_at, request_secret_hash)
-    VALUES (?, ?, ?, 'PENDING', ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING`)
-    .bind(requestId, phone, code, createdAt, createdAt, expiresAt, secretHash).run();
-  const saved = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at, request_secret_hash FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
-  if (!saved || saved.phone10 !== phone) return json({ ok: false, message: 'Не удалось создать запрос на вход.' }, 503);
-  if (!equal(String(saved.request_secret_hash || ''), secretHash)) return json({ ok: false, code: 'NOT_FOUND', message: 'Запрос не найден. Начните вход заново.' }, 404);
-  const created = Number(inserted.meta && inserted.meta.changes || 0) > 0;
-  if (created) {
-    const pushJob = notifyEducatorParentAccessBestEffort(env, profile, requestId)
-      .catch(error => console.error('PARENT_ACCESS_PUSH_FAILED', String(error && error.message || error)));
-    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(pushJob);
-    else await pushJob;
-  }
-  return json({ ok: true, requestId, code: saved.code, status: saved.status,
-    createdAt: new Date(Number(saved.created_at)).toISOString(),
-    expiresAt: new Date(Number(saved.expires_at)).toISOString(), created });
 }
 
 async function getParentAccessStatus(request, env) {
@@ -581,6 +508,29 @@ async function getParentAccessStatus(request, env) {
   if ((status === 'PENDING' || status === 'APPROVED') && expired) {
     await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE request_id=? AND status IN ('PENDING','APPROVED')").bind(now, requestId).run();
     status = 'EXPIRED';
+  }
+  if (status === 'PENDING') {
+    if (await parentHasActivePasskey(env, phone)) {
+      await env.CHAT_DB.prepare(`UPDATE parent_access_requests SET status='DENIED', decision='PASSKEY_REQUIRED', updated_at=?
+        WHERE request_id=? AND status='PENDING'`).bind(now, requestId).run();
+      return json({ ok:true, requestId, phone:'8' + phone, status:'PASSKEY_REQUIRED' });
+    }
+    const consumed = await env.CHAT_DB.prepare(`UPDATE parent_access_requests SET status='CONSUMED', decision='PHONE_ONLY', updated_at=?
+      WHERE request_id=? AND status='PENDING' AND expires_at>? AND request_secret_hash=?`)
+      .bind(now, requestId, now, secretHash).run();
+    if (Number(consumed.meta && consumed.meta.changes || 0) === 1) {
+      status = 'CONSUMED';
+      row.updated_at = now;
+    } else {
+      const current = await env.CHAT_DB.prepare('SELECT status, updated_at, decision FROM parent_access_requests WHERE request_id=? AND phone10=? AND request_secret_hash=?')
+        .bind(requestId, phone, secretHash).first();
+      status = String(current && current.status || 'NOT_FOUND').toUpperCase();
+      row.updated_at = current && current.updated_at || row.updated_at;
+      row.decision = current && current.decision || '';
+    }
+  }
+  if (status === 'DENIED' && row.decision === 'PASSKEY_REQUIRED') {
+    return json({ ok:true, requestId, phone:'8' + phone, status:'PASSKEY_REQUIRED' });
   }
   if (status === 'APPROVED' || status === 'CONSUMED') {
     if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис авторизации временно недоступен.' }, 503);
@@ -618,36 +568,11 @@ async function getParentAccessStatus(request, env) {
 async function listParentAccessRequests(env) {
   const now = Date.now();
   await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE status='PENDING' AND expires_at<=?").bind(now, now).run();
-  const result = await env.CHAT_DB.prepare(`SELECT a.request_id, a.phone10, a.code, a.status, a.created_at, a.expires_at,
-      p.parent_name, p.child_name, p.relationship, p.child_genitive
-    FROM parent_access_requests AS a LEFT JOIN chat_profiles AS p ON p.phone10 = a.phone10
-    WHERE a.status='PENDING' ORDER BY a.created_at ASC LIMIT 100`).all();
-  return json({ ok: true, requests: (result.results || []).map(row => ({
-    requestId: row.request_id, phone: '8' + row.phone10, code: row.code,
-    status: row.status, createdAt: new Date(Number(row.created_at)).toISOString(),
-    expiresAt: new Date(Number(row.expires_at)).toISOString(),
-    actor: parentActorLabel(row)
-  })) });
+  return json({ ok:true, requests:[] });
 }
 
 async function decideParentAccessRequest(request, env) {
-  const payload = await body(request) || {};
-  const requestId = parentAccessRequestId(payload.requestId);
-  const decision = String(payload.decision || '').trim().toUpperCase();
-  if (!requestId || !['APPROVE', 'DENY'].includes(decision)) return json({ ok: false, message: 'Некорректное решение.' }, 400);
-  const now = Date.now(), status = decision === 'APPROVE' ? 'APPROVED' : 'DENIED';
-  const result = await env.CHAT_DB.prepare(`UPDATE parent_access_requests SET status=?, updated_at=?, decided_at=?, decision=?
-    WHERE request_id=? AND status='PENDING' AND expires_at>?`).bind(status, now, now, decision, requestId, now).run();
-  const row = await env.CHAT_DB.prepare('SELECT status, expires_at FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
-  if (!row) return json({ ok: false, message: 'Запрос уже недоступен.' }, 404);
-  if (!result.meta || !result.meta.changes) {
-    if (row.status === 'PENDING' && Number(row.expires_at) <= now) {
-      await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE request_id=? AND status='PENDING'").bind(now, requestId).run();
-      return json({ ok: true, status: 'EXPIRED', alreadyResolved: true });
-    }
-    return json({ ok: true, status: row.status, alreadyResolved: true });
-  }
-  return json({ ok: true, status, alreadyResolved: false });
+  return json({ ok:false, code:'PARENT_APPROVAL_DISABLED', message:'Подтверждение входа воспитателем отключено.' }, 410);
 }
 
 function assertPhone(raw, env) {
@@ -2241,7 +2166,7 @@ export default {
       return parentPasskeyAuthenticationVerify(request, env, { issueParentSession: (phone, secret) => issueParentSession(phone, secret, env) });
     }
     if (request.method === 'POST' && url.pathname === '/lab/parent-auth/request') {
-      return requestParentAccess(request, env, ctx);
+      return requestParentAccess(request, env);
     }
     if (request.method === 'POST' && url.pathname === '/lab/parent-auth/status') {
       return getParentAccessStatus(request, env);

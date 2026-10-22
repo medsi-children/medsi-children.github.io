@@ -129,7 +129,7 @@ test('new parent sessions bind to a profile generation while existing pre-migrat
   } finally { db.close(); }
 });
 
-test('the educator fallback can safely repeat delivery after a lost response for the same device secret', async () => {
+test('a previously approved request remains recoverable while educator approvals are disabled', async () => {
   const { db, env } = makeDatabase();
   const context = { Response, URL, console, Date, TextEncoder, Uint8Array, btoa, atob, crypto: require('node:crypto').webcrypto };
   vm.createContext(context);
@@ -144,19 +144,12 @@ test('the educator fallback can safely repeat delivery after a lost response for
     const secret = Buffer.from(require('node:crypto').webcrypto.getRandomValues(new Uint8Array(32))).toString('base64url');
     const payload = { phone: '89990000005', requestId: 'auth_12345678901234567890123456789012', requestSecret: secret };
     const request = value => ({ json: async () => value, url: 'https://worker.test/lab/parent-auth/status' });
-    const created = await context.requestParentAccess(request(payload), env, null, true);
-    const createdBody = await created.json();
-    assert.equal(createdBody.ok, true);
-    const stored = db.prepare('SELECT request_secret_hash, status FROM parent_access_requests WHERE request_id=?').get(payload.requestId);
-    assert.notEqual(stored.request_secret_hash, secret);
-    assert.equal(stored.status, 'PENDING');
-
-    const legacyAttempt = await context.requestParentAccess(request({ ...payload, requestSecret: undefined }), env, null);
-    assert.equal(legacyAttempt.status, 400);
+    const secretHash = await context.parentAccessSecretHash(secret);
+    db.prepare(`INSERT INTO parent_access_requests(request_id,phone10,code,status,created_at,updated_at,expires_at,request_secret_hash)
+      VALUES(?,?,?,'APPROVED',?,?,?,?)`).run(payload.requestId, '9990000005', '1234', Date.now(), Date.now(), Date.now() + 7200000, secretHash);
     const wrongSecretStatus = await context.getParentAccessStatus(request({ ...payload, requestSecret: secret + 'x' }), env, true);
     assert.equal((await wrongSecretStatus.json()).status, 'NOT_FOUND');
 
-    await context.decideParentAccessRequest(request({ requestId: payload.requestId, decision: 'APPROVE' }), env);
     const approved = await (await context.getParentAccessStatus(request(payload), env, true)).json();
     assert.equal(approved.status, 'APPROVED');
     assert.ok(approved.parentSession);
@@ -167,7 +160,7 @@ test('the educator fallback can safely repeat delivery after a lost response for
   } finally { db.close(); }
 });
 
-test('phone-only access is allowed only during the original 72-hour registration window and only without a passkey', async () => {
+test('parents without a passkey can recover by phone at any time, while passkey users must use their key', async () => {
   const { db, env } = makeDatabase();
   const context = { Response, URL, console, Date, TextEncoder, Uint8Array, btoa, atob, crypto: require('node:crypto').webcrypto };
   vm.createContext(context);
@@ -177,21 +170,57 @@ test('phone-only access is allowed only during the original 72-hour registration
     const phone = '9990000006', requestId = 'auth_12345678901234567890123456789012';
     db.prepare('INSERT INTO chat_profiles(phone10,parent_name,child_name) VALUES(?,?,?)').run(phone, 'Тест Родитель', 'Тест Ребёнок');
     db.prepare(`INSERT INTO parent_registration_attempts(attempt_id,phone10,parent_name,child_name,status,created_at)
-      VALUES(?,?,?,?,?,?)`).run('reg_12345678901234567890123456789012', phone, 'Тест Родитель', 'Тест Ребёнок', 'COMPLETED', Date.now() - 24 * 60 * 60 * 1000);
+      VALUES(?,?,?,?,?,?)`).run('reg_12345678901234567890123456789012', phone, 'Тест Родитель', 'Тест Ребёнок', 'COMPLETED', Date.now() - 13 * 24 * 60 * 60 * 1000);
     const payload = { phone:'8' + phone, requestId, requestSecret:'A'.repeat(43) };
     const request = value => ({ json:async()=>value, url:'https://worker.test/lab/parent-auth/request' });
-    const grace = await (await context.requestParentAccess(request(payload), env, null, true)).json();
-    assert.equal(grace.recoveryMode, 'registration-grace');
-    assert.ok(grace.parentSession);
+    const phoneOnly = await (await context.requestParentAccess(request(payload), env, null, true)).json();
+    assert.equal(phoneOnly.recoveryMode, 'phone-only');
+    assert.ok(phoneOnly.parentSession);
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM parent_access_requests').get().n, 0);
 
     db.prepare(`INSERT INTO parent_passkeys(credential_id,user_handle,public_key,counter,created_at)
       SELECT ?,user_handle,?,?,? FROM parent_auth_profiles WHERE phone10=?`)
       .run('synthetic_credential_1234567890', new Uint8Array([1]), 0, Date.now(), phone);
-    const recovery = await (await context.requestParentAccess(request({ ...payload, requestId:'auth_22345678901234567890123456789012' }), env, null, true)).json();
-    assert.equal(recovery.status, 'PENDING');
-    assert.equal(recovery.parentSession, undefined);
+    const passkeyRequired = await (await context.requestParentAccess(request({ ...payload, requestId:'auth_22345678901234567890123456789012' }), env, null, true)).json();
+    assert.equal(passkeyRequired.code, 'PASSKEY_REQUIRED');
+    assert.equal(passkeyRequired.parentSession, undefined);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM parent_access_requests').get().n, 0);
   } finally { db.close(); }
+});
+
+test('already waiting no-passkey parents receive access from their pending request without educator approval', async () => {
+  const { db, env } = makeDatabase();
+  const context = { Response, URL, console, Date, TextEncoder, Uint8Array, btoa, atob, crypto: require('node:crypto').webcrypto };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(repo, 'services/cloudflare/chat-worker/src/index.js'), 'utf8').replace('export default {', 'globalThis.worker = {'), context);
+  env.LAB_D1_SESSION_SECRET = 'test-session-secret';
+  try {
+    const phone = '9990000008', requestId = 'auth_32345678901234567890123456789012', secret = 'B'.repeat(43);
+    db.prepare('INSERT INTO chat_profiles(phone10,parent_name,child_name) VALUES(?,?,?)').run(phone, 'Тест Родитель', 'Тест Ребёнок');
+    const secretHash = await context.parentAccessSecretHash(secret);
+    db.prepare(`INSERT INTO parent_access_requests(request_id,phone10,code,status,created_at,updated_at,expires_at,request_secret_hash)
+      VALUES(?,?,?,'PENDING',?,?,?,?)`).run(requestId, phone, '1234', Date.now(), Date.now(), Date.now() + 7200000, secretHash);
+    const request = { json:async()=>({ phone:'8'+phone, requestId, requestSecret:secret }), url:'https://worker.test/lab/parent-auth/status' };
+    const first = await (await context.getParentAccessStatus(request, env)).json();
+    const saved = db.prepare('SELECT status,decision FROM parent_access_requests WHERE request_id=?').get(requestId);
+    assert.equal(first.status, 'APPROVED');
+    assert.ok(first.parentSession);
+    assert.equal(saved.status, 'CONSUMED');
+    assert.equal(saved.decision, 'PHONE_ONLY');
+    const replay = await (await context.getParentAccessStatus(request, env)).json();
+    assert.equal(replay.parentSession, first.parentSession);
+    const educatorList = await (await context.listParentAccessRequests(env)).json();
+    assert.deepEqual(educatorList.requests, []);
+  } finally { db.close(); }
+});
+
+test('educators can no longer approve parent login requests', async () => {
+  const context = { Response, URL, console };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(repo, 'services/cloudflare/chat-worker/src/index.js'), 'utf8').replace('export default {', 'globalThis.worker = {'), context);
+  const response = await context.decideParentAccessRequest({ json:async()=>({ decision:'APPROVE' }) }, {});
+  assert.equal(response.status, 410);
+  assert.equal((await response.json()).code, 'PARENT_APPROVAL_DISABLED');
 });
 
 test('old approvals without a device secret cannot issue a session through the current flow', async () => {

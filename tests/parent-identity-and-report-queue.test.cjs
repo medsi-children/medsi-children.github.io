@@ -100,7 +100,6 @@ test('Worker does not mark an in-progress Apps Script response as completed',asy
   const env={APP_SCRIPT_URL:'https://example.invalid',CHAT_ADMIN_TOKEN:'synthetic',CHAT_DB:{prepare:sql=>({bind(...args){this.args=args;return this},all:async()=>({results:[{submission_id:'report_synthetic123',report_type:'morning',report_text:'Synthetic',attempts:0}]}),run:async function(){if(sql.includes('status=?'))updates.push(this.args[0]);if(sql.includes("status='retry', attempts="))updates.push('retry');if(sql.includes("status='completed'"))updates.push('completed');return {meta:{changes:1}}}})}};
   await context.drainReportQueue(env);
   assert.deepEqual(updates,['retry']);
-  assert.equal(context.parentActorLabel({relationship:'Мама',child_genitive:'Никиты Иванова'}),'Мама Никиты Иванова');
 });
 test('a single bare ambiguous name is skipped while unrelated children distribute',()=>{
   const x=apps();
