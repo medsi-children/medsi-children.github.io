@@ -1168,8 +1168,10 @@ async function upsertCurrentReports(request, env, ctx) {
       JOIN chat_profiles p ON p.phone10=c.phone10
       WHERE c.phone10=? AND c.kind=? AND c.revision=? AND c.publication_id=?
         AND c.child_admission_id=? AND p.child_admission_id=c.child_admission_id
-        AND c.text=? AND c.version=? LIMIT 1`).bind(item.phone,item.kind,item.revision,item.publicationId,
-          item.childAdmissionId,item.text,item.version).first();
+        AND c.text=? AND (c.version=? OR (
+          substr(c.version,1,length(c.version)-13)=? AND substr(c.version,-13,3)='|d:'
+          AND substr(c.version,-10) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')) LIMIT 1`).bind(item.phone,item.kind,item.revision,item.publicationId,
+          item.childAdmissionId,item.text,item.version,item.version).first();
     if (active) appliedRows.add(key);
   }
   const updated = appliedRows.size;

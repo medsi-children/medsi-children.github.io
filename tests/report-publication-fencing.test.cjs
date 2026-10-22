@@ -163,3 +163,16 @@ test('an explicit repair restores persisted rows even when the publication finge
     assert.equal(x.db.prepare('SELECT text FROM report_current').get().text,'Current report');
   }finally{x.db.close()}
 });
+
+test('repair acknowledges an unchanged report whose published date suffix and read marker are preserved',async()=>{
+  const x=fixture();try{
+    await x.worker.upsertCurrentReports(request({reports:[report('Current report','v2:current')],notificationKind:'morning',reportDate:'2026-10-22',publications:{morning:publication(0,'source_dated_1234','publication_dated_1234')}}),x.env);
+    x.db.prepare('UPDATE report_current SET read_version=version').run();
+    const result=await parse(await x.worker.upsertCurrentReports(request({repair:true,reports:[report('Current report','v2:current')],publications:{morning:publication(1,'source_dated_1234','publication_repairdated_1234')}}),x.env));
+    assert.equal(result.rejectedRows,0);
+    assert.deepEqual(Array.from(result.rejectedKinds),[]);
+    const saved=x.db.prepare('SELECT version,read_version FROM report_current').get();
+    assert.equal(saved.version,'v2:current|d:2026-10-22');
+    assert.equal(saved.read_version,saved.version);
+  }finally{x.db.close()}
+});
