@@ -7,6 +7,7 @@ on:
       - services/cloudflare/chat-worker/**
       - services/cloudflare/chat-gateway/**
       - services/cloudflare/push-worker/**
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -40,6 +41,12 @@ jobs:
           AFTER: ${{ github.sha }}
         run: |
           set -euo pipefail
+          if test "$GITHUB_EVENT_NAME" = workflow_dispatch; then
+            echo "chat_worker=true" >> "$GITHUB_OUTPUT"
+            echo "chat_gateway=false" >> "$GITHUB_OUTPUT"
+            echo "push_worker=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if printf '%s' "$BEFORE" | grep -Eq '^0+$' || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
             git diff-tree --no-commit-id --name-only -r "$AFTER" > /tmp/changed-files
           else
@@ -90,6 +97,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install Worker dependencies
+        run: npm ci
       - name: Verify release credentials
         run: test -n "$CLOUDFLARE_ACCOUNT_ID" && test -n "$CLOUDFLARE_API_TOKEN"
       - name: Publish only changed Workers
