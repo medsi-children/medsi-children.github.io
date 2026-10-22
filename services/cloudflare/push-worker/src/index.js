@@ -242,6 +242,10 @@ async function handleSubscribe(request, env) {
   }
 
   const key = await subscriptionKey(endpoint);
+  const previousRaw = await env.PUSH_SUBSCRIPTIONS.get(`sub:${key}`);
+  if (previousRaw && JSON.parse(previousRaw).disabledReason === 'subscription_expired') {
+    return jsonResponse({ ok: false, code: 'PUSH_SUBSCRIPTION_EXPIRED', message: 'Subscription must be renewed' }, 409);
+  }
   await env.PUSH_SUBSCRIPTIONS.put(`sub:${key}`, JSON.stringify({
     role,
     phone10,
@@ -263,7 +267,16 @@ async function handleUnsubscribe(request, env) {
   if (!endpoint) return jsonResponse({ ok: false, message: 'Endpoint is required' }, 400);
 
   const key = await subscriptionKey(endpoint);
-  await env.PUSH_SUBSCRIPTIONS.delete(`sub:${key}`);
+  const storageKey = `sub:${key}`;
+  const raw = await env.PUSH_SUBSCRIPTIONS.get(storageKey);
+  if (raw) {
+    const previous = JSON.parse(raw);
+    await env.PUSH_SUBSCRIPTIONS.put(storageKey, JSON.stringify({
+      ...previous, enabled: false,
+      disabledReason: body && body.reason === 'permission_revoked' ? 'permission_revoked' : 'user_disabled',
+      updatedAt: new Date().toISOString()
+    }));
+  }
   return jsonResponse({ ok: true });
 }
 
@@ -322,15 +335,33 @@ async function sendNotificationToSubscribers(env, role, phone10, notification) {
 
   let sent = 0;
   let failed = 0;
+  let inactive = 0;
+  const deliveryErrors = [];
 
   for (const item of targets) {
     try {
       await webpush.sendNotification(item.value.subscription, JSON.stringify(notification));
       sent += 1;
     } catch (error) {
-      failed += 1;
-      if (error && (error.statusCode === 404 || error.statusCode === 410)) {
-        await env.PUSH_SUBSCRIPTIONS.delete(item.key);
+      const statusCode = Number(error && error.statusCode) || null;
+      const expired = statusCode === 404 || statusCode === 410;
+      const reason = expired ? 'subscription_expired'
+        : statusCode === 401 || statusCode === 403 ? 'push_credentials_rejected'
+        : statusCode === 429 ? 'provider_rate_limited'
+        : statusCode >= 500 ? 'provider_unavailable'
+        : statusCode ? 'provider_rejected' : 'network_or_transport_error';
+      // Never retain the provider's response body, endpoint or encryption keys.
+      let provider = '';
+      try { provider = new URL(item.value.subscription.endpoint).hostname; } catch (_) {}
+      deliveryErrors.push({ statusCode, reason, provider });
+      if (expired) {
+        inactive += 1;
+        await env.PUSH_SUBSCRIPTIONS.put(item.key, JSON.stringify({
+          ...item.value, enabled: false, disabledReason: reason,
+          lastDeliveryStatus: statusCode, updatedAt: new Date().toISOString()
+        }));
+      } else {
+        failed += 1;
       }
     }
   }
@@ -344,10 +375,12 @@ async function sendNotificationToSubscribers(env, role, phone10, notification) {
     tag: notification.tag,
     total: targets.length,
     sent,
-    failed
+    failed,
+    inactive,
+    deliveryErrors
   });
 
-  return { ok: true, sent, failed, total: targets.length, eventWrite };
+  return { ok: true, sent, failed, inactive, total: targets.length, eventWrite };
 }
 
 async function handleNotifyClient(request, env) {

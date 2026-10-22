@@ -1,6 +1,7 @@
 (function () {
   const PUSH_MESSAGE_TYPE = 'medsi:push-subscription';
   const IDENTITY_KEY = 'medsi_push_identity';
+  const INTENT_PREFIX = 'medsi_push_wanted_v1:';
   const VAPID_PUBLIC_KEY = 'BOP6j6f_c1Rw_Zi-vyL3c6NpjmEKYqiISsQtCl7v8F3iV-XyNUnIqUYrppQKRHi6jnhMKTuKuF4HkPKziL8-cXE';
   const SERVICE_WORKER_URL = '/sw.js?v=20260909-auth-close-1';
   const INTRO_VISIBLE_MS = 5000;
@@ -18,6 +19,13 @@
     hideStatusTimer: null,
     hasShownIntro: false,
     panelVisible: true,
+    recoveryPromise: null,
+    syncPromise: null,
+    syncKey: '',
+    lastSync: '',
+    lastSyncAt: 0,
+    recoveryTimer: null,
+    recoveryAttempts: 0,
     actionBusy: false
   };
 
@@ -47,6 +55,7 @@
       state.identity.role !== next.role ||
       state.identity.phone !== next.phone;
 
+    const sessionChanged = !state.identity || state.identity.parentSession !== next.parentSession;
     state.identity = next;
     try { localStorage.setItem(IDENTITY_KEY, JSON.stringify(next)); }
     catch (e) {}
@@ -55,7 +64,12 @@
     // пятисекундный показ. Один и тот же пользователь получал второй всплывающий
     // контрол уже поверх открытого чата. Обновляем кнопку лишь при смене роли
     // или номера; первичная инициализация сама выполнит один показ ниже.
-    if (hasChanged) updateButton({ reveal: true });
+    if (hasChanged || sessionChanged) {
+      state.lastSync = '';
+      state.recoveryAttempts = 0;
+      if (state.button) recoverSubscription();
+      if (hasChanged) updateButton({ reveal: true });
+    }
   }
 
   function clearIdentity() {
@@ -90,6 +104,119 @@
     return outputArray;
   }
 
+  function intentKey() {
+    return state.identity ? INTENT_PREFIX + state.identity.role + ':' + state.identity.phone : '';
+  }
+
+  function wanted() {
+    try { return localStorage.getItem(intentKey()); } catch (_) { return null; }
+  }
+
+  function setWanted(value) {
+    try { if (intentKey()) localStorage.setItem(intentKey(), value ? 'yes' : 'no'); } catch (_) {}
+  }
+
+  async function syncSubscription(subscription) {
+    if (wanted() === 'no') return;
+    const identity = JSON.stringify(state.identity);
+    try { localStorage.setItem(intentKey() + ':endpoint', subscription.endpoint); } catch (_) {}
+    let savedEndpoint = subscription.endpoint;
+    const key = identity + ':' + subscription.endpoint;
+    if (state.lastSync === key && Date.now() - state.lastSyncAt < 300000) return;
+    if (state.syncPromise) {
+      const pendingKey = state.syncKey;
+      await state.syncPromise;
+      if (identity !== JSON.stringify(state.identity) || wanted() === 'no') return;
+      if (pendingKey === key || state.lastSync === key) return;
+    }
+    const pending = (async () => {
+      try { return await sendSubscriptionToApp(subscription); }
+      catch (error) {
+        if (error.code !== 'PUSH_SUBSCRIPTION_EXPIRED' || wanted() === 'no' || identity !== JSON.stringify(state.identity)) throw error;
+        await subscription.unsubscribe();
+        if (wanted() === 'no' || identity !== JSON.stringify(state.identity)) return;
+        const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL);
+        const fresh = await registration.pushManager.subscribe({
+          userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+        if (wanted() === 'no' || identity !== JSON.stringify(state.identity)) return;
+        savedEndpoint = fresh.endpoint;
+        return sendSubscriptionToApp(fresh);
+      }
+    })();
+    state.syncPromise = pending;
+    state.syncKey = key;
+    try {
+      await pending;
+      if (identity === JSON.stringify(state.identity) && wanted() !== 'no') {
+        state.lastSync = identity + ':' + savedEndpoint;
+        try { localStorage.setItem(intentKey() + ':endpoint', savedEndpoint); } catch (_) {}
+        state.lastSyncAt = Date.now();
+      }
+    } finally {
+      if (state.syncPromise === pending) state.syncPromise = null;
+    }
+  }
+
+  function recoverSubscription() {
+    if (state.recoveryPromise) return state.recoveryPromise;
+    const pending = runSubscriptionRecovery();
+    state.recoveryPromise = pending;
+    pending.finally(() => { if (state.recoveryPromise === pending) state.recoveryPromise = null; });
+    return pending;
+  }
+
+  async function runSubscriptionRecovery() {
+    if (!state.button || !state.identity || !isSupported() || state.actionBusy || document.hidden) return;
+    if (state.identity.role === 'parent' && !state.identity.parentSession) return;
+    const identity = JSON.stringify(state.identity);
+    if (wanted() === 'no') {
+      try {
+        const endpoint = localStorage.getItem(intentKey() + ':off-endpoint');
+        if (endpoint) await deleteSubscriptionInApp({endpoint});
+      } catch (_) { /* Keep the off request for the next opening or online event. */ }
+      return;
+    }
+    try {
+      const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL);
+      let subscription = await registration.pushManager.getSubscription();
+      if (identity !== JSON.stringify(state.identity)) return;
+      if (Notification.permission === 'denied') {
+        let knownEndpoint = subscription && subscription.endpoint;
+        try { knownEndpoint = knownEndpoint || localStorage.getItem(intentKey() + ':endpoint'); } catch (_) {}
+        if (knownEndpoint) {
+          await deleteSubscriptionInApp({endpoint: knownEndpoint}, 'permission_revoked');
+          try { localStorage.removeItem(intentKey() + ':endpoint'); } catch (_) {}
+        }
+        return;
+      }
+      if (Notification.permission !== 'granted') return;
+      // Only restore an explicitly enabled subscription. Never override a user's off switch.
+      if (!subscription && wanted() === 'yes') {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+      }
+      if (!subscription || identity !== JSON.stringify(state.identity)) return;
+      if (wanted() === 'no') return;
+      setWanted(true);
+      await syncSubscription(subscription);
+      state.recoveryAttempts = 0;
+      if (state.recoveryTimer) clearTimeout(state.recoveryTimer);
+      state.recoveryTimer = null;
+      updateButton();
+    } catch (_) {
+      setStatus('Не удалось восстановить уведомления. Проверьте подключение в настройках бота.');
+      if (!state.recoveryTimer && state.recoveryAttempts < 2) {
+        state.recoveryAttempts += 1;
+        state.recoveryTimer = setTimeout(() => {
+          state.recoveryTimer = null;
+          recoverSubscription();
+        }, 30000);
+      }
+    }
+  }
+
   function sendSubscriptionToApp(subscription, targetWindow) {
     const target = targetWindow || (state.frame && state.frame.contentWindow);
     if (!state.identity) return Promise.resolve(null);
@@ -108,19 +235,27 @@
     return sendPushRequestToServer(message);
   }
 
-  function deleteSubscriptionInApp(subscription) {
+  function deleteSubscriptionInApp(subscription, reason) {
     if (!subscription) return;
 
     const message = {
       type: PUSH_MESSAGE_TYPE,
       action: 'delete',
+      reason: reason || 'user_disabled',
       endpoint: subscription.endpoint || ''
     };
 
     if (state.frame && state.frame.contentWindow) {
       state.frame.contentWindow.postMessage(message, '*');
     }
-    sendPushRequestToServer(message).catch(() => {});
+    const pendingKey = intentKey() + ':off-endpoint';
+    try { localStorage.setItem(pendingKey, subscription.endpoint || ''); } catch (_) {}
+    return sendPushRequestToServer(message).then(result => {
+      try {
+        if (localStorage.getItem(pendingKey) === subscription.endpoint) localStorage.removeItem(pendingKey);
+      } catch (_) {}
+      return result;
+    });
   }
 
   function sendPushRequestToServer(message) {
@@ -140,7 +275,8 @@
 
     if (state.pushServiceUrl && message.action === 'delete') {
       pushRequest = sendPushRequest(state.pushServiceUrl + '/unsubscribe', {
-        endpoint: message.endpoint
+        endpoint: message.endpoint,
+        reason: message.reason
       });
     }
 
@@ -172,7 +308,12 @@
       if (opaque) return null;
       let result;
       try { result = await response.json(); } catch (_) { throw new Error('PUSH_BAD_RESPONSE'); }
-      if (!response.ok || !result || result.ok !== true) throw new Error(result && result.message || 'PUSH_SUBSCRIBE_FAILED');
+      if (!response.ok || !result || result.ok !== true) {
+        const error = new Error(result && result.message || 'PUSH_SUBSCRIBE_FAILED');
+        error.code = result && result.code || '';
+        error.status = response.status;
+        throw error;
+      }
       return result;
     } finally { clearTimeout(timer); }
   }
@@ -221,18 +362,26 @@
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
 
-    await sendSubscriptionToApp(subscription);
+    setWanted(true);
+    state.lastSync = '';
+    await syncSubscription(subscription);
     setStatus('Уведомления включены.');
     updateButton({ reveal: true });
   }
 
   async function unsubscribe() {
+    setWanted(false);
+    state.lastSync = '';
+    if (state.recoveryTimer) clearTimeout(state.recoveryTimer);
+    state.recoveryTimer = null;
+    // Wait for an older save before recording the explicit off switch.
+    if (state.syncPromise) { try { await state.syncPromise; } catch (_) {} }
     const subscription = await getSubscription();
     if (subscription) {
       // Remove the browser subscription first, then remove the same endpoint
       // from the server. Android can resolve unsubscribe asynchronously; doing
       // this in this order prevents a quick re-enable from racing the delete.
-      try { await subscription.unsubscribe(); } finally { deleteSubscriptionInApp(subscription); }
+      try { await subscription.unsubscribe(); } finally { await deleteSubscriptionInApp(subscription); }
     }
 
     setStatus('Уведомления отключены.');
@@ -311,11 +460,11 @@
       }
     }
 
-    if (subscription) {
+    if (subscription && wanted() !== 'no') {
       state.button.textContent = 'Отключить уведомления';
       state.button.disabled = false;
 
-      sendSubscriptionToApp(subscription).catch(() => {
+      syncSubscription(subscription).catch(() => {
         setStatus('Проверяем подключение уведомлений. Попробуем ещё раз при следующем открытии.');
       });
 
@@ -354,7 +503,7 @@
 
     getSubscription()
       .then(subscription => {
-        if (subscription) return sendSubscriptionToApp(subscription, event.source);
+        if (subscription && wanted() !== 'no') return sendSubscriptionToApp(subscription, event.source);
       })
       .catch(() => {});
   });
@@ -381,7 +530,7 @@
       state.button.disabled = true;
       try {
         const subscription = await getSubscription();
-        if (subscription) {
+        if (subscription && wanted() !== 'no') {
           await unsubscribe();
           return;
         }
@@ -404,15 +553,21 @@
 
     if (options && options.identity) saveIdentity(options.identity);
     updateButton({ reveal: true });
+    recoverSubscription();
   }
+
+  window.addEventListener('online', () => { state.recoveryAttempts = 0; recoverSubscription(); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { state.recoveryAttempts = 0; recoverSubscription(); }
+  });
 
   window.MedsiPush = {
     init,
-    async getEnabled() { return !!(await getSubscription()); },
+    async getEnabled() { return isSupported() && wanted() !== 'no' && Notification.permission === 'granted' && !!(await getSubscription()); },
     async toggle() {
       const subscription = await getSubscription();
-      if (subscription) { await unsubscribe(); return false; }
-      await subscribe(); return !!(await getSubscription());
+      if (subscription && wanted() !== 'no') { await unsubscribe(); return false; }
+      await subscribe(); return wanted() !== 'no' && Notification.permission === 'granted' && !!(await getSubscription());
     },
     setIdentity: saveIdentity,
     clearIdentity,
@@ -427,7 +582,7 @@
     },
     sendCurrentSubscription: async function () {
       const subscription = await getSubscription();
-      if (subscription) return sendSubscriptionToApp(subscription);
+      if (subscription && wanted() !== 'no') return syncSubscription(subscription);
       return null;
     }
   };
