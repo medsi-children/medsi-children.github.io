@@ -72,90 +72,59 @@ function mirrorCloudflareParentRegistration(phoneRaw, attemptIdRaw, parentSessio
   if (!phone10 || !attemptId || !claims) return { ok: false, message: 'Не удалось подтвердить регистрацию.' };
 
   try {
-    return withChatWriteLock_(function() {
-      const previousSnapshot = typeof loadReportsD1ProfilesSnapshot_ === 'function'
-        ? (loadReportsD1ProfilesSnapshot_() || reportsD1ProfilesSnapshot_())
-        : null;
-      const outbox = d1AdminRequest_('/admin/parent-registration-outbox', 'get');
-      const item = (outbox.registrations || []).find(function(row) {
-        return String(row.attempt_id || '') === attemptId && last10_(row.phone10) === phone10;
-      });
-      if (!item) {
-        return getReportRowsByPhone_(phone10).length
-          ? { ok: true, alreadySynced: true }
-          : { ok: true, pending: true };
-      }
-
-      // A row created or deliberately edited by staff wins; never overwrite it
-      // with the initial registration form contents.
-      if (!getReportRowsByPhone_(phone10).length) {
-        smartRegisterFromInboxCore_('8' + phone10, item.parent_name, item.child_name, true);
-      }
-      let reportMaintenance = { ok:true, skipped:true };
-      const currentSnapshot = typeof reportsD1ProfilesSnapshot_ === 'function'
-        ? reportsD1ProfilesSnapshot_()
-        : null;
-      if (
-        previousSnapshot && currentSnapshot &&
-        typeof reportsD1SnapshotsDiffer_ === 'function' &&
-        reportsD1SnapshotsDiffer_(previousSnapshot, currentSnapshot) &&
-        typeof maintainRawReportsAfterProfilesChangeCore_ === 'function'
-      ) {
-        reportMaintenance = maintainRawReportsAfterProfilesChangeCore_(previousSnapshot, 'registration');
-      }
-      // Keep the sheet-diff baseline aligned with the just-materialized row so
-      // a subsequent manual deletion is recognized as an explicit revocation.
-      // If an infrastructure error prevented report maintenance, keep the old
-      // baseline so the scheduled reconciliation can retry the transition.
-      if (
-        reportMaintenance.ok !== false &&
-        currentSnapshot &&
-        typeof saveReportsD1ProfilesSnapshot_ === 'function'
-      ) {
-        saveReportsD1ProfilesSnapshot_(currentSnapshot);
-      }
-      d1AdminRequest_('/admin/parent-registration-outbox/ack', 'post', { attemptIds: [attemptId] });
-      return {
-        ok:true,
-        synced:true,
-        reportMaintenancePending:reportMaintenance.ok === false
-      };
-    });
+    // Cloudflare already owns the durable registration/outbox. A browser
+    // request must not wait for the global Apps Script lock or for follow-up
+    // Worker calls. Wake the minute trigger; the 10-minute reconciliation is
+    // still the safety net if this signal cannot be processed immediately.
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty('PARENT_REGISTRATION_OUTBOX_REQUEST', Utilities.getUuid());
+    if (typeof requestReportsD1ProfileSync_ === 'function') requestReportsD1ProfileSync_();
+    return { ok:true, pending:true };
   } catch (e) {
-    try {
-      d1AdminRequest_('/admin/parent-registration-outbox/fail', 'post', {
-        attemptId: attemptId, message: String(e && e.message || e)
-      });
-    } catch (_) {}
-    return { ok: false, pending: true, message: 'Профиль сохранён; синхронизация с таблицей продолжится автоматически.' };
+    return { ok:false, pending:true, message:'Профиль сохранён; синхронизация с таблицей продолжится автоматически.' };
   }
 }
 
 function flushCloudflareParentRegistrationOutbox_() {
   const outbox = d1AdminRequest_('/admin/parent-registration-outbox', 'get');
   const acknowledged = [], failed = [];
+  let deferred = 0;
   (outbox.registrations || []).forEach(function(item) {
     const phone10 = last10_(item.phone10);
     const attemptId = normalizeParentAccessId_(item.attempt_id);
     if (!phone10 || !attemptId) return;
+    const lock = LockService.getScriptLock();
+    let acquired = false;
     try {
+      // The immediate registration mirror and this scheduled outbox drain can
+      // race. Protect only the sheet check-and-append; never hold the global
+      // script lock across a Worker request.
+      acquired = lock.tryLock(1000);
+      if (!acquired) {
+        deferred += 1;
+        return;
+      }
       if (!getReportRowsByPhone_(phone10).length) {
         smartRegisterFromInboxCore_('8' + phone10, item.parent_name, item.child_name, true);
       }
       acknowledged.push(attemptId);
     } catch (e) {
       failed.push({ attemptId: attemptId, message: String(e && e.message || e) });
-      try {
-        d1AdminRequest_('/admin/parent-registration-outbox/fail', 'post', {
-          attemptId: attemptId, message: String(e && e.message || e)
-        });
-      } catch (_) {}
+    } finally {
+      if (acquired) lock.releaseLock();
     }
+  });
+  failed.forEach(function(item) {
+    try {
+      d1AdminRequest_('/admin/parent-registration-outbox/fail', 'post', {
+        attemptId: item.attemptId, message: item.message
+      });
+    } catch (_) {}
   });
   if (acknowledged.length) {
     d1AdminRequest_('/admin/parent-registration-outbox/ack', 'post', { attemptIds: acknowledged });
   }
-  return { ok: failed.length === 0, synced: acknowledged.length, failed: failed };
+  return { ok: failed.length === 0, synced: acknowledged.length, deferred: deferred, failed: failed };
 }
 
 function getParentRegistrationStatus(phoneRaw, attemptIdRaw) {

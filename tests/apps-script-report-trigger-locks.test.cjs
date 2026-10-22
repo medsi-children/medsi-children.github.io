@@ -86,6 +86,101 @@ test('report distribution lock serializes work without the global chat lock', ()
   assert.equal(acquired, 1);
 });
 
+test('registration outbox locks the REPORTS check-and-append and defers on contention', () => {
+  let held = false;
+  let appends = 0;
+  const requests = [];
+  const context = {
+    LockService: { getScriptLock: () => ({
+      tryLock() { if (held) return false; held = true; return true; },
+      releaseLock() { held = false; }
+    }) },
+    last10_: value => String(value || '').slice(-10),
+    normalizeParentAccessId_: value => String(value || ''),
+    getReportRowsByPhone_: () => [],
+    smartRegisterFromInboxCore_: () => {
+      appends += 1;
+      // Simulate the immediate path trying to mirror the same outbox row
+      // while the scheduled path is inside its critical section.
+      const nested = context.flushCloudflareParentRegistrationOutbox_();
+      assert.equal(nested.deferred, 1);
+      assert.equal(nested.synced, 0);
+    },
+    d1AdminRequest_: (route, method, payload) => {
+      requests.push({ route, payload });
+      return route === '/admin/parent-registration-outbox'
+        ? { registrations: [{ phone10:'0000000001', attempt_id:'reg_abcdefghijklmnop', parent_name:'Parent', child_name:'Child' }] }
+        : { ok:true };
+    }
+  };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'parent-access.js'), 'utf8'), context);
+
+  const result = context.flushCloudflareParentRegistrationOutbox_();
+  assert.equal(appends, 1);
+  assert.equal(result.synced, 1);
+  assert.equal(result.deferred, 0);
+  assert.equal(requests.filter(x => x.route.endsWith('/ack')).length, 1);
+  assert.equal(held, false);
+});
+
+test('browser registration mirror returns without waiting for a lock or Worker call', () => {
+  const properties = new Map();
+  const context = {
+    last10_: value => String(value || '').slice(-10),
+    decodeCloudflareParentSession_: () => ({ role:'parent' }),
+    normalizeParentAccessId_: value => String(value || ''),
+    LockService: { getScriptLock() { throw new Error('browser path must not acquire a lock'); } },
+    Utilities: { getUuid:() => 'outbox-request-1' },
+    PropertiesService: { getScriptProperties:() => ({ setProperty:(key,value) => properties.set(key,value) }) },
+    requestReportsD1ProfileSync_:() => properties.set('REPORTS_D1_SYNC_REQUEST','profile-request-1'),
+    d1AdminRequest_:() => { throw new Error('browser path must not call Worker'); }
+  };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'parent-access.js'), 'utf8'), context);
+  context.decodeCloudflareParentSession_ = () => ({ role:'parent' });
+
+  const result = context.mirrorCloudflareParentRegistration('80000000001', 'reg_abcdefghijklmnop', 'signed-session');
+  assert.equal(result.ok, true);
+  assert.equal(result.pending, true);
+  assert.equal(properties.get('PARENT_REGISTRATION_OUTBOX_REQUEST'), 'outbox-request-1');
+  assert.equal(properties.get('REPORTS_D1_SYNC_REQUEST'), 'profile-request-1');
+});
+
+test('minute retry drains a signaled registration outbox before profile reconciliation', () => {
+  const properties = new Map([
+    ['PARENT_REGISTRATION_OUTBOX_REQUEST','outbox-request-1'],
+    ['REPORTS_D1_SYNC_REQUEST','profile-request-1']
+  ]);
+  const calls = [];
+  const context = {
+    PropertiesService: { getScriptProperties:() => ({
+      getProperty:key => properties.get(key) || null,
+      setProperty:(key,value) => properties.set(key,value)
+    }) },
+    flushCloudflareParentRegistrationOutbox_:() => { calls.push('outbox'); return { ok:true, synced:1, deferred:0 }; },
+    reconcileReportsProfilesToD1_:reason => {
+      calls.push(reason);
+      properties.set('REPORTS_D1_SYNC_COMPLETED', properties.get('REPORTS_D1_SYNC_REQUEST'));
+      return { ok:true };
+    }
+  };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'chat-d1-migration.js'), 'utf8'), context);
+  context.flushCloudflareParentRegistrationOutbox_ = () => { calls.push('outbox'); return { ok:true, synced:1, deferred:0 }; };
+  context.reconcileReportsProfilesToD1_ = reason => {
+    calls.push(reason);
+    properties.set('REPORTS_D1_SYNC_COMPLETED', properties.get('REPORTS_D1_SYNC_REQUEST'));
+    return { ok:true };
+  };
+
+  const result = context.retryPendingReportsD1ProfileSync();
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ['outbox','pending-retry']);
+  assert.equal(properties.get('PARENT_REGISTRATION_OUTBOX_COMPLETED'), 'outbox-request-1');
+  assert.equal(context.retryPendingReportsD1ProfileSync().skipped, true);
+});
+
 function profileSyncFixture() {
   const properties = new Map();
   const calls = [];

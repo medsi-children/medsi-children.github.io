@@ -338,10 +338,28 @@ function requestReportsD1ProfileSync_() {
 function retryPendingReportsD1ProfileSync() {
   const props = PropertiesService.getScriptProperties();
   const requested = props.getProperty('REPORTS_D1_SYNC_REQUEST');
-  if (!requested || requested === props.getProperty('REPORTS_D1_SYNC_COMPLETED')) {
+  const outboxRequested = props.getProperty('PARENT_REGISTRATION_OUTBOX_REQUEST');
+  const outboxPending = outboxRequested && outboxRequested !== props.getProperty('PARENT_REGISTRATION_OUTBOX_COMPLETED');
+  const profilePending = requested && requested !== props.getProperty('REPORTS_D1_SYNC_COMPLETED');
+  if (!profilePending && !outboxPending) {
     return { ok:true, skipped:true };
   }
-  return reconcileReportsProfilesToD1_('pending-retry');
+  let registrationSync = { ok:true, skipped:true };
+  if (outboxPending) {
+    registrationSync = flushCloudflareParentRegistrationOutbox_();
+    // A busy sheet lock leaves the durable Worker outbox untouched for the
+    // next minute. Do not spend another lock/network pass until then.
+    if (registrationSync.deferred) return { ok:true, skipped:true, registrationSync:registrationSync };
+    if (!registrationSync.ok) return { ok:false, registrationSync:registrationSync };
+    props.setProperty('PARENT_REGISTRATION_OUTBOX_COMPLETED', outboxRequested);
+  }
+  if (!profilePending && registrationSync.synced) requestReportsD1ProfileSync_();
+  const latestRequested = props.getProperty('REPORTS_D1_SYNC_REQUEST');
+  const latestPending = latestRequested && latestRequested !== props.getProperty('REPORTS_D1_SYNC_COMPLETED');
+  if (!latestPending) return { ok:true, skipped:true, registrationSync:registrationSync };
+  const reconciliation = reconcileReportsProfilesToD1_('pending-retry');
+  reconciliation.registrationSync = registrationSync;
+  return reconciliation;
 }
 
 function reconcileReportsProfilesToD1_(reason) {

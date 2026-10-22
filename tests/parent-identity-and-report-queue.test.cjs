@@ -357,13 +357,16 @@ test('Cloudflare-first deletion closes the profile immediately and persists a du
   const context={Request,Response,AbortSignal,console,fetch:async()=>{throw new Error('Apps Script must not delay receipt')}};
   vm.createContext(context);
   vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {','const worker = {'),context);
+  let scheduledTask=null;
+  context.drainParentDeletionQueue=()=>new Promise(()=>{});
   const env={CHAT_DB:{prepare:wrap,batch:async statements=>Promise.all(statements.map(s=>s.run()))}};
   try{
     const request=new Request('https://example.invalid/lab/parent-delete',{method:'POST',body:JSON.stringify({
       phone:'89990000001',operationId:'delete_synthetic123456'
     })});
-    const receipt=await (await context.enqueueParentDeletion(request,env,{role:'educator'},null)).json();
+    const receipt=await (await context.enqueueParentDeletion(request,env,{role:'educator'},{waitUntil(task){scheduledTask=task}})).json();
     assert.equal(receipt.accepted,true);
+    assert.ok(scheduledTask instanceof Promise);
     assert.equal(db.prepare('SELECT count(*) AS n FROM chat_profiles').get().n,0);
     assert.equal(db.prepare('SELECT count(*) AS n FROM chat_messages').get().n,1);
     assert.equal(db.prepare("SELECT status FROM parent_deletion_queue WHERE phone10='9990000001'").get().status,'pending');
