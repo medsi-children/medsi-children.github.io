@@ -90,6 +90,19 @@ test('registration outbox locks the REPORTS check-and-append and defers on conte
   let held = false;
   let appends = 0;
   const requests = [];
+  const cells = new Map();
+  const properties = new Map();
+  const sheet = {
+    getMaxColumns:() => 9,
+    getLastRow:() => 1,
+    getRange:(row, column) => ({
+      getValue:() => cells.get(`${row}:${column}`) || '',
+      setValue:value => cells.set(`${row}:${column}`, value),
+      getValues:() => []
+    }),
+    isColumnHiddenByUser:() => true,
+    hideColumns() {}
+  };
   const context = {
     LockService: { getScriptLock: () => ({
       tryLock() { if (held) return false; held = true; return true; },
@@ -97,9 +110,12 @@ test('registration outbox locks the REPORTS check-and-append and defers on conte
     }) },
     last10_: value => String(value || '').slice(-10),
     normalizeParentAccessId_: value => String(value || ''),
+    PropertiesService:{ getScriptProperties:() => ({ getProperty:key => properties.get(key) || null, setProperty:(key,value) => properties.set(key,value), deleteProperty:key => properties.delete(key) }) },
+    getDataSheet_:() => sheet,
     getReportRowsByPhone_: () => [],
-    smartRegisterFromInboxCore_: () => {
+    smartRegisterFromInboxCore_: (phone,parent,child,defer,generation) => {
       appends += 1;
+      assert.equal(generation, 'reg_abcdefghijklmnop');
       // Simulate the immediate path trying to mirror the same outbox row
       // while the scheduled path is inside its critical section.
       const nested = context.flushCloudflareParentRegistrationOutbox_();
@@ -121,7 +137,44 @@ test('registration outbox locks the REPORTS check-and-append and defers on conte
   assert.equal(result.synced, 1);
   assert.equal(result.deferred, 0);
   assert.equal(requests.filter(x => x.route.endsWith('/ack')).length, 1);
+  assert.equal(cells.get('1:9'), 'Поколение профиля (служебный)');
   assert.equal(held, false);
+});
+
+test('revoked registration cleanup removes only the REPORTS row carrying that attempt ID', () => {
+  const attemptId = 'reg_revoked_synthetic';
+  const rows = [
+    ['phone-a','Parent A','Child A','Family A','','','','admission-a',attemptId],
+    ['phone-b','Parent B','Child B','Family B','','','','admission-b','reg_current_synthetic']
+  ];
+  const properties = new Map();
+  const sheet = {
+    getMaxColumns:() => 9,
+    getLastRow:() => rows.length + 1,
+    getRange:(row,column,numRows=1,numColumns=1) => ({
+      getValue:() => row === 1 ? 'Поколение профиля (служебный)' : rows[row - 2]?.[column - 1] || '',
+      setValue:value => { if (row === 1) return; rows[row - 2][column - 1] = value; },
+      getValues:() => Array.from({length:numRows},(_,index)=>[
+        rows[row - 2 + index]?.[column - 1] || ''
+      ])
+    }),
+    isColumnHiddenByUser:() => true,
+    hideColumns() {},
+    deleteRow:row => rows.splice(row - 2,1)
+  };
+  const context = {
+    LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock(){}})},
+    PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key)||null,setProperty:(key,value)=>properties.set(key,value),deleteProperty:key=>properties.delete(key)})},
+    getDataSheet_:()=>sheet,
+    normalizeParentAccessId_:value=>String(value||'')
+  };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root,'parent-access.js'),'utf8'),context);
+  const result = context.queueRevokedParentRegistrationCleanup_([attemptId]);
+  assert.equal(result.removed,1);
+  assert.equal(rows.length,1);
+  assert.equal(rows[0][8],'reg_current_synthetic');
+  assert.equal(properties.has('REVOKED_PARENT_REGISTRATION_ROWS'),false);
 });
 
 test('browser registration mirror returns without waiting for a lock or Worker call', () => {

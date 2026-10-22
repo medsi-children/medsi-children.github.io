@@ -446,19 +446,34 @@ async function getParentRegistrationStatus(request, env) {
 }
 
 async function listParentRegistrationOutbox(env) {
-  const rows = await env.CHAT_DB.prepare(`SELECT attempt_id, phone10, parent_name, child_name, created_at
-    FROM parent_registration_outbox ORDER BY created_at ASC LIMIT 50`).all();
+  const rows = await env.CHAT_DB.prepare(`SELECT o.attempt_id, o.phone10, o.parent_name, o.child_name, o.created_at
+    FROM parent_registration_outbox o
+    JOIN chat_profiles p ON p.phone10 = o.phone10 AND p.profile_generation = o.attempt_id
+    ORDER BY o.created_at ASC LIMIT 50`).all();
   return json({ ok: true, registrations: rows.results || [] });
 }
 
 async function acknowledgeParentRegistrationOutbox(request, env) {
   const payload = await body(request) || {};
   const ids = Array.isArray(payload.attemptIds) ? payload.attemptIds.map(registrationId).filter(Boolean).slice(0, 50) : [];
-  if (!ids.length) return json({ ok: true, acknowledged: 0 });
-  await env.CHAT_DB.batch(ids.map(id => env.CHAT_DB.prepare(
-    'DELETE FROM parent_registration_outbox WHERE attempt_id = ?'
-  ).bind(id)));
-  return json({ ok: true, acknowledged: ids.length });
+  if (!ids.length) return json({ ok: true, acknowledged: 0, acceptedAttemptIds:[], revokedAttemptIds:[] });
+  const acceptedAttemptIds = [], revokedAttemptIds = [];
+  for (const id of ids) {
+    const acknowledged = await env.CHAT_DB.prepare(`DELETE FROM parent_registration_outbox
+      WHERE attempt_id = ? AND EXISTS (
+        SELECT 1 FROM chat_profiles p
+        WHERE p.phone10 = parent_registration_outbox.phone10 AND p.profile_generation = ?
+      )`).bind(id, id).run();
+    if (acknowledged.meta && acknowledged.meta.changes) {
+      acceptedAttemptIds.push(id);
+      continue;
+    }
+    const alreadyApplied = await env.CHAT_DB.prepare(
+      'SELECT phone10 FROM chat_profiles WHERE profile_generation = ?'
+    ).bind(id).first();
+    (alreadyApplied ? acceptedAttemptIds : revokedAttemptIds).push(id);
+  }
+  return json({ ok:true, acknowledged:acceptedAttemptIds.length, acceptedAttemptIds, revokedAttemptIds });
 }
 
 async function failParentRegistrationOutbox(request, env) {
@@ -1605,16 +1620,27 @@ async function reconcileProfiles(request, env) {
     WHERE status IN ('pending','retry','processing','failed')
   `).all();
   const deleting = new Set((deletingRows.results || []).map(row => String(row.phone10 || '')).filter(Boolean));
+  const recentlyDeletedRows = await env.CHAT_DB.prepare(`
+    SELECT DISTINCT phone10
+    FROM parent_deletion_queue
+    WHERE status = 'completed' AND updated_at >= ?
+  `).bind(Date.now() - 30 * 24 * 60 * 60 * 1000).all();
+  const recentlyDeleted = new Set((recentlyDeletedRows.results || []).map(row => String(row.phone10 || '')).filter(Boolean));
   const active = new Map();
   profiles.forEach(item => {
     const phone = phone10(item && item.phone);
     if (!phone || deleting.has(phone)) return;
+    const profileGeneration = registrationId(item.profileGeneration) || '';
+    // Old code may still have a REPORTS snapshot in flight when a discharge
+    // finishes. Such a snapshot has no generation and must not recreate the
+    // just-removed profile. A fresh Worker registration always has a new ID.
+    if (recentlyDeleted.has(phone) && !profileGeneration) return;
     active.set(phone, {
       parentName: String(item.parentName || '').trim().slice(0, 300),
       childName: String(item.childName || '').trim().slice(0, 300),
       relationship: String(item.relationship || 'Родитель').trim().slice(0, 30),
       childGenitive: String(item.childGenitive || '').trim().slice(0, 100),
-      profileGeneration: registrationId(item.profileGeneration) || '',
+      profileGeneration: profileGeneration,
       childAdmissionId: /^[A-Za-z0-9_-]{8,120}$/.test(String(item.childAdmissionId || '').trim())
         ? String(item.childAdmissionId).trim() : ''
     });
@@ -1627,7 +1653,16 @@ async function reconcileProfiles(request, env) {
     statements.push(env.CHAT_DB.prepare(`
       INSERT INTO chat_profiles
         (phone10, parent_name, child_name, relationship, child_genitive, profile_generation, child_admission_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      SELECT ?, ?, ?, ?, ?, ?, ?
+      WHERE ? = ''
+        OR EXISTS (
+          SELECT 1 FROM parent_registration_attempts a
+          WHERE a.attempt_id = ? AND a.phone10 = ? AND a.status = 'COMPLETED'
+        )
+        OR EXISTS (
+          SELECT 1 FROM chat_profiles current
+          WHERE current.phone10 = ? AND current.profile_generation = ?
+        )
       ON CONFLICT(phone10) DO UPDATE SET parent_name = excluded.parent_name,
         child_name = excluded.child_name, relationship = excluded.relationship,
         child_genitive = excluded.child_genitive,
@@ -1644,7 +1679,8 @@ async function reconcileProfiles(request, env) {
         AND (excluded.child_admission_id = '' OR chat_profiles.child_admission_id = ''
           OR chat_profiles.child_admission_id = excluded.child_admission_id)
     `).bind(phone, profile.parentName, profile.childName, profile.relationship, profile.childGenitive,
-      profile.profileGeneration, profile.childAdmissionId));
+      profile.profileGeneration, profile.childAdmissionId, profile.profileGeneration,
+      profile.profileGeneration, phone, phone, profile.profileGeneration));
     statements.push(env.CHAT_DB.prepare(`
       INSERT INTO report_inactivity_state (phone10, first_seen_at, roster_order)
       VALUES (?, ?, ?)

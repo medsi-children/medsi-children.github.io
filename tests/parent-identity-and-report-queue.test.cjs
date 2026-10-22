@@ -15,7 +15,7 @@ function apps() {
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value)})},
     LockService:{getScriptLock:()=>({waitLock(){},tryLock(){return true},releaseLock(){}}),getUserLock:()=>({waitLock(){},releaseLock(){}})}};
   vm.createContext(context);
-  ['report-rules.js','report-names.js','report-parser.js','Медси бот.js','report-admissions.js','medsi-contacts.js','parent-relationships.js'].forEach(file=>vm.runInContext(read('apps-script/medsi-bot/'+file),context));
+  ['report-rules.js','report-names.js','report-parser.js','Медси бот.js','report-admissions.js','parent-access.js','medsi-contacts.js','parent-relationships.js'].forEach(file=>vm.runInContext(read('apps-script/medsi-bot/'+file),context));
   return context;
 }
 test('full child name uses child gender and produces a full genitive label',()=>{
@@ -47,7 +47,7 @@ test('profile enrichment reads REPORTS G without writing; background writer fill
 test('legacy registration corrects only an inherited surname; explicit surname is retained',()=>{
   for(const [child,expected] of [['Никита','Иванов'],['Никита Петров','Петров'],['Никита Иванова','Иванова']]) {
     const x=apps(), saved=[];
-    x.getDataSheet_=()=>({getLastRow:()=>1,appendRow:row=>saved.push(row)});
+    x.getDataSheet_=()=>({getLastRow:()=>1,getMaxColumns:()=>9,getRange:()=>({getValue:()=>'',setValue(){},getValues:()=>[]}),isColumnHiddenByUser:()=>true,hideColumns(){},appendRow:row=>saved.push(row)});
     x.reportAdmissionIdForNewChild_=()=> 'synthetic-admission';
     x.appendToDatabase_=()=>{};
     x.smartRegisterFromInboxCore_('89990000001','Анна Иванова',child,true);
@@ -167,7 +167,7 @@ test('report checks run locally before queue acceptance and preserve the submitt
 });
 test('surname and relationship corrections preserve the chat after legacy login retirement',async()=>{
   const {DatabaseSync}=require('node:sqlite'),db=new DatabaseSync(':memory:');
-  db.exec("CREATE TABLE chat_profiles(phone10 TEXT PRIMARY KEY,parent_name TEXT,child_name TEXT,relationship TEXT,child_genitive TEXT,profile_generation TEXT NOT NULL DEFAULT '',child_admission_id TEXT NOT NULL DEFAULT ''); CREATE TABLE chat_messages(phone10 TEXT,message TEXT); CREATE TABLE report_inactivity_state(phone10 TEXT PRIMARY KEY,first_seen_at INTEGER,last_new_report_at INTEGER DEFAULT 0,last_prompt_days INTEGER DEFAULT 0,roster_order INTEGER DEFAULT 0);");
+  db.exec("CREATE TABLE chat_profiles(phone10 TEXT PRIMARY KEY,parent_name TEXT,child_name TEXT,relationship TEXT,child_genitive TEXT,profile_generation TEXT NOT NULL DEFAULT '',child_admission_id TEXT NOT NULL DEFAULT ''); CREATE TABLE parent_registration_attempts(attempt_id TEXT PRIMARY KEY,phone10 TEXT,parent_name TEXT,child_name TEXT,status TEXT); CREATE TABLE chat_messages(phone10 TEXT,message TEXT); CREATE TABLE report_inactivity_state(phone10 TEXT PRIMARY KEY,first_seen_at INTEGER,last_new_report_at INTEGER DEFAULT 0,last_prompt_days INTEGER DEFAULT 0,roster_order INTEGER DEFAULT 0);");
   db.prepare('INSERT INTO chat_profiles(phone10,parent_name,child_name,relationship,child_genitive) VALUES(?,?,?,?,?)').run('9990000001','Анна','Никита Иванова','Мама','');
   db.prepare('INSERT INTO chat_messages VALUES(?,?)').run('9990000001','Synthetic history');
   const wrap=sql=>({args:[],bind(...args){this.args=args;return this},all:async()=>({results:[]}),run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}});

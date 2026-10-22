@@ -240,6 +240,59 @@ test('new registration stores its attempt as the profile generation without chan
   } finally { db.close(); }
 });
 
+test('a registration fetched before discharge is rejected on ACK and cannot be restored by stale REPORTS sync', async () => {
+  const { db, env } = makeDatabase();
+  const context = { Response, console, Date, TextEncoder, Uint8Array, btoa,
+    crypto: require('node:crypto').webcrypto };
+  vm.createContext(context);
+  vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {', 'const worker = {'), context);
+  try {
+    env.LAB_D1_SESSION_SECRET = 'synthetic-session-secret';
+    const attemptId = 'reg_synthetic-discharge-race';
+    await context.registerParent({ json:async()=>({ phone:'89990000001', parentName:'Анна Синтетическая', childName:'Миша Примеров', attemptId }) }, env);
+    const listed = await (await context.listParentRegistrationOutbox(env)).json();
+    assert.equal(listed.registrations.length, 1);
+
+    // Simulate Cloudflare discharge after Apps Script fetched the outbox row.
+    db.prepare('DELETE FROM parent_registration_outbox WHERE attempt_id=?').run(attemptId);
+    db.prepare('DELETE FROM chat_profiles WHERE phone10=?').run('9990000001');
+    db.prepare('DELETE FROM parent_registration_attempts WHERE attempt_id=?').run(attemptId);
+    db.prepare(`INSERT INTO parent_deletion_queue
+      (operation_id,phone10,parent_name,child_name,status,created_at,updated_at,profile_generation)
+      VALUES(?,?,?,?,?,?,?,?)`).run('delete_synthetic-race-001','9990000001','Анна Синтетическая','Миша Примеров','completed',Date.now(),Date.now(),attemptId);
+
+    const ack = await (await context.acknowledgeParentRegistrationOutbox({ json:async()=>({ attemptIds:[attemptId] }) }, env)).json();
+    assert.deepEqual(ack.acceptedAttemptIds, []);
+    assert.deepEqual(ack.revokedAttemptIds, [attemptId]);
+
+    await context.reconcileProfiles({ json:async()=>({ full:false, profiles:[{
+      phone:'89990000001', parentName:'Анна Синтетическая', childName:'Миша Примеров',
+      profileGeneration:attemptId, childAdmissionId:'adm_synthetic_old'
+    }] }) }, env);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM chat_profiles WHERE phone10=?').get('9990000001').n, 0);
+
+    // A request from an already-running older deployment has no generation at all.
+    await context.reconcileProfiles({ json:async()=>({ full:false, profiles:[{
+      phone:'89990000001', parentName:'Анна Синтетическая', childName:'Миша Примеров',
+      childAdmissionId:'adm_synthetic_old'
+    }] }) }, env);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM chat_profiles WHERE phone10=?').get('9990000001').n, 0);
+
+    const nextAttemptId = 'reg_synthetic-new-admission';
+    const nextRegistration = await context.registerParent({ json:async()=>({
+      phone:'89990000001', parentName:'Анна Синтетическая', childName:'Миша Примеров', attemptId:nextAttemptId
+    }) }, env);
+    assert.equal((await nextRegistration.json()).ok, true);
+    await context.reconcileProfiles({ json:async()=>({ full:false, profiles:[{
+      phone:'89990000001', parentName:'Анна Синтетическая', childName:'Миша Примеров',
+      profileGeneration:nextAttemptId, childAdmissionId:'adm_synthetic_new'
+    }] }) }, env);
+    const current = db.prepare('SELECT profile_generation,child_admission_id FROM chat_profiles WHERE phone10=?').get('9990000001');
+    assert.equal(current.profile_generation, nextAttemptId);
+    assert.equal(current.child_admission_id, 'adm_synthetic_new');
+  } finally { db.close(); }
+});
+
 test('profile reconciliation rejects a different generation or admission and fills missing metadata', async () => {
   const { db, env } = makeDatabase();
   const context = { Response, console, Date, TextEncoder, Uint8Array, btoa,

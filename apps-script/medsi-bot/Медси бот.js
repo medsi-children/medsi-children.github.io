@@ -53,7 +53,8 @@ function buildProfileFromReportRow_(r) {
     phone: normalizePhone_(r[0]),
     parentName,
     childName,
-    childAdmissionId: String(r[7] || '').trim()
+    childAdmissionId: String(r[7] || '').trim(),
+    profileGeneration: String(r[8] || '').trim()
   };
 }
 
@@ -67,7 +68,7 @@ function getReportRowsByPhone_(phoneRaw) {
   const lastRow = sh.getLastRow();
   if (lastRow < 2) return [];
 
-  const values = sh.getRange(2, 1, lastRow - 1, 8).getValues(); // A:H, including admission ID
+  const values = sh.getRange(2, 1, lastRow - 1, 8).getValues(); // A:H, including child-admission ID
   return values.filter(r => last10_(r[0]) === phone10);
 }
 
@@ -762,7 +763,7 @@ function registerParent(parentNameRaw, childNameRaw, phoneRaw, registrationAttem
   return registerParentInCloudflare_(parentNameRaw, childNameRaw, phoneRaw, registrationAttemptIdRaw);
 }
 
-function smartRegisterFromInboxCore_(phoneRaw, parentNameRaw, childNameRaw, deferD1Sync) {
+function smartRegisterFromInboxCore_(phoneRaw, parentNameRaw, childNameRaw, deferD1Sync, profileGenerationRaw) {
   const phone = normalizePhone_(phoneRaw);
   const p = splitNameSmart(parentNameRaw);
   const c = splitNameSmart(childNameRaw);
@@ -776,6 +777,8 @@ function smartRegisterFromInboxCore_(phoneRaw, parentNameRaw, childNameRaw, defe
 
   const sh = getDataSheet_();
   if (!sh) throw new Error(`Нет листа "${DATA_SHEET_NAME}"`);
+  const profileGeneration = String(profileGenerationRaw || '').trim();
+  ensureReportParentGenerationColumn_(sh);
 
   const lastRow = sh.getLastRow();
   const data = lastRow > 1
@@ -803,7 +806,8 @@ function smartRegisterFromInboxCore_(phoneRaw, parentNameRaw, childNameRaw, defe
     '',
     '',
     defaultParentRelationship_(parentFirst),
-    childAdmissionId
+    childAdmissionId,
+    profileGeneration
   ]);
 
   appendToDatabase_(phone, parentFirst, childFirst, familyForStore);
@@ -2773,11 +2777,17 @@ function getProfileByPhone_(phoneRaw) {
     const lastRow = sh.getLastRow();
     if (lastRow >= 2) {
       const values = sh.getRange(2, 1, lastRow - 1, 8).getValues(); // A:H, including admission ID
+      const generationColumnReady = typeof REPORT_PARENT_GENERATION_HEADER_ !== 'undefined' &&
+        sh.getMaxColumns && sh.getMaxColumns() >= 9 &&
+        String(sh.getRange(1, 9).getValue() || '').trim() === REPORT_PARENT_GENERATION_HEADER_;
+      const generations = generationColumnReady
+        ? sh.getRange(2, 9, lastRow - 1, 1).getValues() : [];
 
-      for (const r of values) {
+      for (let index = 0; index < values.length; index++) {
+        const r = values[index];
         if (last10_(r[0]) !== phone10) continue;
 
-        return buildProfileFromReportRow_(r);
+        return buildProfileFromReportRow_(r.concat(generations[index] ? generations[index][0] : ''));
       }
     }
   }

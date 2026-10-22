@@ -62,6 +62,91 @@ function decodeCloudflareParentSession_(phoneRaw, tokenRaw) {
   } catch (_) { return null; }
 }
 
+const REPORT_PARENT_GENERATION_COLUMN_ = 9;
+const REPORT_PARENT_GENERATION_HEADER_ = 'Поколение профиля (служебный)';
+const REPORT_REVOKED_REGISTRATION_CLEANUP_PROPERTY_ = 'REVOKED_PARENT_REGISTRATION_ROWS';
+
+function ensureReportParentGenerationColumn_(sheet) {
+  if (!sheet) throw new Error('Лист REPORTS не найден.');
+  if (sheet.getMaxColumns() < REPORT_PARENT_GENERATION_COLUMN_) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), REPORT_PARENT_GENERATION_COLUMN_ - sheet.getMaxColumns());
+  }
+  const header = String(sheet.getRange(1, REPORT_PARENT_GENERATION_COLUMN_).getValue() || '').trim();
+  if (header && header !== REPORT_PARENT_GENERATION_HEADER_) {
+    throw new Error('REPORTS!I уже занята другим полем; поколение профиля не записано.');
+  }
+  if (!header) {
+    const count = Math.max(0, sheet.getLastRow() - 1);
+    const existing = count ? sheet.getRange(2, REPORT_PARENT_GENERATION_COLUMN_, count, 1).getValues() : [];
+    if (existing.some(row => String(row[0] || '').trim())) {
+      throw new Error('REPORTS!I содержит данные без заголовка; поколение профиля не записано.');
+    }
+    sheet.getRange(1, REPORT_PARENT_GENERATION_COLUMN_).setValue(REPORT_PARENT_GENERATION_HEADER_);
+  }
+  try {
+    if (!sheet.isColumnHiddenByUser(REPORT_PARENT_GENERATION_COLUMN_)) sheet.hideColumns(REPORT_PARENT_GENERATION_COLUMN_);
+  } catch (_) {}
+}
+
+function attachParentRegistrationGeneration_(item, attemptId, sheet) {
+  const phone = last10_(item && item.phone10);
+  const parentFirst = splitNameSmart(item && item.parent_name).first;
+  const child = splitNameSmart(item && item.child_name);
+  const childKey = reportAdmissionChildKey_(child.first, child.last);
+  const lastRow = sheet.getLastRow();
+  const rows = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, REPORT_PARENT_GENERATION_COLUMN_).getValues() : [];
+  const matches = [];
+  rows.forEach(function(row, index) {
+    if (last10_(row[0]) !== phone || normalizeName_(row[1]) !== normalizeName_(parentFirst)) return;
+    if (reportAdmissionChildKey_(row[2], row[3]) !== childKey) return;
+    matches.push({ row:row, sheetRow:index + 2 });
+  });
+  if (matches.length !== 1) return false;
+  const current = String(matches[0].row[REPORT_PARENT_GENERATION_COLUMN_ - 1] || '').trim();
+  if (current && current !== attemptId) return false;
+  if (!current) sheet.getRange(matches[0].sheetRow, REPORT_PARENT_GENERATION_COLUMN_).setValue(attemptId);
+  return true;
+}
+
+function drainRevokedParentRegistrationCleanup_() {
+  const props = PropertiesService.getScriptProperties();
+  let pending = [];
+  try { pending = JSON.parse(props.getProperty(REPORT_REVOKED_REGISTRATION_CLEANUP_PROPERTY_) || '[]'); } catch (_) {}
+  pending = Array.isArray(pending) ? pending.map(normalizeParentAccessId_).filter(Boolean) : [];
+  if (!pending.length) return { ok:true, removed:0 };
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return { ok:true, deferred:true, removed:0 };
+  try {
+    const sheet = getDataSheet_();
+    ensureReportParentGenerationColumn_(sheet);
+    const lastRow = sheet.getLastRow();
+    const ids = new Set(pending);
+    let removed = 0;
+    if (lastRow >= 2) {
+      const markers = sheet.getRange(2, REPORT_PARENT_GENERATION_COLUMN_, lastRow - 1, 1).getValues();
+      for (let index = markers.length - 1; index >= 0; index--) {
+        if (!ids.has(String(markers[index][0] || '').trim())) continue;
+        sheet.deleteRow(index + 2);
+        removed += 1;
+      }
+    }
+    props.deleteProperty(REPORT_REVOKED_REGISTRATION_CLEANUP_PROPERTY_);
+    return { ok:true, removed:removed };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function queueRevokedParentRegistrationCleanup_(attemptIds) {
+  const props = PropertiesService.getScriptProperties();
+  let current = [];
+  try { current = JSON.parse(props.getProperty(REPORT_REVOKED_REGISTRATION_CLEANUP_PROPERTY_) || '[]'); } catch (_) {}
+  const merged = Array.from(new Set((Array.isArray(current) ? current : [])
+    .concat(attemptIds || []).map(normalizeParentAccessId_).filter(Boolean)));
+  if (merged.length) props.setProperty(REPORT_REVOKED_REGISTRATION_CLEANUP_PROPERTY_, JSON.stringify(merged.slice(-100)));
+  return drainRevokedParentRegistrationCleanup_();
+}
+
 // Materialize a D1-first registration in REPORTS after the parent menu is
 // already available. The D1 session restricts the operation to that parent's
 // own account; the outbox makes the projection retryable if this call fails.
@@ -86,6 +171,8 @@ function mirrorCloudflareParentRegistration(phoneRaw, attemptIdRaw, parentSessio
 }
 
 function flushCloudflareParentRegistrationOutbox_() {
+  const cleanup = drainRevokedParentRegistrationCleanup_();
+  if (cleanup.deferred) return { ok:true, synced:0, deferred:1, failed:[] };
   const outbox = d1AdminRequest_('/admin/parent-registration-outbox', 'get');
   const acknowledged = [], failed = [];
   let deferred = 0;
@@ -104,8 +191,13 @@ function flushCloudflareParentRegistrationOutbox_() {
         deferred += 1;
         return;
       }
-      if (!getReportRowsByPhone_(phone10).length) {
-        smartRegisterFromInboxCore_('8' + phone10, item.parent_name, item.child_name, true);
+      const sheet = getDataSheet_();
+      ensureReportParentGenerationColumn_(sheet);
+      const phoneRows = getReportRowsByPhone_(phone10);
+      if (!phoneRows.length) {
+        smartRegisterFromInboxCore_('8' + phone10, item.parent_name, item.child_name, true, attemptId);
+      } else if (!attachParentRegistrationGeneration_(item, attemptId, sheet)) {
+        throw new Error('В REPORTS уже есть другая запись для этого номера; регистрацию оставили на повторную сверку.');
       }
       acknowledged.push(attemptId);
     } catch (e) {
@@ -122,7 +214,10 @@ function flushCloudflareParentRegistrationOutbox_() {
     } catch (_) {}
   });
   if (acknowledged.length) {
-    d1AdminRequest_('/admin/parent-registration-outbox/ack', 'post', { attemptIds: acknowledged });
+    const result = d1AdminRequest_('/admin/parent-registration-outbox/ack', 'post', { attemptIds: acknowledged });
+    if (Array.isArray(result.revokedAttemptIds) && result.revokedAttemptIds.length) {
+      queueRevokedParentRegistrationCleanup_(result.revokedAttemptIds);
+    }
   }
   return { ok: failed.length === 0, synced: acknowledged.length, deferred: deferred, failed: failed };
 }

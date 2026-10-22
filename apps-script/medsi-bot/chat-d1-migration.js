@@ -11,16 +11,19 @@ function d1AdminRequest_(path, method, payload) {
 
 function snapshotActiveProfilesForD1_() {
   const sh = getDataSheet_();
+  if (!sh) return [];
+  ensureReportParentGenerationColumn_(sh);
   const lastRow = sh ? sh.getLastRow() : 0;
   if (lastRow < 2) return [];
   const byPhone = {};
-  const rows = sh.getRange(2, 1, lastRow - 1, 8).getValues();
+  const rows = sh.getRange(2, 1, lastRow - 1, 9).getValues();
   rows.forEach(row => {
     const profile = buildProfileFromReportRow_(row);
     const phone = last10_(profile.phone);
     if (phone) byPhone[phone] = {
       phone:phone, parentName:profile.parentName, childName:profile.childName,
-      childAdmissionId:profile.childAdmissionId
+      childAdmissionId:profile.childAdmissionId,
+      profileGeneration:profile.profileGeneration
     };
   });
   return enrichProfilesWithRelationships_(Object.keys(byPhone).map(phone => byPhone[phone]), rows);
@@ -54,10 +57,11 @@ function snapshotCurrentReportsForD1_(kindRaw) {
   const kinds = allowedKinds.indexOf(requestedKind) >= 0 ? [requestedKind] : allowedKinds;
   const profiles = snapshotActiveProfilesForD1_();
   const dataSheet = getDataSheet_();
+  if (dataSheet) ensureReportParentGenerationColumn_(dataSheet);
   const lastRow = dataSheet ? dataSheet.getLastRow() : 0;
   const rowsByPhone = {};
   if (lastRow >= 2) {
-    dataSheet.getRange(2, 1, lastRow - 1, 8).getValues().forEach(function(row) {
+    dataSheet.getRange(2, 1, lastRow - 1, 9).getValues().forEach(function(row) {
       const phone = last10_(row[0]);
       if (!phone) return;
       (rowsByPhone[phone] || (rowsByPhone[phone] = [])).push(row);
@@ -212,9 +216,10 @@ function syncD1ProfileForPhone_(phoneRaw) {
 function reportsD1ProfilesSnapshot_() {
   const snapshot = {};
   const sheet = getDataSheet_();
+  if (sheet) ensureReportParentGenerationColumn_(sheet);
   const lastRow = sheet ? sheet.getLastRow() : 0;
   const rows = lastRow >= 2
-    ? sheet.getRange(2, 1, lastRow - 1, 8).getValues()
+    ? sheet.getRange(2, 1, lastRow - 1, 9).getValues()
     : [];
 
   rows.forEach(function(row) {
@@ -226,6 +231,7 @@ function reportsD1ProfilesSnapshot_() {
       parentName: String(profile.parentName || '').trim(),
       childName: String(profile.childName || '').trim(),
       childAdmissionId: String(profile.childAdmissionId || '').trim(),
+      profileGeneration: String(profile.profileGeneration || '').trim(),
       // Keep the REPORTS display name and the full family name only in the
       // local lifecycle snapshot.  D1 still receives its existing public
       // profile payload above; these fields let a row-deletion trigger remove
