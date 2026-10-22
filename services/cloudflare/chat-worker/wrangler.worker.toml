@@ -5,6 +5,8 @@ workers_dev = true
 
 [vars]
 CHAT_ENVIRONMENT = "production"
+PARENT_PASSKEY_RP_ID = "xn----btbhdqvtun.xn--p1ai"
+PARENT_PASSKEY_ORIGIN = "https://xn----btbhdqvtun.xn--p1ai"
 
 [triggers]
 crons = ["* * * * *", "0 12-15 * * *", "0 17-20 * * *"]

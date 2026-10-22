@@ -9,7 +9,7 @@
 | `medsi-chat-gateway` | Cloudflare Worker | Узкий service-binding прокси к основному чат-Worker |
 | `medsi-push-worker` | Cloudflare Worker + KV | Web Push-подписки и уведомления |
 | Apps Script и Google Sheets | Google | Отчёты и ручной справочник родителей; обратная совместимость старых сессий и синхронизация справочника с Cloudflare |
-| Родительская регистрация и повторная авторизация | Cloudflare Worker + D1 | Хранение новых профилей и запросов на подтверждение; регистрация проецируется в Google Sheets |
+| Родительская регистрация и вход | Cloudflare Worker + D1 | Регистрация, passkey и запасной запрос на одобрение воспитателем; регистрация проецируется в Google Sheets. Запрос только по телефону сессии не выдаёт. |
 
 ## Где находятся исходники
 
@@ -30,9 +30,9 @@ Google Apps Script или Cloudflare Dashboard не считаются прав�
    обновляет существующее веб-приложение Apps Script. Его URL сохраняется.
 3. Изменение исходников одного Worker после `npm run verify` автоматически
    публикует только этот Worker. Параллельные публикации блокируются.
-4. D1 migrations остаются отдельной ручной операцией через `deploy-cloudflare.yml`
-   в защищённом окружении `cloudflare-production`; для запуска нужны явное
-   подтверждение и reviewer.
+4. D1 migrations остаются отдельной операцией через `deploy-cloudflare.yml` с
+   явным подтверждением. 22.10.2026 workflow был отклонён Cloudflare из-за
+   credentials; миграция `0015` применена проверенной локальной Cloudflare-сессией.
 
 GitHub Actions не создают новые Apps Script deployment и не применяют
 D1-миграции автоматически. Секреты находятся только в GitHub Environments и

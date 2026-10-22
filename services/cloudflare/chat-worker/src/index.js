@@ -141,6 +141,18 @@ function b64url(bytes) {
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
+const parentAuthProfileCache = new Map();
+async function getParentAuthProfile(env, phone) {
+  const cached = parentAuthProfileCache.get(phone);
+  if (cached && cached.until > Date.now()) return cached.value;
+  const row = await env.CHAT_DB.prepare(`SELECT generation_id, created_at
+    FROM parent_auth_profiles WHERE phone10=?`).bind(phone).first();
+  parentAuthProfileCache.delete(phone);
+  if (parentAuthProfileCache.size >= 200) parentAuthProfileCache.delete(parentAuthProfileCache.keys().next().value);
+  parentAuthProfileCache.set(phone, { value: row || null, until: Date.now() + 15000 });
+  return row || null;
+}
+
 async function hmac(secret, value) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(value))));
@@ -166,7 +178,20 @@ async function authorized(request, env) {
   if (!equal(await hmac(env.LAB_D1_SESSION_SECRET, payload), signature)) return null;
   try {
     const claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-    return Number(claims.exp) > Date.now() ? claims : null;
+    if (Number(claims.exp) <= Date.now()) return null;
+    if (claims.role === 'parent') {
+      const generation = await getParentAuthProfile(env, String(claims.phone10 || ''));
+      if (!generation) return null;
+      if (claims.authGeneration) {
+        if (claims.authGeneration !== generation.generation_id) return null;
+      } else {
+        // Existing sessions were issued without a profile generation. Permit
+        // them only when their issuance predates no later than this profile.
+        const issuedAt = Number(claims.exp) - 30 * 24 * 60 * 60 * 1000;
+        if (Number(generation.created_at || 0) > issuedAt) return null;
+      }
+    }
+    return claims;
   } catch { return null; }
 }
 
@@ -189,39 +214,30 @@ function parentAccessRequestId(value) {
   return /^auth_[A-Za-z0-9_-]{16,115}$/.test(id) ? id : '';
 }
 
-function issueParentSession(phone, secret) {
-  const exp = Date.now() + 30 * 24 * 60 * 60 * 1000;
+function parentAccessSecret(value) {
+  const secret = String(value || '').trim();
+  return /^[A-Za-z0-9_-]{40,60}$/.test(secret) ? secret : '';
+}
+
+async function parentAccessSecretHash(value) {
+  return b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(value || '')))));
+}
+
+async function issueParentSession(phone, secret, env) {
+  // The parent's saved browser session should survive ordinary long stays and
+  // the 30-day legacy reauthorization boundary. Profile deletion still revokes
+  // it immediately through the generation check.
+  const exp = Date.now() + 365 * 24 * 60 * 60 * 1000;
+  parentAuthProfileCache.delete(phone);
+  const generation = env ? await getParentAuthProfile(env, phone) : null;
+  if (!generation) throw new Error('Active parent profile is required to issue a session.');
   const payload = b64url(new TextEncoder().encode(JSON.stringify({
-    role: 'parent', phone10: phone, exp, version: 'cf-parent-v1'
+    role: 'parent', phone10: phone, exp, authGeneration: generation.generation_id, version: 'cf-parent-v2'
   })));
   return hmac(secret, payload).then(signature => ({
     token: payload + '.' + signature,
     expiresAt: exp
   }));
-}
-
-const PARENT_OPEN_ACCESS_MS = 30 * 24 * 60 * 60 * 1000;
-
-async function recentParentRegistration(env, phone, now) {
-  const row = await env.CHAT_DB.prepare(`SELECT MIN(created_at) AS registered_at
-    FROM parent_registration_attempts WHERE phone10 = ? AND status = 'COMPLETED'`)
-    .bind(phone).first();
-  const registeredAt = Number(row && row.registered_at);
-  return registeredAt > 0 && registeredAt <= now && now - registeredAt < PARENT_OPEN_ACCESS_MS;
-}
-
-async function automaticParentAccess(env, phone, profile, requestId, now) {
-  if (!await recentParentRegistration(env, phone, now)) return null;
-  if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис авторизации временно недоступен.' }, 503);
-  // Old requests must disappear from the educator's queue, without becoming
-  // reusable approved request IDs after the open-access period ends.
-  await env.CHAT_DB.prepare(`UPDATE parent_access_requests
-    SET status='DENIED', decision='AUTO_ACCESS', updated_at=?
-    WHERE phone10=? AND status='PENDING'`).bind(now, phone).run();
-  const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET);
-  return json({ ok: true, status: 'APPROVED', autoApproved: true, requestId,
-    phone: '8' + phone, parentName: profile.parent_name || '', childName: profile.child_name || '',
-    parentSession: session.token, d1Session: { ok: true, ...session } });
 }
 
 async function markParentReportRead(request, env, auth) {
@@ -358,7 +374,7 @@ async function registerParent(request, env) {
     }
     const active = await env.CHAT_DB.prepare('SELECT phone10 FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
     if (!active) return json({ ok: false, status: 'REVOKED', message: 'Регистрация уже удалена. Начните заново.' }, 410);
-    const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET);
+    const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env);
     return json({ ok: true, duplicate: false, phone: '8' + phone, parentName, childName,
       parentSession: session.token, d1Session: { ok: true, ...session }, registrationAttemptId: attemptId });
   }
@@ -394,7 +410,7 @@ async function registerParent(request, env) {
     return json({ ok: false, message: 'Не удалось сохранить регистрацию. Попробуйте ещё раз.' }, 503);
   }
 
-  const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET);
+  const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env);
   return json({ ok: true, duplicate: false, phone: '8' + phone, parentName, childName,
     parentSession: session.token, d1Session: { ok: true, ...session }, registrationAttemptId: attemptId });
 }
@@ -411,7 +427,7 @@ async function getParentRegistrationStatus(request, env) {
   if (!attempt || attempt.phone10 !== phone) return json({ ok: true, status: 'NOT_FOUND' });
   const active = await env.CHAT_DB.prepare('SELECT phone10 FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
   if (!active) return json({ ok: true, status: 'REVOKED' });
-  const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET);
+  const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env);
   return json({ ok: true, status: 'COMPLETED', phone: '8' + phone,
     parentName: attempt.parent_name, childName: attempt.child_name,
     parentSession: session.token, d1Session: { ok: true, ...session }, registrationAttemptId: attemptId });
@@ -473,20 +489,22 @@ async function notifyEducatorParentAccessBestEffort(env, profile, requestId) {
   if (!response.ok) throw new Error(`Educator access push HTTP ${response.status}`);
 }
 
-async function requestParentAccess(request, env, ctx) {
+async function requestParentAccess(request, env, ctx, secure = false) {
   const payload = await body(request) || {};
   const phone = phone10(payload.phone);
   const requestId = parentAccessRequestId(payload.requestId);
-  if (!phone || !requestId) return json({ ok: false, message: 'Проверьте номер телефона.' }, 400);
+  const requestSecret = secure ? parentAccessSecret(payload.requestSecret) : '';
+  if (!phone || !requestId || (secure && !requestSecret)) return json({ ok: false, message: 'Проверьте данные запроса.' }, 400);
+  const secretHash = secure ? await parentAccessSecretHash(requestSecret) : '';
   const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
   if (!profile) return json({ ok: false, code: 'NOT_FOUND', message: 'Этот номер не найден среди активных родителей.' }, 404);
 
-  const automatic = await automaticParentAccess(env, phone, profile, requestId, Date.now());
-  if (automatic) return automatic;
-
-  const prior = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
+  const prior = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at, request_secret_hash FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
   if (prior) {
     if (prior.phone10 !== phone) return json({ ok: false, message: 'Запрос относится к другому номеру телефона.' }, 409);
+    if ((secure && !equal(String(prior.request_secret_hash || ''), secretHash)) || (!secure && prior.request_secret_hash)) {
+      return json({ ok: false, code: 'NOT_FOUND', message: 'Запрос не найден. Начните вход заново.' }, 404);
+    }
     if (prior.status === 'PENDING' && Number(prior.expires_at) <= Date.now()) {
       await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE request_id=? AND status='PENDING'").bind(Date.now(), requestId).run();
       prior.status = 'EXPIRED';
@@ -503,14 +521,15 @@ async function requestParentAccess(request, env, ctx) {
   }
 
   const createdAt = Date.now(), expiresAt = createdAt + 2 * 60 * 60 * 1000;
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(requestId + '|' + phone)));
-  const code = String((((digest[0] & 255) * 256) + (digest[1] & 255)) % 10000).padStart(4, '0');
+  const randomCode = crypto.getRandomValues(new Uint32Array(1))[0] % 10000;
+  const code = String(randomCode).padStart(4, '0');
   const inserted = await env.CHAT_DB.prepare(`INSERT INTO parent_access_requests
-    (request_id, phone10, code, status, created_at, updated_at, expires_at)
-    VALUES (?, ?, ?, 'PENDING', ?, ?, ?) ON CONFLICT(request_id) DO NOTHING`)
-    .bind(requestId, phone, code, createdAt, createdAt, expiresAt).run();
-  const saved = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
+    (request_id, phone10, code, status, created_at, updated_at, expires_at, request_secret_hash)
+    VALUES (?, ?, ?, 'PENDING', ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING`)
+    .bind(requestId, phone, code, createdAt, createdAt, expiresAt, secretHash).run();
+  const saved = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at, request_secret_hash FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
   if (!saved || saved.phone10 !== phone) return json({ ok: false, message: 'Не удалось создать запрос на вход.' }, 503);
+  if ((secure && !equal(String(saved.request_secret_hash || ''), secretHash)) || (!secure && saved.request_secret_hash)) return json({ ok: false, code: 'NOT_FOUND', message: 'Запрос не найден. Начните вход заново.' }, 404);
   const created = Number(inserted.meta && inserted.meta.changes || 0) > 0;
   if (created) {
     const pushJob = notifyEducatorParentAccessBestEffort(env, profile, requestId)
@@ -523,16 +542,19 @@ async function requestParentAccess(request, env, ctx) {
     expiresAt: new Date(Number(saved.expires_at)).toISOString(), created });
 }
 
-async function getParentAccessStatus(request, env) {
-  const url = new URL(request.url), phone = phone10(url.searchParams.get('phone'));
-  const requestId = parentAccessRequestId(url.searchParams.get('requestId'));
+async function getParentAccessStatus(request, env, secure = false) {
+  const payload = secure ? await body(request) || {} : null;
+  const url = new URL(request.url), phone = phone10(secure ? payload.phone : url.searchParams.get('phone'));
+  const requestId = parentAccessRequestId(secure ? payload.requestId : url.searchParams.get('requestId'));
+  const requestSecret = secure ? parentAccessSecret(payload.requestSecret) : '';
+  const secretHash = secure && requestSecret ? await parentAccessSecretHash(requestSecret) : '';
+  if (secure && !secretHash) return json({ ok: true, status: 'NOT_FOUND' });
   if (!phone || !requestId) return json({ ok: true, status: 'NOT_FOUND' });
   const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
   if (!profile) return json({ ok: true, status: 'NOT_FOUND' });
-  const automatic = await automaticParentAccess(env, phone, profile, requestId, Date.now());
-  if (automatic) return automatic;
   const row = await env.CHAT_DB.prepare('SELECT * FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
   if (!row || row.phone10 !== phone) return json({ ok: true, status: 'NOT_FOUND' });
+  if ((secure && !equal(String(row.request_secret_hash || ''), secretHash)) || (!secure && row.request_secret_hash)) return json({ ok: true, status: 'NOT_FOUND' });
   let status = String(row.status || '').toUpperCase();
   const now = Date.now();
   if (status === 'PENDING' && Number(row.expires_at) <= now) {
@@ -541,8 +563,15 @@ async function getParentAccessStatus(request, env) {
   }
   if (status === 'APPROVED' || status === 'CONSUMED') {
     if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис авторизации временно недоступен.' }, 503);
-    if (status === 'APPROVED') await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='CONSUMED', updated_at=? WHERE request_id=? AND status='APPROVED'").bind(now, requestId).run();
-    const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET);
+    if (secure) {
+      if (status === 'CONSUMED') return json({ ok: true, requestId, phone: '8' + phone, status: 'CONSUMED' });
+      const consumed = await env.CHAT_DB.prepare(`UPDATE parent_access_requests SET status='CONSUMED', updated_at=?
+        WHERE request_id=? AND status='APPROVED' AND expires_at>? AND request_secret_hash=?`)
+        .bind(now, requestId, now, secretHash).run();
+      if (Number(consumed.meta && consumed.meta.changes || 0) !== 1) return json({ ok: true, requestId, phone: '8' + phone, status: 'CONSUMED' });
+    }
+    if (!secure && status === 'APPROVED') await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='CONSUMED', updated_at=? WHERE request_id=? AND status='APPROVED'").bind(now, requestId).run();
+    const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env);
     return json({ ok: true, status: 'APPROVED', requestId, phone: '8' + phone,
       parentName: profile.parent_name || '', childName: profile.child_name || '',
       parentSession: session.token, d1Session: { ok: true, ...session } });
@@ -1304,6 +1333,7 @@ async function enqueueParentDeletion(request, env, auth, ctx) {
     env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(now, phone)
   ]);
+  parentAuthProfileCache.delete(phone);
 
   if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(drainParentDeletionQueue(env));
   return json({ ok:true, accepted:true, operationId, status:'pending' });
@@ -1585,6 +1615,7 @@ async function reconcileProfiles(request, env) {
         deletions.push(env.CHAT_DB.prepare('DELETE FROM chat_profiles WHERE phone10 = ?').bind(phone));
       });
       await env.CHAT_DB.batch(deletions);
+      stale.forEach(phone => parentAuthProfileCache.delete(phone));
       removed = stale.length;
     }
   }
@@ -1644,6 +1675,8 @@ async function moveProfilePhone(request, env) {
   const parentName = String(payload.parentName || '').trim().slice(0, 300);
   const childName = String(payload.childName || '').trim().slice(0, 300);
   await env.CHAT_DB.batch([
+    env.CHAT_DB.prepare('UPDATE parent_auth_profiles SET phone10=?,updated_at=? WHERE phone10=?').bind(to, Date.now(), from),
+    env.CHAT_DB.prepare('UPDATE parent_auth_challenges SET consumed_at=? WHERE phone10=? AND consumed_at IS NULL').bind(Date.now(), from),
     env.CHAT_DB.prepare('UPDATE chat_messages SET phone10 = ? WHERE phone10 = ?').bind(to, from),
     env.CHAT_DB.prepare('UPDATE chat_pins SET phone10 = ? WHERE phone10 = ?').bind(to, from),
     env.CHAT_DB.prepare('UPDATE report_snapshots SET phone10 = ? WHERE phone10 = ?').bind(to, from),
@@ -1657,6 +1690,8 @@ async function moveProfilePhone(request, env) {
     env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(Date.now(), from),
     env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(from)
   ]);
+  parentAuthProfileCache.delete(from);
+  parentAuthProfileCache.delete(to);
   return json({ ok: true, fromPhone: from, toPhone: to, movedMessages: Number(before && before.messages || 0) });
 }
 
@@ -1684,6 +1719,7 @@ async function deleteProfilePhone(request, env) {
     env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(Date.now(), phone)
   ]);
+  parentAuthProfileCache.delete(phone);
   return json({ ok: true, phone, s3Keys, deletedKvKeys:kvKeys.length });
 }
 
@@ -2054,6 +2090,20 @@ export default {
     if (request.method === 'GET' && url.pathname === '/lab/parent-registration/status') {
       return getParentRegistrationStatus(request, env);
     }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-passkeys/authentication/options') {
+      const { parentPasskeyAuthenticationOptions } = await import('./parent-passkeys.mjs');
+      return parentPasskeyAuthenticationOptions(request, env);
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-passkeys/authentication/verify') {
+      const { parentPasskeyAuthenticationVerify } = await import('./parent-passkeys.mjs');
+      return parentPasskeyAuthenticationVerify(request, env, { issueParentSession: (phone, secret) => issueParentSession(phone, secret, env) });
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-auth/request') {
+      return requestParentAccess(request, env, ctx, true);
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-auth/status') {
+      return getParentAccessStatus(request, env, true);
+    }
     if (request.method === 'POST' && url.pathname === '/lab/parent-access/request') {
       return requestParentAccess(request, env, ctx);
     }
@@ -2065,6 +2115,15 @@ export default {
     }
     const auth = await authorized(request, env);
     if (!auth) return json({ ok: false, message: 'Unauthorized' }, 401);
+
+    if (request.method === 'POST' && url.pathname === '/lab/parent-passkeys/registration/options') {
+      const { parentPasskeyRegistrationOptions } = await import('./parent-passkeys.mjs');
+      return parentPasskeyRegistrationOptions(request, env, auth);
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-passkeys/registration/verify') {
+      const { parentPasskeyRegistrationVerify } = await import('./parent-passkeys.mjs');
+      return parentPasskeyRegistrationVerify(request, env, auth, { issueParentSession });
+    }
 
     if (request.method === 'GET' && url.pathname === '/lab/parent-access/requests') {
       if (auth.role !== 'educator') return json({ ok: false, message: 'Forbidden' }, 403);

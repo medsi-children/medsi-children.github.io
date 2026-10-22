@@ -5,7 +5,7 @@
   const CHAT_WORKER_URL='https://medsi-chat-worker.medsi-children.workers.dev';
   const PUSH_APP_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
   const PUSH_SERVICE_URL='https://medsi-push-worker.medsi-children.workers.dev';
-  const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',BOOTSTRAP_CHECK_KEY='medsi_parent_bootstrap_check_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1';
+  const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',BOOTSTRAP_CHECK_KEY='medsi_parent_bootstrap_check_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1',PASSKEY_OFFER_KEY='medsi_parent_passkey_offer_v1';
   const $=id=>document.getElementById(id);
   const reportCache={},reportPending={},reportReadPending={};
   const REPORT_FRESH_MS=60000;let sessionPending=null,menuPending=null,openingChat=false,reportRun=0,historyRun=0;
@@ -53,13 +53,22 @@
     }
     throw lastError||new Error('Cloudflare временно недоступен.');
   }
+  function b64urlToBytes(value){const raw=atob(String(value||'').replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-String(value||'').length%4)%4));return Uint8Array.from(raw,c=>c.charCodeAt(0))}
+  function bytesToB64url(value){const bytes=new Uint8Array(value);let raw='';for(let i=0;i<bytes.length;i++)raw+=String.fromCharCode(bytes[i]);return btoa(raw).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'')}
+  function webauthnOptions(options,registration){const value={...options,challenge:b64urlToBytes(options.challenge)};if(registration&&value.user)value.user={...value.user,id:b64urlToBytes(value.user.id)};if(value.allowCredentials)value.allowCredentials=value.allowCredentials.map(item=>({...item,id:b64urlToBytes(item.id)}));if(value.excludeCredentials)value.excludeCredentials=value.excludeCredentials.map(item=>({...item,id:b64urlToBytes(item.id)}));return value}
+  function webauthnCredentialJSON(credential,registration){const response=credential.response,result={id:credential.id,rawId:bytesToB64url(credential.rawId),type:credential.type,authenticatorAttachment:credential.authenticatorAttachment||null,response:{clientDataJSON:bytesToB64url(response.clientDataJSON)}};if(registration){result.response.attestationObject=bytesToB64url(response.attestationObject);result.response.transports=typeof response.getTransports==='function'?response.getTransports():[]}else{result.response.authenticatorData=bytesToB64url(response.authenticatorData);result.response.signature=bytesToB64url(response.signature);result.response.userHandle=response.userHandle?bytesToB64url(response.userHandle):null}return result}
+  async function callParentPasskey(path,payload){const response=await fetch(CHAT_WORKER_URL+path,{method:'POST',headers:{'content-type':'application/json','x-medsi-chat-session':parentSession},body:JSON.stringify(payload||{}),cache:'no-store'});let result;try{result=await response.json()}catch(_){throw new Error('Cloudflare вернул некорректный ответ.')}if(!response.ok||!result||result.ok!==true){const error=new Error(result&&result.message||'Не удалось выполнить вход.');error.status=response.status;error.code=result&&result.code;throw error}return result}
+  let preparedPasskeyLogin=null;
+  async function preparePasskeyLogin(){const button=$('passkeyLoginBtn');if(!button||!window.PublicKeyCredential||!navigator.credentials){button.disabled=true;button.textContent='Ключ доступа не поддерживается';return}button.disabled=true;button.textContent='Подготавливаем вход…';try{preparedPasskeyLogin=await callCloudflare('/lab/parent-passkeys/authentication/options','POST',{});if(document.body.dataset.screen==='screenAuth'){button.disabled=false;button.textContent='Войти с ключом доступа'}}catch(error){preparedPasskeyLogin=null;if(document.body.dataset.screen==='screenAuth'){button.disabled=false;button.textContent='Попробовать снова';$('passkeyLoginError').textContent='Не удалось подготовить вход. Попробуйте ещё раз или войдите по номеру телефона.';$('passkeyLoginError').classList.remove('hidden')}}}
+  async function loginWithPasskey(){const button=$('passkeyLoginBtn'),error=$('passkeyLoginError');error.classList.add('hidden');if(!preparedPasskeyLogin){await preparePasskeyLogin();return}const ready=preparedPasskeyLogin;preparedPasskeyLogin=null;button.disabled=true;button.textContent='Подтвердите вход…';try{const credential=await navigator.credentials.get({publicKey:webauthnOptions(ready.options,false)});if(!credential)throw new Error('Вход отменён.');const result=await callCloudflare('/lab/parent-passkeys/authentication/verify','POST',{challengeId:ready.challengeId,credential:webauthnCredentialJSON(credential,false)});if(!applyBootstrap(result))throw new Error('Не удалось сохранить вход.');safeRemove(REAUTH_KEY);prewarmAll();justRegistered=false;showChoose()}catch(e){if(e&&e.name==='NotAllowedError'){error.textContent='Ключ не найден или вход отменён. Можно войти по номеру телефона с подтверждением воспитателя.'}else error.textContent=String(e&&e.message||'Не удалось выполнить вход.');error.classList.remove('hidden');button.disabled=false;button.textContent='Войти с ключом доступа';preparePasskeyLogin()}}
+  async function askToSavePasskey(){if(!navigator.credentials||!window.PublicKeyCredential)return;let prepared;try{prepared=await callParentPasskey('/lab/parent-passkeys/registration/options',{})}catch(_){return}const dialog=$('passkeyOfferDialog'),later=$('passkeyLaterBtn'),save=$('passkeySaveBtn'),error=$('passkeyOfferError');if(!dialog||dialog.open)return;error.classList.add('hidden');dialog.showModal();await new Promise(resolve=>{later.onclick=()=>{safeSet(PASSKEY_OFFER_KEY,'declined');dialog.close();resolve()};save.onclick=async()=>{save.disabled=true;save.textContent='Создаём ключ…';try{const credential=await navigator.credentials.create({publicKey:webauthnOptions(prepared.options,true)});if(!credential)throw new Error('Не удалось создать ключ доступа.');await callParentPasskey('/lab/parent-passkeys/registration/verify',{challengeId:prepared.challengeId,credential:webauthnCredentialJSON(credential,true)});safeSet(PASSKEY_OFFER_KEY,'saved');dialog.close();resolve()}catch(e){error.textContent=e&&e.name==='NotAllowedError'?'Не удалось сохранить ключ. Можно продолжить без него.':'Не удалось сохранить ключ. Попробуйте позже.';error.classList.remove('hidden');save.disabled=false;save.textContent='Повторить'} }})}
   function callCloudflareRegistration(status,data){
     const path=status?'/lab/parent-registration/status?phone='+encodeURIComponent(data.phone)+'&attemptId='+encodeURIComponent(data.attemptId):'/lab/parent-registration';
     return callCloudflare(path,status?'GET':'POST',status?null:{parentName:data.parentName,childName:data.childName,phone:data.phone,attemptId:data.attemptId});
   }
   function callCloudflareAccess(status,data){
-    const path=status?'/lab/parent-access/status?phone='+encodeURIComponent(data.phone)+'&requestId='+encodeURIComponent(data.requestId):'/lab/parent-access/request';
-    return callCloudflare(path,status?'GET':'POST',status?null:{phone:data.phone,requestId:data.requestId});
+    const path=status?'/lab/parent-auth/status':'/lab/parent-auth/request';
+    return callCloudflare(path,'POST',{phone:data.phone,requestId:data.requestId,requestSecret:data.requestSecret});
   }
   function isStartLike(id){return id==='screenStart'||id==='screenChoose'}
   function initPush(){if(pushReady||!window.MedsiPush)return;pushReady=true;const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));MedsiPush.init({frameId:'__no_parent_iframe__',appEndpointUrl:PUSH_APP_URL,pushServiceUrl:PUSH_SERVICE_URL,identity:validPhone(ph)?{role:'parent',phone:ph}:null})}
@@ -74,7 +83,7 @@
   function showStart(){setHeader('Медси Бот','Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.');show('screenStart')}
   function showNames(){setHeader('Регистрация родителя','Укажите данные ребёнка и родителя.');show('screenNames')}
   function showPhoneReg(){setHeader('Телефон для входа','Введите номер, с которым будете входить в систему.');show('screenPhoneReg')}
-  function showAuth(){setHeader('Авторизация','Введите номер телефона, который вы указывали при регистрации.');show('screenAuth')}
+  function showAuth(){setHeader('Авторизация','Подтвердите вход системным ключом доступа.');$('phoneAuthFallback').classList.add('hidden');$('passkeyLoginError').classList.add('hidden');show('screenAuth');preparePasskeyLogin()}
   function applyBootstrap(res){if(!res||!res.ok||!res.parentSession)return false;currentPhone=onlyDigits(res.phone||currentPhone);parentName=String(res.parentName||parentName||'').trim();childName=String(res.childName||childName||'').trim();parentSession=String(res.parentSession);if(res.d1Session&&res.d1Session.token)saveD1Session(res.d1Session);safeSet(PARENT_SESSION_KEY,parentSession);safeSet(PHONE_KEY,currentPhone);safeSet(LEGACY_PHONE_KEY,currentPhone);safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);applyUnread(res);syncPushIdentity();return true}
   function showChoose(){if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();setHeader('Медси Бот','Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.');$('waitNote').classList.toggle('hidden',!justRegistered);prewarmAll();show('screenChoose');openRequestedDestination()}
   function openRequestedDestination(){const url=new URL(location.href),destination=url.searchParams.has('openChat')?'chat':url.searchParams.has('openTherapy')?'therapy':'';if(!destination)return;url.searchParams.delete('openChat');url.searchParams.delete('openTherapy');history.replaceState(history.state,'',url.pathname+url.search+url.hash);Promise.resolve().then(()=>{if(document.body.dataset.screen!=='screenChoose')return;if(destination==='chat')openChat();else openReport('psychology')})}
@@ -109,8 +118,9 @@
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   function readJson(key){try{return JSON.parse(safeGet(key)||'null')}catch(_){return null}}
   function makeFlowId(prefix){let value='';try{if(crypto&&crypto.randomUUID)value=crypto.randomUUID()}catch(_){}if(!value)value=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);return prefix+'_'+value.replace(/[^A-Za-z0-9_-]/g,'')}
+  function makeAccessSecret(){return bytesToB64url(crypto.getRandomValues(new Uint8Array(32)))}
   function registrationFingerprint(data){return [onlyDigits(data.phone).slice(-10),data.parentName,data.childName].join('|')}
-  async function finishRegistration(res,run){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;prewarmAll();await Promise.resolve(window.MedsiAssistantReady);if(run===flowRun)showChoose()}
+  async function finishRegistration(res,run){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;prewarmAll();await Promise.resolve(window.MedsiAssistantReady);if(run===flowRun){showChoose();if(!safeGet(PASSKEY_OFFER_KEY))askToSavePasskey()}}
   async function runRegistrationFlow(data){
     const run=++flowRun;
     show('screenRegistrationPending');
@@ -130,7 +140,7 @@
           }
           if(run!==flowRun)return;
           if(res){
-            if(res.duplicate){safeRemove(REG_ATTEMPT_KEY);$('phoneInputAuth').value=data.phone;await beginReauthorization(data.phone,true);return}
+            if(res.duplicate){safeRemove(REG_ATTEMPT_KEY);$('phoneInputAuth').value=data.phone;showAuth();return}
             if(res.ok&&res.parentSession){await finishRegistration(res,run);return}
             phase='status';
           }
@@ -164,11 +174,10 @@
   }
   async function register(){const digits=onlyDigits($('phoneInputReg').value),err=$('phoneErrorReg'),info=$('alreadyRegistered');err.classList.add('hidden');info.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}const snapshot={phone:digits,parentName:regParentName,childName:regChildName};const saved=readJson(REG_ATTEMPT_KEY);snapshot.attemptId=saved&&saved.fingerprint===registrationFingerprint(snapshot)?saved.attemptId:makeFlowId('reg');snapshot.fingerprint=registrationFingerprint(snapshot);safeSet(REG_ATTEMPT_KEY,JSON.stringify(snapshot));runRegistrationFlow(snapshot)}
   function resetAuthPendingUi(){const screen=$('screenAuthPending');screen.classList.remove('is-approved');$('authPendingSpinner').classList.remove('hidden');$('authApprovedIcon').classList.add('hidden');$('authPendingTitle').textContent='Проверяем доступ';$('authPendingText').textContent='Пожалуйста, подождите…';$('authRequestCode').textContent='••••';$('authRequestCodeWrap').classList.add('hidden');$('authPendingBackBtn').classList.add('hidden')}
-  async function finishAutomaticAccess(res,run){if(!applyBootstrap(res))throw new Error('Не удалось сохранить вход.');safeRemove(REAUTH_KEY);prewarmAll();await Promise.resolve(window.MedsiAssistantReady);if(run===flowRun){justRegistered=false;showChoose()}}
-  function showAuthApproved(res){if(!applyBootstrap(res))throw new Error('Не удалось сохранить подтверждённый вход.');safeRemove(REAUTH_KEY);prewarmAll();const screen=$('screenAuthPending');screen.classList.add('is-approved');$('authPendingSpinner').classList.add('hidden');$('authApprovedIcon').classList.remove('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent='Авторизация подтверждена!';$('authPendingText').textContent='Вход сохранён на этом устройстве.';const approvedRun=flowRun;Promise.all([wait(1800),Promise.resolve(window.MedsiAssistantReady)]).then(()=>{if(flowRun===approvedRun&&document.body.dataset.screen==='screenAuthPending'){justRegistered=false;showChoose()}})}
-  function showAuthStopped(status,message){$('authPendingSpinner').classList.add('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent=status==='DENIED'?'Авторизация отклонена':status==='NOT_FOUND'?'Номер не найден':'Срок запроса истёк';$('authPendingText').textContent=message||'Вы можете отправить новый запрос.';$('authPendingBackBtn').classList.remove('hidden')}
+  function showAuthApproved(res){if(!applyBootstrap(res))throw new Error('Не удалось сохранить подтверждённый вход.');safeRemove(REAUTH_KEY);prewarmAll();const screen=$('screenAuthPending');screen.classList.add('is-approved');$('authPendingSpinner').classList.add('hidden');$('authApprovedIcon').classList.remove('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent='Авторизация подтверждена!';$('authPendingText').textContent='Вход сохранён на этом устройстве.';const approvedRun=flowRun;Promise.all([wait(1800),Promise.resolve(window.MedsiAssistantReady)]).then(()=>{if(flowRun===approvedRun&&document.body.dataset.screen==='screenAuthPending'){justRegistered=false;showChoose();if(!safeGet(PASSKEY_OFFER_KEY))askToSavePasskey()}})}
+  function showAuthStopped(status,message){$('authPendingSpinner').classList.add('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent=status==='DENIED'?'Авторизация отклонена':status==='NOT_FOUND'?'Номер не найден':status==='CONSUMED'?'Запрос уже использован':'Срок запроса истёк';$('authPendingText').textContent=message||'Вы можете отправить новый запрос.';$('authPendingBackBtn').classList.remove('hidden')}
   async function runReauthorizationFlow(data,createFirst){
-    const run=++flowRun;resetAuthPendingUi();let shouldCreate=!!createFirst;
+    const run=++flowRun;resetAuthPendingUi();let shouldCreate=!!createFirst,pollDelay=2000;
     const authButton=$('authBtn'),originalButtonText=authButton.textContent;
     let pendingVisible=!shouldCreate;
     if(pendingVisible)show('screenAuthPending');
@@ -179,27 +188,27 @@
         let res=await callCloudflareAccess(!shouldCreate,data);
         if(run!==flowRun)return;
         if(res&&res.code==='NOT_FOUND'&&res.ok===false){
-          restoreButton();safeRemove(REAUTH_KEY);$('phoneInputAuth').value=data.phone;showAuth();
+          restoreButton();safeRemove(REAUTH_KEY);$('phoneInputAuth').value=data.phone;showAuth();$('phoneAuthFallback').classList.remove('hidden');
           $('phoneErrorAuth').textContent='Этот номер не найден среди активных родителей.';
           $('phoneErrorAuth').classList.remove('hidden');return;
         }
         if(!res||res.ok===false)throw new Error((res&&res.message)||'Не удалось проверить авторизацию.');
         if(res.status==='NOT_FOUND'){shouldCreate=true;continue}
         restoreButton();
-        if(res.autoApproved&&res.parentSession){await finishAutomaticAccess(res,run);return}
         if(!pendingVisible){show('screenAuthPending');pendingVisible=true}
         shouldCreate=false;
         $('authPendingText').textContent='Пожалуйста, подождите, пока воспитатель подтвердит вход.';
         if(res.code){$('authRequestCode').textContent=res.code;$('authRequestCodeWrap').classList.remove('hidden')}
         if(res.parentSession){showAuthApproved(res);return}
         if(res.status==='DENIED'){safeRemove(REAUTH_KEY);showAuthStopped('DENIED','Воспитатель отклонил запрос. При необходимости свяжитесь с отделением.');return}
+        if(res.status==='CONSUMED'){safeRemove(REAUTH_KEY);showAuthStopped('CONSUMED','Этот запрос уже использован. Начните вход ещё раз.');return}
         if(res.status==='EXPIRED'){safeRemove(REAUTH_KEY);showAuthStopped('EXPIRED','Запрос больше не действует. Отправьте новый запрос на вход.');return}
         if(res.status==='NOT_FOUND')shouldCreate=true;
       }catch(e){if(run!==flowRun)return;restoreButton();if(!pendingVisible){show('screenAuthPending');pendingVisible=true}$('authPendingText').textContent='Связь временно прервана. Продолжаем проверять запрос…'}
-      await wait(1500);
+      await wait(pollDelay);pollDelay=Math.min(8000,pollDelay+1000);
     }
   }
-  async function beginReauthorization(phoneRaw,forceNew){const digits=onlyDigits(phoneRaw);if(!validPhone(digits))return;let saved=readJson(REAUTH_KEY);if(forceNew||!saved||onlyDigits(saved.phone).slice(-10)!==digits.slice(-10))saved={phone:digits,requestId:makeFlowId('auth')};safeSet(REAUTH_KEY,JSON.stringify(saved));runReauthorizationFlow(saved,true)}
+  async function beginReauthorization(phoneRaw,forceNew){const digits=onlyDigits(phoneRaw);if(!validPhone(digits))return;let saved=readJson(REAUTH_KEY);if(forceNew||!saved||onlyDigits(saved.phone).slice(-10)!==digits.slice(-10)||!saved.requestSecret)saved={phone:digits,requestId:makeFlowId('auth'),requestSecret:makeAccessSecret()};safeSet(REAUTH_KEY,JSON.stringify(saved));runReauthorizationFlow(saved,true)}
   async function auth(){const digits=onlyDigits($('phoneInputAuth').value),err=$('phoneErrorAuth');err.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}beginReauthorization(digits,true)}
   function extractSession(res){if(res&&res.token)return res;if(res&&res.session&&res.session.token)return res.session;return null}
   function saveD1Session(session){if(!session||!session.token)return null;d1Session=session;safeSet(D1_KEY,JSON.stringify({phone:onlyDigits(currentPhone).slice(-10),session}));return session}
@@ -321,14 +330,14 @@
   }
 
   $('btnGoRegister').onclick=()=>showNames();$('btnGoAuth').onclick=()=>showAuth();$('startHelpBtn').onclick=()=>{const p=$('startHelpPanel'),open=p.classList.toggle('is-open');p.setAttribute('aria-hidden',open?'false':'true')};
-  $('namesBackBtn').onclick=showStart;$('namesAuthBtn').onclick=showAuth;$('phoneRegBackBtn').onclick=showNames;$('authBackBtn').onclick=()=>{flowRun++;safeRemove(REAUTH_KEY);$('authBtn').disabled=false;$('authBtn').textContent='Войти';showStart()};
+  $('namesBackBtn').onclick=showStart;$('namesAuthBtn').onclick=showAuth;$('phoneRegBackBtn').onclick=showNames;$('authMainBackBtn').onclick=()=>{flowRun++;safeRemove(REAUTH_KEY);showStart()};$('showPhoneAuthBtn').onclick=()=>{$('phoneAuthFallback').classList.toggle('hidden');$('phoneErrorAuth').classList.add('hidden');if(!$('phoneAuthFallback').classList.contains('hidden'))$('phoneInputAuth').focus()};$('passkeyLoginBtn').onclick=loginWithPasskey;
   $('toPhoneReg').onclick=()=>{const pFirst=$('parentFirst').value.trim(),pLast=$('parentLast').value.trim(),cFirst=$('childFirst').value.trim(),cLast=$('childLast').value.trim(),err=$('namesError');if(!pFirst||!cFirst){err.textContent='Введите имя родителя и имя ребёнка.';err.classList.remove('hidden');return}if(!cLast){err.textContent='Введите фамилию ребёнка. Она может отличаться от фамилии родителя.';err.classList.remove('hidden');return}if(![pFirst,pLast,cFirst,cLast].filter(Boolean).every(isSingleWord)){err.textContent='В каждое поле вводите только имя или фамилию, без отчества.';err.classList.remove('hidden');return}err.classList.add('hidden');regParentName=[pFirst,pLast].filter(Boolean).join(' ');regChildName=[cFirst,cLast].filter(Boolean).join(' ');showPhoneReg()};
   $('registerBtn').onclick=register;$('authBtn').onclick=auth;$('btnChat').onclick=openChat;$('btnMorning').onclick=()=>openReport('morning');$('btnEvening').onclick=()=>openReport('evening');$('btnPsychology').onclick=()=>openReport('psychology');$('btnSchedule').onclick=showSchedule;
   $('reportCopyBtn').onclick=()=>copyText(currentReportText,$('reportCopyBtn'));$('reportHistoryBtn').onclick=openReportHistory;$('historyBackBtn').onclick=()=>{setHeader(reportTitle(currentReportKind),'');show('screenReport')};$('reportHistoryModalClose').onclick=closeHistoryModal;$('reportHistoryModal').onclick=e=>{if(e.target===$('reportHistoryModal'))closeHistoryModal()};
   $('authPendingBackBtn').onclick=()=>{flowRun++;safeRemove(REAUTH_KEY);showAuth()};
   $('reportBackBtn').onclick=()=>{const pending=reportReadPending[currentReportKind];showChoose();if(pending)pending.then(()=>refreshParentMenu())};$('scheduleBackBtn').onclick=showChoose;$('logoutBtn').onclick=()=>{if(['screenAuthPending','screenRegistrationPending'].includes(document.body.dataset.screen)){clearSession();safeRemove(REAUTH_KEY);safeRemove(REG_ATTEMPT_KEY);$('authRequestCode').textContent='••••';justRegistered=false;showStart();return}$('logoutModal').classList.remove('hidden')};$('logoutCancelBtn').onclick=()=>$('logoutModal').classList.add('hidden');$('logoutConfirmBtn').onclick=()=>{$('logoutModal').classList.add('hidden');clearSession();safeRemove(REAUTH_KEY);justRegistered=false;showStart()};
   ['phoneInputReg','phoneInputAuth'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter')(id==='phoneInputReg'?register:auth)()}));
-  function boot(){initPush();const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY)),session=safeGet(PARENT_SESSION_KEY);if(validPhone(ph)&&session){restoreSaved();return}const reauth=readJson(REAUTH_KEY);if(reauth&&validPhone(reauth.phone)&&reauth.requestId){runReauthorizationFlow(reauth,false);return}const registration=readJson(REG_ATTEMPT_KEY);if(registration&&validPhone(registration.phone)&&registration.attemptId){runRegistrationFlow(registration);return}showStart()}
+  function boot(){initPush();const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY)),session=safeGet(PARENT_SESSION_KEY);if(validPhone(ph)&&session){restoreSaved();return}const reauth=readJson(REAUTH_KEY);if(reauth&&validPhone(reauth.phone)&&reauth.requestId){if(!reauth.requestSecret){safeRemove(REAUTH_KEY);beginReauthorization(reauth.phone,true)}else runReauthorizationFlow(reauth,false);return}const registration=readJson(REG_ATTEMPT_KEY);if(registration&&validPhone(registration.phone)&&registration.attemptId){runRegistrationFlow(registration);return}showStart()}
   window.MedsiParentApp.refresh=refreshParentMenu;
   window.MedsiParentApp.helpersReady=()=>{initPush();syncPushIdentity();};
   function resume(){if(document.hidden||!currentPhone||!parentSession)return;if(document.body.dataset.screen==='screenChoose')refreshParentMenu();else if(document.body.dataset.screen==='screenReport')openReport(currentReportKind);}
