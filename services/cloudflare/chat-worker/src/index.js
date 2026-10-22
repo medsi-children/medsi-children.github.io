@@ -224,6 +224,97 @@ async function automaticParentAccess(env, phone, profile, requestId, now) {
     parentSession: session.token, d1Session: { ok: true, ...session } });
 }
 
+async function markParentReportRead(request, env, auth) {
+  if (auth.role !== 'parent') return json({ ok:false, message:'Forbidden' }, 403);
+  const payload = await body(request) || {};
+  const kind = String(payload.kind || '').toLowerCase();
+  const version = String(payload.version || '').slice(0, 180);
+  if (!['morning','evening','psychology'].includes(kind) || !version) return json({ ok:false, message:'Некорректный отчёт.' }, 400);
+  const result = await env.CHAT_DB.prepare(`UPDATE report_current SET read_version=version
+    WHERE phone10=? AND kind=? AND version=? AND read_version IS NOT version`).bind(auth.phone10, kind, version).run();
+  return json({ ok:true, skipped:!Number(result.meta && result.meta.changes || 0) });
+}
+
+async function getParentReportUnread(env, auth) {
+  if (auth.role !== 'parent') return json({ ok:false, message:'Forbidden' }, 403);
+  const rows = await env.CHAT_DB.prepare(`SELECT kind, version, read_version FROM report_current WHERE phone10=?`).bind(auth.phone10).all();
+  const reportUnread = { morning:false, evening:false, psychology:false };
+  for (const row of rows.results || []) reportUnread[row.kind] = !!row.version && row.version !== row.read_version;
+  return json({ ok:true, reportUnread });
+}
+
+async function getCurrentReportVersions(env) {
+  const rows = await env.CHAT_DB.prepare(`SELECT phone10, kind, version, updated_at
+    FROM report_current WHERE TRIM(text)<>''`).all();
+  return json({ok:true, versions:(rows.results||[]).map(row=>({
+    phone:row.phone10, kind:row.kind, version:row.version||'', updatedAt:Number(row.updated_at||0)
+  }))});
+}
+
+async function getReportInactivityReminder(env) {
+  const rows = await env.CHAT_DB.prepare(`SELECT s.phone10, s.last_new_report_at, s.first_seen_at, s.last_prompt_days, s.roster_order, p.child_name
+    FROM report_inactivity_state s JOIN chat_profiles p ON p.phone10=s.phone10
+    ORDER BY s.roster_order DESC, s.phone10 DESC`).all();
+  const now = Date.now();
+  for (const row of rows.results || []) {
+    const base = Number(row.last_new_report_at || row.first_seen_at || 0);
+    const days = Math.floor((now - base) / 86400000);
+    const tier = days >= 21 ? 21 : days >= 7 ? 7 : days >= 3 ? 3 : 0;
+    if (tier && tier > Number(row.last_prompt_days || 0)) return json({ ok:true, reminder:{ phone:'8'+row.phone10, childName:row.child_name || 'Без имени ребёнка', days, tier, lastNewReportAt:Number(row.last_new_report_at||0), firstSeenAt:Number(row.first_seen_at||0) } });
+  }
+  return json({ ok:true, reminder:null });
+}
+
+async function acknowledgeReportInactivity(request, env) {
+  const payload = await body(request) || {}, phone = phone10(payload.phone), tier = Number(payload.tier);
+  const expectedLastNewReportAt = Number(payload.expectedLastNewReportAt || 0);
+  const expectedFirstSeenAt = Number(payload.expectedFirstSeenAt || 0);
+  if (!phone || ![3,7,21].includes(tier) || !expectedFirstSeenAt) return json({ ok:false, message:'Некорректное напоминание.' }, 400);
+  const result = await env.CHAT_DB.prepare(`UPDATE report_inactivity_state SET last_prompt_days=?
+    WHERE phone10=? AND last_new_report_at=? AND first_seen_at=? AND last_prompt_days<?`).bind(tier, phone, expectedLastNewReportAt, expectedFirstSeenAt, tier).run();
+  return Number(result.meta && result.meta.changes || 0) ? json({ ok:true }) : json({ ok:false, message:'Напоминание уже не найдено.' }, 404);
+}
+
+async function syncReportInactivity(request, env) {
+  const payload = await body(request) || {}, items = Array.isArray(payload.items) ? payload.items.slice(0, 500) : [];
+  const mode = payload.mode === 'import' ? 'import' : 'live';
+  const now = Date.now(), statements=[];
+  items.forEach((item, index) => {
+    const phone=phone10(item && item.phone); if(!phone)return;
+    const eventAt=Number(item && item.lastNewReportAt || (item && item.hasNewReport ? now : 0)), first=Number(item && item.firstSeenAt || now), tier=Number(item && item.lastPromptDays || 0);
+    statements.push(env.CHAT_DB.prepare(`INSERT INTO report_inactivity_state(phone10,last_new_report_at,first_seen_at,last_prompt_days,roster_order)
+      VALUES(?,?,?,?,?) ON CONFLICT(phone10) DO UPDATE SET
+      last_new_report_at=CASE WHEN excluded.last_new_report_at>report_inactivity_state.last_new_report_at THEN excluded.last_new_report_at ELSE report_inactivity_state.last_new_report_at END,
+      first_seen_at=CASE WHEN report_inactivity_state.first_seen_at=0 THEN excluded.first_seen_at ELSE report_inactivity_state.first_seen_at END,
+      last_prompt_days=CASE WHEN excluded.last_new_report_at>report_inactivity_state.last_new_report_at THEN 0
+        WHEN ?='import' AND excluded.last_new_report_at>=report_inactivity_state.last_new_report_at THEN excluded.last_prompt_days
+        ELSE report_inactivity_state.last_prompt_days END,
+      roster_order=excluded.roster_order
+      WHERE excluded.last_new_report_at>report_inactivity_state.last_new_report_at
+        OR (report_inactivity_state.first_seen_at=0 AND excluded.first_seen_at<>0)
+        OR (?='import' AND excluded.last_new_report_at>=report_inactivity_state.last_new_report_at AND excluded.last_prompt_days<>report_inactivity_state.last_prompt_days)
+        OR excluded.roster_order<>report_inactivity_state.roster_order`).bind(phone, eventAt, first, tier, Number(item && item.rosterOrder || index), mode, mode));
+  });
+  if(statements.length) await env.CHAT_DB.batch(statements);
+  return json({ok:true,received:statements.length});
+}
+
+async function importReportReadState(request, env) {
+  const payload=await body(request)||{}, items=Array.isArray(payload.items)?payload.items.slice(0,1500):[];
+  const importId=String(payload.importId||'').trim();
+  if(!/^report-state-v1-[0-9]{8}$/.test(importId)) return json({ok:false,message:'Некорректный идентификатор импорта.'},400);
+  const prior=await env.CHAT_DB.prepare('SELECT import_id FROM report_state_import_runs WHERE import_id=?').bind(importId).all();
+  if((prior.results||[]).length) return json({ok:true,received:0,alreadyImported:true});
+  const statements=[];
+  for(const item of items){const phone=phone10(item&&item.phone),kind=String(item&&item.kind||'').toLowerCase(),expectedVersion=String(item&&item.expectedVersion||'').slice(0,180);if(!phone||!['morning','evening','psychology'].includes(kind)||!expectedVersion)continue;
+    statements.push(env.CHAT_DB.prepare(`UPDATE report_current SET read_version=CASE WHEN ? THEN '' ELSE version END
+      WHERE phone10=? AND kind=? AND version=? AND read_version IS NOT CASE WHEN ? THEN '' ELSE version END
+        AND NOT EXISTS(SELECT 1 FROM report_state_import_runs WHERE import_id=?)`).bind(item.unread===true?1:0,phone,kind,expectedVersion,item.unread===true?1:0,importId));}
+  statements.push(env.CHAT_DB.prepare('INSERT OR IGNORE INTO report_state_import_runs(import_id, imported_at) VALUES(?,?)').bind(importId,Date.now()));
+  await env.CHAT_DB.batch(statements);
+  return json({ok:true,received:statements.length});
+}
+
 async function registerParent(request, env) {
   const payload = await body(request) || {};
   const phone = phone10(payload.phone);
@@ -986,6 +1077,10 @@ async function upsertCurrentReports(request, env, ctx) {
           THEN report_current.version
           ELSE excluded.version
         END,
+        read_version = CASE
+          WHEN COALESCE(TRIM(report_current.text), '') = '' AND COALESCE(TRIM(excluded.text), '') <> '' THEN ''
+          ELSE report_current.read_version
+        END,
         updated_at = excluded.updated_at
       WHERE report_current.text IS NOT excluded.text
         OR (report_current.version IS NOT excluded.version AND NOT (
@@ -1197,6 +1292,7 @@ async function enqueueParentDeletion(request, env, auth, ctx) {
     env.CHAT_DB.prepare('DELETE FROM chat_profiles WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM chat_pins WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM report_current WHERE phone10 = ?').bind(phone),
+    env.CHAT_DB.prepare('DELETE FROM report_inactivity_state WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM legacy_parent_access WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone),
@@ -1467,6 +1563,7 @@ async function reconcileProfiles(request, env) {
         deletions.push(env.CHAT_DB.prepare('DELETE FROM chat_pins WHERE phone10 = ?').bind(phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM report_snapshots WHERE phone10 = ?').bind(phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM report_current WHERE phone10 = ?').bind(phone));
+        deletions.push(env.CHAT_DB.prepare('DELETE FROM report_inactivity_state WHERE phone10 = ?').bind(phone));
         deletions.push(env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(Date.now(), phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone));
@@ -1926,6 +2023,9 @@ export default {
       if (request.method === 'GET' && url.pathname === '/admin/parent-registration-outbox') return listParentRegistrationOutbox(env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/ack') return acknowledgeParentRegistrationOutbox(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/fail') return failParentRegistrationOutbox(request, env);
+      if (request.method === 'POST' && url.pathname === '/admin/report-read-state/import') return importReportReadState(request, env);
+      if (request.method === 'POST' && url.pathname === '/admin/report-inactivity/sync') return syncReportInactivity(request, env);
+      if (request.method === 'GET' && url.pathname === '/admin/report-current/versions') return getCurrentReportVersions(env);
       if (request.method === 'GET' && url.pathname === '/admin/parent-access-requests') return listParentAccessRequests(env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-access-requests/import') return importParentAccessRequests(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-access-requests/decision') return decideParentAccessRequest(request, env);
@@ -1957,6 +2057,15 @@ export default {
     if (request.method === 'POST' && url.pathname === '/lab/parent-access/decision') {
       if (auth.role !== 'educator') return json({ ok: false, message: 'Forbidden' }, 403);
       return decideParentAccessRequest(request, env);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/lab/report-inactivity') {
+      if (auth.role !== 'educator') return json({ ok:false, message:'Forbidden' }, 403);
+      return getReportInactivityReminder(env);
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/report-inactivity/ack') {
+      if (auth.role !== 'educator') return json({ ok:false, message:'Forbidden' }, 403);
+      return acknowledgeReportInactivity(request, env);
     }
 
     if (auth.role === 'parent') {
@@ -2001,8 +2110,12 @@ export default {
       return getOwnProfile(env, auth);
     }
     if (request.method === 'GET' && url.pathname === '/lab/parent-unread') {
-      return getParentUnreadState(env, auth);
+      const chat = await getParentUnreadState(env, auth);
+      const report = await getParentReportUnread(env, auth);
+      const a = await chat.json(), b = await report.json();
+      return json({ ok:true, hasUnread:!!a.hasUnread, reportUnread:b.reportUnread || {} });
     }
+    if (request.method === 'POST' && url.pathname === '/lab/report-read') return markParentReportRead(request, env, auth);
     if (request.method === 'POST' && url.pathname === '/lab/bot-log') {
       return json({ ok: false }, 410);
     }

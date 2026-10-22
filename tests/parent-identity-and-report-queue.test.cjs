@@ -343,6 +343,7 @@ test('Cloudflare-first deletion closes the profile immediately and persists a du
   db.exec(read('services/cloudflare/chat-worker/migrations/0010_report_snapshot_psychology.sql'));
   db.exec(read('services/cloudflare/chat-worker/migrations/0011_parent_relationship.sql'));
   db.exec(read('services/cloudflare/chat-worker/migrations/0012_parent_deletion_queue.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0013_report_state_in_d1.sql'));
   db.prepare('INSERT INTO chat_profiles(phone10,parent_name,child_name,relationship,child_genitive) VALUES(?,?,?,?,?)')
     .run('9990000001','Анна','Никита Иванов','Мама','Никиты Иванова');
   db.prepare("INSERT INTO chat_messages(message_key,phone10,side,type,text,created_at,status,read_by_parent,read_by_educator) VALUES(?,?,?,?,?,?,?,?,?)")
