@@ -362,7 +362,7 @@ async function registerParent(request, env) {
   const pendingDeletion = await env.CHAT_DB.prepare(`
     SELECT operation_id
     FROM parent_deletion_queue
-    WHERE phone10 = ? AND status IN ('pending','retry','processing')
+    WHERE phone10 = ? AND status IN ('pending','retry','processing','failed')
     LIMIT 1
   `).bind(phone).first();
   if (pendingDeletion) {
@@ -1304,7 +1304,7 @@ async function enqueueParentDeletion(request, env, auth, ctx) {
   const alreadyDeleting = await env.CHAT_DB.prepare(`
     SELECT operation_id, status
     FROM parent_deletion_queue
-    WHERE phone10 = ? AND status IN ('pending','retry','processing')
+    WHERE phone10 = ? AND status IN ('pending','retry','processing','failed')
     ORDER BY created_at DESC
     LIMIT 1
   `).bind(phone).first();
@@ -1374,6 +1374,36 @@ async function getParentDeletionStatus(env, auth, operationIdRaw) {
   });
 }
 
+async function listParentDeletionJobs(env, auth) {
+  if (auth.role !== 'educator') return json({ ok:false, message:'Forbidden' }, 403);
+  const rows = await env.CHAT_DB.prepare(`
+    SELECT operation_id, phone10, child_name, status, attempts, last_error, updated_at
+    FROM parent_deletion_queue
+    WHERE status IN ('pending','retry','processing','failed')
+    ORDER BY updated_at DESC
+    LIMIT 20
+  `).all();
+  return json({ ok:true, operations:(rows.results || []).map(row => ({
+    operationId:String(row.operation_id || ''), phone:String(row.phone10 || ''),
+    childName:String(row.child_name || ''), status:String(row.status || ''),
+    attempts:Number(row.attempts || 0), message:String(row.last_error || ''),
+    updatedAt:Number(row.updated_at || 0)
+  })) });
+}
+
+async function retryParentDeletion(request, env, auth, ctx) {
+  if (auth.role !== 'educator') return json({ ok:false, message:'Forbidden' }, 403);
+  const payload = await body(request) || {};
+  const operationId = parentDeletionId(payload.operationId);
+  if (!operationId) return json({ ok:false, message:'Некорректный идентификатор удаления.' }, 400);
+  const row = await env.CHAT_DB.prepare('SELECT status FROM parent_deletion_queue WHERE operation_id=?').bind(operationId).first();
+  if (!row) return json({ ok:false, message:'Операция удаления не найдена.' }, 404);
+  if (row.status !== 'failed') return json({ ok:true, operationId, status:String(row.status || '') });
+  await env.CHAT_DB.prepare(`UPDATE parent_deletion_queue SET status='retry', attempts=0, last_error='', updated_at=? WHERE operation_id=? AND status='failed'`).bind(Date.now(), operationId).run();
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(drainParentDeletionQueue(env));
+  return json({ ok:true, operationId, status:'retry' });
+}
+
 async function drainParentDeletionQueue(env) {
   if (!env.APP_SCRIPT_URL || !env.CHAT_ADMIN_TOKEN) {
     return { ok:false, message:'Parent deletion queue is not configured' };
@@ -1429,8 +1459,11 @@ async function drainParentDeletionQueue(env) {
       const payload = await response.json().catch(() => null);
       const result = payload && payload.result ? payload.result : payload;
       if (!response.ok || !result || result.ok !== true ||
-          (result.operationId && result.operationId !== row.operation_id)) {
-        throw new Error(result && result.message || `Apps Script did not confirm parent deletion (HTTP ${response.status})`);
+          (result.operationId && result.operationId !== row.operation_id) ||
+          result.coreComplete !== true || result.cleanupComplete !== true) {
+        const error = new Error(result && result.message || `Apps Script did not confirm complete parent deletion (HTTP ${response.status})`);
+        error.code = result && result.code || '';
+        throw error;
       }
       await env.CHAT_DB.prepare(`
         UPDATE parent_deletion_queue
@@ -1440,7 +1473,8 @@ async function drainParentDeletionQueue(env) {
       results.push({ operationId:row.operation_id, status:'completed' });
     } catch (error) {
       const attempts = Number(row.attempts || 0) + 1;
-      const next = attempts >= 12 ? 'failed' : 'retry';
+      const next = error && (error.code === 'RECORD_CHANGED' || error.code === 'OPERATION_MISMATCH' || error.code === 'CHECKPOINT_UNRECOVERABLE')
+        ? 'failed' : (attempts >= 12 ? 'failed' : 'retry');
       await env.CHAT_DB.prepare(`
         UPDATE parent_deletion_queue
         SET status=?, last_error=?, updated_at=?
@@ -1562,7 +1596,7 @@ async function reconcileProfiles(request, env) {
   const deletingRows = await env.CHAT_DB.prepare(`
     SELECT phone10
     FROM parent_deletion_queue
-    WHERE status IN ('pending','retry','processing')
+    WHERE status IN ('pending','retry','processing','failed')
   `).all();
   const deleting = new Set((deletingRows.results || []).map(row => String(row.phone10 || '')).filter(Boolean));
   const active = new Map();
@@ -2165,6 +2199,12 @@ export default {
     }
     if (request.method === 'GET' && url.pathname === '/lab/parent-delete/status') {
       return getParentDeletionStatus(env, auth, url.searchParams.get('operationId'));
+    }
+    if (request.method === 'GET' && url.pathname === '/lab/parent-delete/pending') {
+      return listParentDeletionJobs(env, auth);
+    }
+    if (request.method === 'POST' && url.pathname === '/lab/parent-delete/retry') {
+      return retryParentDeletion(request, env, auth, ctx);
     }
     if (request.method === 'GET' && url.pathname === '/lab/profile') {
       return getOwnProfile(env, auth);

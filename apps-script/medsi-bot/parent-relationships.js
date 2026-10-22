@@ -45,17 +45,14 @@ function parentRelationshipForPhone_(phoneRaw, parentName) {
   return defaultParentRelationship_(parentName);
 }
 
-function enrichProfilesWithRelationships_(profiles) {
-  const sheet = getDataSheet_();
-  const count = sheet ? Math.max(0, sheet.getLastRow() - 1) : 0;
-  const rows = count ? sheet.getRange(2, 1, count, 7).getValues() : [];
+function enrichProfilesWithRelationships_(profiles, rowsRaw) {
+  const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
   const byPhone = {};
-  rows.forEach(function(row, index) {
+  rows.forEach(function(row) {
     const phone = last10_(row[0]);
     if (!phone) return;
     const value = String(row[6] || '').trim();
     const relationship = value ? parentRelationshipLabel_(value) : defaultParentRelationship_(row[1]);
-    if (!value) sheet.getRange(index + 2, 7).setValue(relationship);
     if (!byPhone[phone]) byPhone[phone] = relationship;
   });
   profiles.forEach(function(profile) {
@@ -63,6 +60,26 @@ function enrichProfilesWithRelationships_(profiles) {
     profile.childGenitive = parentChildGenitive_(profile.childName);
   });
   return profiles;
+}
+
+// Explicit writer for inferred labels. Call only from an existing background
+// lifecycle/sync path that already owns the ScriptLock; profile readers remain
+// read-only. Re-read each blank cell just before writing so a manual value wins.
+function fillMissingParentRelationships_(sheetRaw) {
+  const sheet = sheetRaw || getDataSheet_();
+  const count = sheet ? Math.max(0, sheet.getLastRow() - 1) : 0;
+  if (!count) return { ok:true, filled:0 };
+  const rows = sheet.getRange(2, 1, count, 7).getValues();
+  let filled = 0;
+  rows.forEach(function(row, index) {
+    if (!last10_(row[0]) || String(row[6] || '').trim()) return;
+    const relationship = defaultParentRelationship_(row[1]);
+    const cell = sheet.getRange(index + 2, 7);
+    if (String(cell.getValue() || '').trim()) return;
+    cell.setValue(relationship);
+    filled += 1;
+  });
+  return { ok:true, filled:filled };
 }
 
 function initializeParentRelationships() {

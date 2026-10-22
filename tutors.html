@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="/chat-overlay/educator-exact.css?v=20261015-light-teal-centered-2">
   <link rel="stylesheet" href="/chat-overlay/overlay-fixes.css?v=20260905-production">
   <link rel="stylesheet" href="/tutors/full-web.css?v=20260905-production">
-  <link rel="stylesheet" href="/tutors/full-web-fixes.css?v=20261014-chat-canvas-2">
+  <link rel="stylesheet" href="/tutors/full-web-fixes.css?v=20261022-deletion-status-1">
   <link rel="stylesheet" href="/tutors/layout-stability.css?v=20260905-production">
   <link rel="stylesheet" href="/tutors/dashboard-ui.css?v=20261005-therapy-wrap-1">
   <link rel="stylesheet" href="/tutors/chat-ui.css?v=20260907-1">
@@ -59,7 +59,7 @@
   </script>
   <script defer src="/notify-client.js?v=20261007-verified-subscription-1"></script>
   <script defer src="/tutors/push-auth.js?v=20260906-timeweb-1"></script>
-  <script defer src="/chat-overlay/transport.js?v=20261010-durable-reports-1"></script>
+  <script defer src="/chat-overlay/transport.js?v=20261022-deletion-status-1"></script>
   <script defer src="/chat-overlay/media-preload.js?v=20260907-1"></script>
   <script defer src="/chat-overlay/upload-ux.js?v=20260907-1"></script>
   <script defer src="/tutors/chat-prewarm.js?v=20261009-profile-lifecycle-1"></script>
@@ -109,6 +109,7 @@
         <p id="meta" class="meta">Что хотите сделать?</p>
 
         <section id="screenChoose">
+          <div id="parentDeletionJobs" class="hidden" aria-live="polite"></div>
           <div class="educator-start-brand">
             <div id="medsiAssistantLogo" class="medsi-assistant-logo" aria-label="Медси Бот"></div>
             <h1 class="educator-start-title">Медси Бот</h1>
@@ -194,7 +195,7 @@
   <script defer src="/tutors/assistant.js?v=20261012-group-therapy-label-1"></script>
   <script defer src="/tutors/qr-code.js?v=20261005-1"></script>
   <script defer src="/parents/smart-bot-widget.js?v=20261012-group-therapy-label-1"></script>
-  <script defer src="/tutors/full-web.js?v=20261012-group-therapy-label-1"></script>
+  <script defer src="/tutors/full-web.js?v=20261022-deletion-status-1"></script>
   <script defer src="/tutors/page-scroll.js?v=20260907-1"></script>
   <script defer src="/tutors/report-ui.js?v=20260907-1"></script>
   <script defer src="/tutors/chat-opening.js?v=20260907-1"></script>

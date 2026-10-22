@@ -2,6 +2,7 @@
   const APP_BASE_URL='/__session/apps-script';
   const TUTOR_KEY='medsi_tutor_session_v1';
   const D1_KEY='medsi_d1_educator_session_v1';
+  const DELETION_KEY='medsi_parent_deletions_v1';
   const $=id=>document.getElementById(id);
   let tutorToken='';
   let d1Session=null;
@@ -15,10 +16,13 @@
   let authVerifyInFlight=false;
   let authRetryTimer=null;
   let reportAttempt=null;
+  let deletionStatusTimer=null;
 
   function safeGet(key){try{return localStorage.getItem(key)||''}catch(_){return''}}
   function safeSet(key,val){try{localStorage.setItem(key,val)}catch(_){}}
   function safeRemove(key){try{localStorage.removeItem(key)}catch(_){}}
+  function savedDeletionIds(){try{const value=JSON.parse(safeGet(DELETION_KEY)||'[]');return Array.isArray(value)?value:[]}catch(_){return[]}}
+  function saveDeletionIds(ids){safeSet(DELETION_KEY,JSON.stringify((ids||[]).slice(-20)))}
   function loadD1(){try{const s=JSON.parse(safeGet(D1_KEY)||'null');return s&&s.token&&Number(s.expiresAt||0)>Date.now()+30000?s:null}catch(_){return null}}
   function extractD1(res){if(!res)return null;if(res.d1Session&&res.d1Session.token)return res.d1Session;if(res.session&&res.session.token)return res.session;if(res.token)return res;return null}
   function saveAuth(token,session){tutorToken=String(token||'');if(tutorToken)safeSet(TUTOR_KEY,tutorToken);if(session&&session.token){d1Session=session;safeSet(D1_KEY,JSON.stringify(session))}}
@@ -163,7 +167,7 @@
     document.body.dataset.screen=name==='screenForm'?'report-'+($('btnSend').dataset.type||''):name;
     $('title').textContent=title||'Медси Бот';$('meta').textContent=meta||'Что хотите сделать?';animateScreen($(name));window.scrollTo(0,0)
   }
-  function showMenu(){setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge();scheduleD1Warm();if(window.MedsiAccessRequests)MedsiAccessRequests.refresh()}
+  function showMenu(){if(deletionStatusTimer){clearTimeout(deletionStatusTimer);deletionStatusTimer=null}setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge();refreshDeletionJobs();scheduleD1Warm();if(window.MedsiAccessRequests)MedsiAccessRequests.refresh()}
   function openReport(type){scheduleD1Warm();$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Групповая терапия','Вставьте отчёт по групповой терапии.'];setScreen('screenForm',spec[0],spec[1])}
   async function submitReportPayload(type,text,submissionId) {
     if (!tutorToken || !['morning','evening','psychology'].includes(type) || !String(text).trim()) throw new Error('Некорректный отчёт.');
@@ -237,6 +241,32 @@
       actions.append(copy,call);card.append(title,del,meta,actions);box.appendChild(card);
     });
   }
+  function renderDeletionJobs(rows){
+    const box=$('parentDeletionJobs');if(!box)return;box.replaceChildren();
+    const jobs=Array.isArray(rows)?rows:[];box.classList.toggle('hidden',!jobs.length);
+    jobs.forEach(job=>{
+      const item=document.createElement('div');item.className='parent-deletion-job status '+(job.status==='failed'?'error':'');
+      const label=document.createElement('span');label.textContent=(job.status==='failed'?'Не удалось завершить удаление: ':'Удаление выполняется: ')+(job.childName||displayPhone(job.phone)||'ребёнок');item.appendChild(label);
+      if(job.status==='failed'){
+        const retry=document.createElement('button');retry.type='button';retry.className='btn btn-teal phone-action-btn';retry.textContent='Повторить';
+        retry.onclick=async()=>{retry.disabled=true;try{const session=await ensureD1Fresh();await MedsiOverlayTransport.retryParentDelete(session,job.operationId);await refreshDeletionJobs()}catch(e){retry.disabled=false;alert(String(e&&e.message||e))}};
+        item.appendChild(retry);
+      }
+      box.appendChild(item);
+    });
+  }
+  async function refreshDeletionJobs(){
+    try{
+      const session=await ensureD1Fresh();const result=await MedsiOverlayTransport.parentDeletePending(session);const jobs=result&&result.operations||[];
+      const activeIds=new Set(jobs.map(job=>String(job.operationId||'')));
+      saveDeletionIds(savedDeletionIds().filter(id=>activeIds.has(id)));
+      renderDeletionJobs(jobs);
+      if(deletionStatusTimer){clearTimeout(deletionStatusTimer);deletionStatusTimer=null}
+      if(['screenChoose','screenPhones'].includes(document.body.dataset.screen)&&jobs.some(job=>job.status==='pending'||job.status==='retry'||job.status==='processing')){
+        deletionStatusTimer=setTimeout(refreshDeletionJobs,5000);
+      }
+    }catch(_){ }
+  }
   function removePhoneCardOptimistically(row,card){
     const snapshot=parentsCache.slice();
     parentsCache=parentsCache.filter(x=>phone10(x.phone)!==phone10(row.phone));
@@ -253,18 +283,25 @@
     const child=String(row.childName||'ребёнка').trim();
     if(!confirm('Удалить ребёнка '+child+' из бота?\n\nВся история сообщений будет удалена.'))return;
     const snapshot=removePhoneCardOptimistically(row,card);
+    let operationId='';
     try{
       if(!window.MedsiOverlayTransport||!MedsiOverlayTransport.parentDelete)throw new Error('Не загрузилось быстрое удаление. Обновите страницу и попробуйте ещё раз.');
       const session=await ensureD1Fresh();
-      const operationId=parentDeletionId();
+      operationId=parentDeletionId();
+      saveDeletionIds(savedDeletionIds().concat(operationId));
       const res=await MedsiOverlayTransport.parentDelete(session,{phone:row.phone,operationId});
       if(!res||res.ok!==true||res.accepted!==true)throw new Error((res&&res.message)||'Не удалось подтвердить удаление.');
       window.MedsiEducatorPrewarm?.clear();
       refreshUnreadBadge();
-    }catch(e){restorePhoneAfterFailedDelete(snapshot,e&&e.message||e)}
+      refreshDeletionJobs();
+    }catch(e){
+      if(operationId){try{const session=await ensureD1Fresh();const state=await MedsiOverlayTransport.parentDeleteStatus(session,operationId);if(state&&['pending','retry','processing','failed','completed'].includes(state.status)){refreshDeletionJobs();return}}catch(_){}}
+      restorePhoneAfterFailedDelete(snapshot,e&&e.message||e)
+    }
   }
   async function openPhones(){
     setScreen('screenPhones','Телефоны родителей','Здесь можно быстро скопировать номер или позвонить.');
+    refreshDeletionJobs();
     const box=$('phonesList');const err=$('phonesError');err.classList.add('hidden');
     if(parentsCache.length){
       renderPhones(parentsCache);

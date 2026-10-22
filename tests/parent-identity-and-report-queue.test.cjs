@@ -30,15 +30,18 @@ test('full child name uses child gender and produces a full genitive label',()=>
   assert.equal(x.defaultParentRelationship_('Андрей'),'Папа');
   assert.equal(x.defaultParentRelationship_('Саша'),'Родитель');
 });
-test('REPORTS G overrides inference and only empty adult statuses are filled',()=>{
+test('profile enrichment reads REPORTS G without writing; background writer fills only blanks',()=>{
   const x=apps(), rows=[['89990000001','Анна','Никита И.','Иванов','','','Бабушка'],['89990000002','Андрей','Никита И.','Иванов','','','']];
   const writes=[];
-  x.getDataSheet_=()=>({getLastRow:()=>3,getRange:(r,c)=>({getValues:()=>rows,setValue:value=>writes.push({r,c,value})})});
+  const sheet={getLastRow:()=>3,getRange:(r,c)=>({getValues:()=>rows,getValue:()=>rows[r-2][c-1],setValue:value=>{writes.push({r,c,value});rows[r-2][c-1]=value}})};
+  x.getDataSheet_=()=>sheet;
   const profiles=[{phone:'9990000001',parentName:'Анна',childName:'Никита Иванов'},{phone:'9990000002',parentName:'Андрей',childName:'Никита Иванов'}];
-  x.enrichProfilesWithRelationships_(profiles);
+  x.enrichProfilesWithRelationships_(profiles,rows);
   assert.equal(profiles[0].relationship,'Бабушка');
   assert.equal(profiles[1].relationship,'Папа');
   assert.equal(profiles[0].childGenitive,'Никиты Иванова');
+  assert.deepEqual(writes,[]);
+  x.fillMissingParentRelationships_(sheet);
   assert.deepEqual(writes,[{r:3,c:7,value:'Папа'}]);
 });
 test('legacy registration corrects only an inherited surname; explicit surname is retained',()=>{
@@ -218,6 +221,19 @@ test('parent deletion revokes D1 even if S3 purge credentials are missing',()=>{
   assert.equal(x.flushReportsS3PurgeQueue_().ok,true);
   assert.equal(calls.filter(p=>p==='/admin/delete-profile-phone').length,1);
 });
+test('parent deletion resumes raw cleanup from its operation checkpoint after REPORTS row removal',()=>{
+  const x=apps(),properties=new Map([['MEDSI_SPREADSHEET_ID','synthetic']]),rows=[['89990000001','Анна','Никита И.','Иванов','','','','']];let failRaw=true,captured=[];
+  x.PropertiesService={getScriptProperties:()=>({getProperty:key=>properties.get(key)||'',setProperty:(key,value)=>properties.set(key,value)})};
+  const sheet={getLastRow:()=>rows.length+1,getRange:(r,c,n)=>({getValues:()=>rows.slice(r-2,r-2+n),getValue:()=>''}),deleteRow:r=>rows.splice(r-2,1)};
+  x.getDataSheet_=()=>sheet;x.deleteD1ProfileWithS3Purge_=()=>({ok:true,deleted:{}});x.removeReportInactivityState_=()=>({ok:true});x.removeMedsiParentContactByPhone_=()=>({ok:true});
+  x.prepareRawReportCleanupForChildren_=(targets)=>{captured=targets;return {patches:[],removedBlocks:1}};
+  x.applyRawReportCleanup_=()=>{if(failRaw)throw new Error('synthetic raw write failure');return {removedBlocks:1}};
+  const first=x.deleteReportChildByPhoneCore_('89990000001',{parentName:'Анна',childName:'Никита Иванов'},'delete_synthetic123456');
+  assert.equal(first.coreComplete,false,JSON.stringify(first));assert.equal(rows.length,0);assert.ok(properties.has('PARENT_DELETION_PROGRESS_delete_synthetic123456'));
+  failRaw=false;
+  const second=x.deleteReportChildByPhoneCore_('89990000001',{parentName:'Анна',childName:'Никита Иванов'},'delete_synthetic123456');
+  assert.equal(second.coreComplete,true);assert.equal(second.cleanupComplete,true);assert.equal(captured[0].familyKey,'иванов');
+});
 test('deletion without S3 attachments does not require Timeweb cleanup',()=>{
   const x=apps(),properties=new Map();
   x.PropertiesService={getScriptProperties:()=>({getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value)})};
@@ -370,6 +386,20 @@ test('Cloudflare-first deletion closes the profile immediately and persists a du
     assert.equal(db.prepare('SELECT count(*) AS n FROM chat_profiles').get().n,0);
     assert.equal(db.prepare('SELECT count(*) AS n FROM chat_messages').get().n,1);
     assert.equal(db.prepare("SELECT status FROM parent_deletion_queue WHERE phone10='9990000001'").get().status,'pending');
+  }finally{db.close();}
+});
+
+test('Worker retries Apps Script deletion when critical cleanup is incomplete', async()=>{
+  const {DatabaseSync}=require('node:sqlite');
+  const db=new DatabaseSync(':memory:');db.exec(read('services/cloudflare/chat-worker/migrations/0012_parent_deletion_queue.sql'));
+  db.prepare("INSERT INTO parent_deletion_queue(operation_id,phone10,parent_name,child_name,status,attempts,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)")
+    .run('delete_synthetic123456','9990000001','Анна','Никита Иванов','pending',0,1,1);
+  const wrap=sql=>({args:[],bind(...args){this.args=args;return this},first:async function(){return db.prepare(sql).get(...this.args)},all:async function(){return {results:db.prepare(sql).all(...this.args)}},run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}});
+  const context={AbortSignal,fetch:async()=>({ok:true,json:async()=>({result:{ok:true,operationId:'delete_synthetic123456',coreComplete:false,cleanupComplete:false,pendingSteps:['raw']}})})};
+  vm.createContext(context);vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {','const worker = {'),context);
+  try{
+    await context.drainParentDeletionQueue({APP_SCRIPT_URL:'https://example.invalid',CHAT_ADMIN_TOKEN:'synthetic',CHAT_DB:{prepare:wrap}});
+    assert.equal(db.prepare('SELECT status FROM parent_deletion_queue').get().status,'retry');
   }finally{db.close();}
 });
 

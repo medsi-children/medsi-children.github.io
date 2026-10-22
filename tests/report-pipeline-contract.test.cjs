@@ -17,7 +17,7 @@ function fixture(children){
   const lock={waitLock(){effects.push('lock')},releaseLock(){effects.push('unlock')}};
   const context={Logger:{log(){}},SpreadsheetApp:{openById:()=>({getSheetByName:name=>sheets[name]||null})},PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key)||'',getProperties:()=>Object.fromEntries(properties),setProperty:(key,value)=>properties.set(key,value)})},Utilities:{DigestAlgorithm:{SHA_256:'sha256'},Charset:{UTF_8:'utf8'},computeDigest:(_,s)=>Array.from(crypto.createHash('sha256').update(s).digest()),base64EncodeWebSafe:bytes=>Buffer.from(bytes).toString('base64url')},LockService:{getUserLock:()=>lock}};
   vm.createContext(context);
-  for(const file of ['report-rules.js','report-names.js','report-parser.js','Медси бот.js'])vm.runInContext(fs.readFileSync(path.join(directory,file),'utf8'),context);
+  for(const file of ['report-rules.js','report-names.js','report-parser.js','report-distribution.js','Медси бот.js'])vm.runInContext(fs.readFileSync(path.join(directory,file),'utf8'),context);
   Object.assign(context,{removeLegacyDistributionLogSheet_(){},syncReportHistoryPublicationFromSource_(){},syncReportNotificationState_(){effects.push('notifications')},syncReportInactivityState_(){effects.push('inactivity')},syncD1CurrentReportsToWorker_(){effects.push('d1')}});
   function publish(kind,text){sheets[kind==='morning'?'MORNING':'EVENING'].rows[0][0]=text;context.rememberRawReportPublicationOwnership_(kind,text,text);}
   function output(){return reports.rows.slice(1).map(row=>[row[0],row[4],row[5]])}

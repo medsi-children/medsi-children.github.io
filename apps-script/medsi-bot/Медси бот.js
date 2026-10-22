@@ -800,7 +800,7 @@ function smartRegisterFromInboxCore_(phoneRaw, parentNameRaw, childNameRaw, defe
     familyForStore,
     '',
     '',
-    '',
+    defaultParentRelationship_(parentFirst),
     ''
   ]);
 
@@ -2473,99 +2473,195 @@ function deletionProfileMatchesExpected_(row, expectedRaw) {
   return (!expectedParent || parent === expectedParent) && (!expectedChild || child === expectedChild);
 }
 
-function deleteReportChildByPhoneCore_(phoneRaw, expectedProfileRaw) {
+function parentDeletionCheckpointKey_(operationId) {
+  return 'PARENT_DELETION_PROGRESS_' + String(operationId || '').trim();
+}
+
+function loadParentDeletionCheckpoint_(operationId) {
+  const raw = PropertiesService.getScriptProperties().getProperty(parentDeletionCheckpointKey_(operationId));
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw);
+    return value && value.version === 1 && value.operationId === operationId ? value : null;
+  } catch (_) { return null; }
+}
+
+function saveParentDeletionCheckpoint_(checkpoint) {
+  PropertiesService.getScriptProperties().setProperty(
+    parentDeletionCheckpointKey_(checkpoint.operationId), JSON.stringify(checkpoint)
+  );
+}
+
+function createParentDeletionCheckpoint_(operationId, phone10, expectedProfile, sheet, values) {
+  const rowIndexes = [];
+  values.forEach(function(row, index) {
+    if (last10_(row[0]) === phone10) rowIndexes.push(index);
+  });
+  if (rowIndexes.length && expectedProfile && !rowIndexes.some(function(index) {
+    return deletionProfileMatchesExpected_(values[index], expectedProfile);
+  })) return { error:'RECORD_CHANGED', message:'Данные ребёнка изменились после запроса удаления; автоматическое удаление остановлено.' };
+
+  const removedRows = rowIndexes.map(function(index) { return values[index]; });
+  if (!removedRows.length) {
+    return { error:'CHECKPOINT_UNRECOVERABLE', message:'Строка REPORTS и сохранённый снимок удаления не найдены; продолжение остановлено без догадок.' };
+  }
+  const removedTargets = removedRows.map(rawReportChildTargetFromReportRow_).filter(Boolean);
+  const activeTargets = values.filter(function(row) { return last10_(row[0]) !== phone10; })
+    .map(rawReportChildTargetFromReportRow_).filter(Boolean);
+  const rawTargets = rawReportTargetsNoLongerActive_(removedTargets, activeTargets);
+  const targetBases = {};
+  rawTargets.forEach(function(target) { targetBases[target.baseKey] = true; });
+  const rawGuardTargets = activeTargets.filter(function(target) { return !!targetBases[target.baseKey]; });
+  const first = removedRows[0] || [];
+  const admission = rawReportOwnershipProperty_('REPORT_ADMISSION_' + phone10) || 'legacy';
+  const checkpoint = {
+    version:1,
+    operationId:operationId,
+    phone10:phone10,
+    parentName:String(first[1] || expectedProfile && expectedProfile.parentName || '').trim(),
+    childName:String(first[2] || expectedProfile && expectedProfile.childName || '').trim(),
+    admissionToken:admission,
+    rowIdentity:removedRows.map(function(row) {
+      return [last10_(row[0]), String(row[1] || '').trim(), String(row[2] || '').trim(), String(row[3] || '').trim()];
+    }),
+    rawTargets:rawTargets,
+    rawGuardTargets:rawGuardTargets,
+    steps:{ d1:false, raw:false, reports:false, inactivity:false, contact:false },
+    createdAt:Date.now(),
+    updatedAt:Date.now(),
+    result:{ deletedReportRows:0, deletedRawReportBlocks:0, deletedD1Profiles:0 }
+  };
+  saveParentDeletionCheckpoint_(checkpoint);
+  return { checkpoint:checkpoint, rowIndexes:rowIndexes };
+}
+
+function currentDeletionRowsMatchCheckpoint_(values, phone10, checkpoint, expectedProfile) {
+  const current = [];
+  values.forEach(function(row) { if (last10_(row[0]) === phone10) current.push(row); });
+  if (!current.length) return true;
+  const admission = rawReportOwnershipProperty_('REPORT_ADMISSION_' + phone10) || 'legacy';
+  if (admission !== checkpoint.admissionToken) return false;
+  if (expectedProfile && !current.some(function(row) { return deletionProfileMatchesExpected_(row, expectedProfile); })) return false;
+  const expectedRows = checkpoint.rowIdentity || [];
+  return current.every(function(row) {
+    return expectedRows.some(function(identity) {
+      return identity[0] === phone10 && identity[1] === String(row[1] || '').trim() &&
+        identity[2] === String(row[2] || '').trim() && identity[3] === String(row[3] || '').trim();
+    });
+  });
+}
+
+function deleteReportChildByPhoneCore_(phoneRaw, expectedProfileRaw, operationIdRaw) {
   try {
     const phone10 = last10_(phoneRaw);
     if (!phone10) return { ok:false, message:'Не удалось определить номер родителя.' };
 
     return withChatWriteLock_(function() {
       const sh = getDataSheet_();
+      const operationId = String(operationIdRaw || '').trim();
+      const hasCheckpoint = !!operationId;
       const lastRow = sh ? sh.getLastRow() : 0;
-      const values = lastRow >= 2
-        ? sh.getRange(2, 1, lastRow - 1, 4).getValues()
-        : [];
-      const rowNumbers = [];
-
-      values.forEach(function(row, index) {
-        if (last10_(row[0]) === phone10) rowNumbers.push(index + 2);
-      });
-
-      if (rowNumbers.length && expectedProfileRaw) {
-        const identityStillMatches = rowNumbers.some(function(rowNumber) {
-          return deletionProfileMatchesExpected_(values[rowNumber - 2], expectedProfileRaw);
-        });
-        if (!identityStillMatches) {
-          return {
-            ok:false,
-            code:'RECORD_CHANGED',
-            message:'Данные ребёнка изменились после запроса удаления; автоматическое удаление остановлено.'
-          };
-        }
+      const values = lastRow >= 2 ? sh.getRange(2, 1, lastRow - 1, 4).getValues() : [];
+      let checkpoint = hasCheckpoint ? loadParentDeletionCheckpoint_(operationId) : null;
+      let rowIndexes = [];
+      if (hasCheckpoint && !checkpoint) {
+        const created = createParentDeletionCheckpoint_(operationId, phone10, expectedProfileRaw, sh, values);
+        if (created.error) return { ok:false, code:created.error, message:created.message };
+        checkpoint = created.checkpoint;
+        rowIndexes = created.rowIndexes;
+      } else if (!hasCheckpoint) {
+        values.forEach(function(row, index) { if (last10_(row[0]) === phone10) rowIndexes.push(index); });
       }
 
-      const rawDeletedTargets = rowNumbers
-        .map(function(rowNumber) { return rawReportChildTargetFromReportRow_(values[rowNumber - 2]); })
-        .filter(Boolean);
-      const rawActiveTargets = values
-        .filter(function(row) { return last10_(row[0]) !== phone10; })
-        .map(rawReportChildTargetFromReportRow_)
-        .filter(Boolean);
-      const rawTargets = rawReportTargetsNoLongerActive_(rawDeletedTargets, rawActiveTargets);
-      const rawAllTargets = rawActiveTargets.concat(rawTargets);
-      const rawCleanupPlan = prepareRawReportCleanupForChildren_(rawTargets, rawAllTargets);
-
-      let d1Cleanup = null;
-      let rawCleanup = null;
-      const cleanupErrors = [];
-
-      try {
-        d1Cleanup = deleteD1ProfileWithS3Purge_(phone10);
-      } catch (e) {
-        return {
-          ok:false,
-          message:'Не удалось закрыть чат родителя. Удаление будет повторено: ' + String(e && e.message || e)
-        };
+      if (checkpoint && checkpoint.phone10 !== phone10) return { ok:false, code:'OPERATION_MISMATCH', message:'Операция удаления привязана к другому профилю.' };
+      if (checkpoint && checkpoint.steps && checkpoint.steps.complete) {
+        return Object.assign({ ok:true, cleanupComplete:true, coreComplete:true, pendingSteps:[] }, checkpoint.result, { operationId:operationId, replayed:true });
+      }
+      if (checkpoint && !currentDeletionRowsMatchCheckpoint_(values, phone10, checkpoint, expectedProfileRaw)) {
+        return { ok:false, code:'RECORD_CHANGED', message:'Профиль изменился после начала удаления; новая запись не затронута.' };
       }
 
-      try {
-        rawCleanup = applyRawReportCleanup_(rawCleanupPlan);
-      } catch (e) {
-        const message = String(e && e.message || e);
-        cleanupErrors.push('raw reports: ' + message);
-        Logger.log('Raw report cleanup will retry after REPORTS deletion for ' + phone10 + ': ' + message);
-      }
-
-      for (let i = rowNumbers.length - 1; i >= 0; i -= 1) {
-        sh.deleteRow(rowNumbers[i]);
-      }
-
-      function bestEffortDeleteCleanup_(label, fn) {
+      const errors = [];
+      let deletedReportRows = 0;
+      let deletedRawReportBlocks = 0;
+      let deletedD1Profiles = 0;
+      const persist = function() { checkpoint.updatedAt = Date.now(); saveParentDeletionCheckpoint_(checkpoint); };
+      if (!checkpoint || !checkpoint.steps.d1) {
         try {
-          return fn();
+          const d1Cleanup = deleteD1ProfileWithS3Purge_(phone10);
+          deletedD1Profiles = Number(d1Cleanup && d1Cleanup.deleted && 1 || 0);
+          if (checkpoint) {
+            checkpoint.steps.d1 = true;
+            checkpoint.result.deletedD1Profiles = deletedD1Profiles;
+            persist();
+          }
         } catch (e) {
-          const message = String(e && e.message || e);
-          cleanupErrors.push(label + ': ' + message);
-          Logger.log('Cleanup after parent deletion failed [' + label + '] for ' + phone10 + ': ' + message);
-          return null;
+          return { ok:false, message:'Не удалось закрыть чат родителя. Удаление будет повторено: ' + String(e && e.message || e) };
         }
       }
 
-      bestEffortDeleteCleanup_('report inactivity state', function() {
-        return removeReportInactivityState_(phone10);
-      });
-      bestEffortDeleteCleanup_('parent contact', function() {
-        return removeMedsiParentContactBestEffort_(phone10);
-      });
+      if (!checkpoint || !checkpoint.steps.raw) {
+        try {
+          const currentRows = sh && sh.getLastRow() >= 2 ? sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues() : [];
+          const activeTargets = currentRows.filter(function(row) { return last10_(row[0]) !== phone10; })
+            .map(rawReportChildTargetFromReportRow_).filter(Boolean);
+          const targets = checkpoint ? checkpoint.rawTargets || [] : rowIndexes.map(function(index) { return rawReportChildTargetFromReportRow_(values[index]); }).filter(Boolean);
+          const allTargets = (checkpoint ? checkpoint.rawGuardTargets || [] : []).concat(activeTargets, targets);
+          const rawCleanup = applyRawReportCleanup_(prepareRawReportCleanupForChildren_(targets, allTargets));
+          deletedRawReportBlocks = Number(rawCleanup.removedBlocks || 0);
+          if (checkpoint) { checkpoint.steps.raw = true; checkpoint.result.deletedRawReportBlocks = deletedRawReportBlocks; persist(); }
+        } catch (e) {
+          errors.push('raw reports: ' + String(e && e.message || e));
+        }
+      }
 
+      if (!checkpoint || !checkpoint.steps.reports) {
+        try {
+          const latest = sh && sh.getLastRow() >= 2 ? sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues() : [];
+          const toDelete = [];
+          latest.forEach(function(row, index) {
+            if (last10_(row[0]) !== phone10) return;
+            if (checkpoint && !(checkpoint.rowIdentity || []).some(function(identity) {
+              return identity[0] === phone10 && identity[1] === String(row[1] || '').trim() && identity[2] === String(row[2] || '').trim() && identity[3] === String(row[3] || '').trim();
+            })) throw new Error('Профиль изменился после начала удаления; новая запись сохранена.');
+            toDelete.push(index + 2);
+          });
+          for (let i = toDelete.length - 1; i >= 0; i -= 1) sh.deleteRow(toDelete[i]);
+          deletedReportRows = toDelete.length;
+          if (checkpoint) { checkpoint.steps.reports = true; checkpoint.result.deletedReportRows = deletedReportRows; persist(); }
+        } catch (e) { errors.push('REPORTS: ' + String(e && e.message || e)); }
+      }
+
+      if (!checkpoint || !checkpoint.steps.inactivity) {
+        try { removeReportInactivityState_(phone10); if (checkpoint) { checkpoint.steps.inactivity = true; persist(); } }
+        catch (e) { errors.push('report inactivity state: ' + String(e && e.message || e)); }
+      }
+      if (!checkpoint || !checkpoint.steps.contact) {
+        try {
+          const contact = checkpoint
+            ? removeMedsiParentContactByPhone_(phone10)
+            : removeMedsiParentContactBestEffort_(phone10);
+          if (!contact || contact.ok !== false) { if (checkpoint) { checkpoint.steps.contact = true; persist(); } }
+          else errors.push('parent contact: cleanup did not complete');
+        } catch (e) { errors.push('parent contact: ' + String(e && e.message || e)); }
+      }
+
+      const pendingSteps = checkpoint ? Object.keys(checkpoint.steps).filter(function(step) { return step !== 'complete' && !checkpoint.steps[step]; }) : errors.length ? ['cleanup'] : [];
+      const coreComplete = checkpoint ? checkpoint.steps.d1 && checkpoint.steps.raw && checkpoint.steps.reports : !errors.length;
+      const cleanupComplete = coreComplete && (!checkpoint || checkpoint.steps.inactivity && checkpoint.steps.contact) && errors.length === 0;
+      if (checkpoint && cleanupComplete) { checkpoint.steps.complete = true; checkpoint.result.completedAt = Date.now(); persist(); }
       return {
         ok:true,
-        alreadyDeleted:rowNumbers.length === 0,
-        deletedReportRows:rowNumbers.length,
-        deletedRawReportBlocks:Number(rawCleanup && rawCleanup.removedBlocks || 0),
+        operationId:operationId || undefined,
+        alreadyDeleted:checkpoint ? Number(checkpoint.result.deletedReportRows || 0) === 0 : rowIndexes.length === 0,
+        deletedReportRows:Number(checkpoint ? checkpoint.result.deletedReportRows || 0 : deletedReportRows),
+        deletedRawReportBlocks:Number(checkpoint ? checkpoint.result.deletedRawReportBlocks || 0 : deletedRawReportBlocks),
         deletedChatRows:0,
-        deletedD1Profiles:Number(d1Cleanup && d1Cleanup.deleted && 1 || 0),
-        cleanupComplete:cleanupErrors.length === 0,
-        cleanupErrors:cleanupErrors
+        deletedD1Profiles:Number(checkpoint ? checkpoint.result.deletedD1Profiles || 0 : deletedD1Profiles),
+        coreComplete:!!coreComplete,
+        cleanupComplete:!!cleanupComplete,
+        pendingSteps:pendingSteps,
+        cleanupErrors:errors
       };
     });
   } catch (e) {
@@ -2591,7 +2687,7 @@ function processParentDeletionFromCloudflare_(paramRaw) {
   const result = deleteReportChildByPhoneCore_(param.phone, {
     parentName:String(param.parentName || '').trim(),
     childName:String(param.childName || '').trim()
-  });
+  }, operationId);
   if (!result || result.ok !== true) return result || { ok:false, message:'Удаление не завершено.' };
   return Object.assign({}, result, {
     operationId:operationId,
@@ -2811,7 +2907,7 @@ function listAvailableParentsForChat(tutorTokenRaw) {
       }
     });
 
-    const rows = enrichProfilesWithRelationships_(Object.values(byPhone)).sort((a, b) => {
+    const rows = enrichProfilesWithRelationships_(Object.values(byPhone), values).sort((a, b) => {
       const aChild = String(a.childName || '').toLowerCase();
       const bChild = String(b.childName || '').toLowerCase();
       return aChild.localeCompare(bChild, 'ru');
@@ -4107,15 +4203,7 @@ function redistributeChildReportKindMaintenanceCore_(kindRaw) {
     buildSafeDistribution_(kind, parsed, contextByBase),
     dataSheet.getRange(2, kind === 'morning' ? 5 : 6, count, 1).getValues().map(function(row) { return row[0]; }), false);
   const MISSING = 'Пока ещё нет отчёта 🙏';
-  const output = [];
-
-  for (let i = 0; i < count; i += 1) {
-    const storedName = baseNames[i];
-    const cleanName = stripInitialFromName_(storedName);
-    let value = distribution.byRow[i] || MISSING;
-    value = prepareReportForParent_(value, storedName, cleanName);
-    output.push([value]);
-  }
+  const output = buildReportRowValues_(baseNames, distribution.byRow, MISSING);
 
   const targetColumn = kind === 'morning' ? 5 : 6;
   assertReportDistributionRosterUnchanged_(dataSheet, children, count);
@@ -4425,22 +4513,13 @@ function distributeChildReports(triggerKindRaw) {
     buildSafeDistribution_('evening', parsedEvening, contextByBase), previousReports.map(function(row) { return row[1]; }), false);
 
   const MISSING = "Пока ещё нет отчёта 🙏";
-  const morningOut = [];
-  const eveningOut = [];
+  const morningOut = buildReportRowValues_(baseNames, morningDistribution.byRow, MISSING);
+  const eveningOut = buildReportRowValues_(baseNames, eveningDistribution.byRow, MISSING);
   const inactivityUpdates = [];
 
   for (let i = 0; i < count; i++) {
-    const storedName = baseNames[i];
-    const cleanName  = stripInitialFromName_(storedName);
-
-    let m = morningDistribution.byRow[i] || MISSING;
-    let e = eveningDistribution.byRow[i] || MISSING;
-
-    m = prepareReportForParent_(m, storedName, cleanName);
-    e = prepareReportForParent_(e, storedName, cleanName);
-
-    morningOut.push([m]);
-    eveningOut.push([e]);
+    const m = morningOut[i][0];
+    const e = eveningOut[i][0];
     inactivityUpdates.push({
       phone: reportPhones[i],
       hasNewReport: (m !== MISSING && String(m) !== String(previousReports[i][0] || '')) ||

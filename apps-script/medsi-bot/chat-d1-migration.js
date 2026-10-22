@@ -14,12 +14,13 @@ function snapshotActiveProfilesForD1_() {
   const lastRow = sh ? sh.getLastRow() : 0;
   if (lastRow < 2) return [];
   const byPhone = {};
-  sh.getRange(2, 1, lastRow - 1, 4).getValues().forEach(row => {
+  const rows = sh.getRange(2, 1, lastRow - 1, 7).getValues();
+  rows.forEach(row => {
     const profile = buildProfileFromReportRow_(row);
     const phone = last10_(profile.phone);
     if (phone) byPhone[phone] = { phone:phone, parentName:profile.parentName, childName:profile.childName };
   });
-  return enrichProfilesWithRelationships_(Object.keys(byPhone).map(phone => byPhone[phone]));
+  return enrichProfilesWithRelationships_(Object.keys(byPhone).map(phone => byPhone[phone]), rows);
 }
 
 function syncD1ProfilesFromReports_(full) {
@@ -193,7 +194,7 @@ function syncD1ProfileForPhone_(phoneRaw) {
   if (!phone || !profile) return { ok:false, message:'Parent is absent from REPORTS.' };
   const enriched = enrichProfilesWithRelationships_([{
     phone:phone, parentName:profile.parentName, childName:profile.childName
-  }]);
+  }], getReportRowsByPhone_(phone));
   return d1AdminRequest_('/admin/reconcile', 'post', {
     profiles:enriched, full:false
   });
@@ -210,7 +211,7 @@ function reportsD1ProfilesSnapshot_() {
   const sheet = getDataSheet_();
   const lastRow = sheet ? sheet.getLastRow() : 0;
   const rows = lastRow >= 2
-    ? sheet.getRange(2, 1, lastRow - 1, 4).getValues()
+    ? sheet.getRange(2, 1, lastRow - 1, 7).getValues()
     : [];
 
   rows.forEach(function(row) {
@@ -229,7 +230,7 @@ function reportsD1ProfilesSnapshot_() {
       familyName: String(row[3] || '').trim()
     };
   });
-  enrichProfilesWithRelationships_(Object.keys(snapshot).map(function(phone) { return snapshot[phone]; }));
+  enrichProfilesWithRelationships_(Object.keys(snapshot).map(function(phone) { return snapshot[phone]; }), rows);
   return snapshot;
 }
 
@@ -373,6 +374,7 @@ function reconcileReportsProfilesToD1_(reason) {
     const requestToken = props.getProperty('REPORTS_D1_SYNC_REQUEST');
     const sheet = getDataSheet_();
     if (!sheet) throw new Error('Лист REPORTS не найден; удаление профилей остановлено.');
+    if (typeof fillMissingParentRelationships_ === 'function') fillMissingParentRelationships_(sheet);
     previousSnapshot = loadReportsD1ProfilesSnapshot_();
     current = reportsD1ProfilesSnapshot_();
     const sync = reconcileReportsProfilesToD1NonDestructive_(reason, true);
