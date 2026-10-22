@@ -382,6 +382,8 @@ async function registerParent(request, env) {
     }
     const active = await env.CHAT_DB.prepare('SELECT phone10 FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
     if (!active) return json({ ok: false, status: 'REVOKED', message: 'Регистрация уже удалена. Начните заново.' }, 410);
+    await env.CHAT_DB.prepare(`UPDATE chat_profiles SET profile_generation = ?
+      WHERE phone10 = ? AND profile_generation = ''`).bind(attemptId, phone).run();
     const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env);
     return json({ ok: true, duplicate: false, phone: '8' + phone, parentName, childName,
       parentSession: session.token, d1Session: { ok: true, ...session }, registrationAttemptId: attemptId });
@@ -397,8 +399,10 @@ async function registerParent(request, env) {
     env.CHAT_DB.prepare(`INSERT INTO parent_registration_attempts
       (attempt_id, phone10, parent_name, child_name, status, created_at) VALUES (?, ?, ?, ?, 'COMPLETED', ?)
       ON CONFLICT(attempt_id) DO NOTHING`).bind(attemptId, phone, parentName, childName, createdAt),
-    env.CHAT_DB.prepare(`INSERT INTO chat_profiles (phone10, parent_name, child_name, relationship, child_genitive)
-      VALUES (?, ?, ?, ?, ?) ON CONFLICT(phone10) DO NOTHING`).bind(phone, parentName, childName, defaultParentRelationship_(parentName), parentChildGenitive_(childName)),
+    env.CHAT_DB.prepare(`INSERT INTO chat_profiles
+      (phone10, parent_name, child_name, relationship, child_genitive, profile_generation)
+      VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(phone10) DO NOTHING`).bind(
+        phone, parentName, childName, defaultParentRelationship_(parentName), parentChildGenitive_(childName), attemptId),
     env.CHAT_DB.prepare(`INSERT INTO parent_registration_outbox (attempt_id, phone10, parent_name, child_name, created_at)
       SELECT ?, phone10, parent_name, child_name, ? FROM chat_profiles
       WHERE phone10 = ? AND parent_name = ? AND child_name = ?
@@ -1319,7 +1323,7 @@ async function enqueueParentDeletion(request, env, auth, ctx) {
   }
 
   const profile = await env.CHAT_DB.prepare(`
-    SELECT phone10, parent_name, child_name
+    SELECT phone10, parent_name, child_name, profile_generation
     FROM chat_profiles
     WHERE phone10 = ?
   `).bind(phone).first();
@@ -1331,9 +1335,10 @@ async function enqueueParentDeletion(request, env, auth, ctx) {
   await env.CHAT_DB.batch([
     env.CHAT_DB.prepare(`
       INSERT INTO parent_deletion_queue
-        (operation_id, phone10, parent_name, child_name, status, attempts, last_error, result_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 'pending', 0, '', '', ?, ?)
-    `).bind(operationId, phone, String(profile.parent_name || ''), String(profile.child_name || ''), now, now),
+        (operation_id, phone10, parent_name, child_name, profile_generation, status, attempts, last_error, result_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'pending', 0, '', '', ?, ?)
+    `).bind(operationId, phone, String(profile.parent_name || ''), String(profile.child_name || ''),
+      String(profile.profile_generation || ''), now, now),
     // Removing chat_profiles is the logical delete. Parent access and educator
     // lists close immediately, while messages stay until background cleanup.
     env.CHAT_DB.prepare('DELETE FROM chat_profiles WHERE phone10 = ?').bind(phone),
@@ -1423,7 +1428,7 @@ async function drainParentDeletionQueue(env) {
   `).bind(Date.now(), staleProcessing).run();
 
   const rows = await env.CHAT_DB.prepare(`
-    SELECT operation_id, phone10, parent_name, child_name, attempts, created_at
+    SELECT operation_id, phone10, parent_name, child_name, profile_generation, attempts, created_at
     FROM parent_deletion_queue
     WHERE status IN ('pending','retry')
     ORDER BY created_at, operation_id
@@ -1452,6 +1457,7 @@ async function drainParentDeletionQueue(env) {
             phone:row.phone10,
             parentName:row.parent_name,
             childName:row.child_name,
+            profileGeneration:row.profile_generation,
             submittedAt:Number(row.created_at || 0)
           }
         })
@@ -1607,7 +1613,10 @@ async function reconcileProfiles(request, env) {
       parentName: String(item.parentName || '').trim().slice(0, 300),
       childName: String(item.childName || '').trim().slice(0, 300),
       relationship: String(item.relationship || 'Родитель').trim().slice(0, 30),
-      childGenitive: String(item.childGenitive || '').trim().slice(0, 100)
+      childGenitive: String(item.childGenitive || '').trim().slice(0, 100),
+      profileGeneration: registrationId(item.profileGeneration) || '',
+      childAdmissionId: /^[A-Za-z0-9_-]{8,120}$/.test(String(item.childAdmissionId || '').trim())
+        ? String(item.childAdmissionId).trim() : ''
     });
   });
 
@@ -1616,12 +1625,24 @@ async function reconcileProfiles(request, env) {
   active.forEach((profile, phone) => {
     const position = rosterOrder++;
     statements.push(env.CHAT_DB.prepare(`
-      INSERT INTO chat_profiles (phone10, parent_name, child_name, relationship, child_genitive)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO chat_profiles
+        (phone10, parent_name, child_name, relationship, child_genitive, profile_generation, child_admission_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(phone10) DO UPDATE SET parent_name = excluded.parent_name,
         child_name = excluded.child_name, relationship = excluded.relationship,
-        child_genitive = excluded.child_genitive
-    `).bind(phone, profile.parentName, profile.childName, profile.relationship, profile.childGenitive));
+        child_genitive = excluded.child_genitive,
+        profile_generation = CASE
+          WHEN excluded.profile_generation <> '' AND
+            (chat_profiles.profile_generation = '' OR chat_profiles.profile_generation = excluded.profile_generation)
+          THEN excluded.profile_generation ELSE chat_profiles.profile_generation END,
+        child_admission_id = CASE
+          WHEN excluded.child_admission_id <> '' AND
+            (chat_profiles.child_admission_id = '' OR chat_profiles.child_admission_id = excluded.child_admission_id)
+          THEN excluded.child_admission_id ELSE chat_profiles.child_admission_id END
+      WHERE excluded.profile_generation = '' OR chat_profiles.profile_generation = ''
+        OR chat_profiles.profile_generation = excluded.profile_generation
+    `).bind(phone, profile.parentName, profile.childName, profile.relationship, profile.childGenitive,
+      profile.profileGeneration, profile.childAdmissionId));
     statements.push(env.CHAT_DB.prepare(`
       INSERT INTO report_inactivity_state (phone10, first_seen_at, roster_order)
       VALUES (?, ?, ?)

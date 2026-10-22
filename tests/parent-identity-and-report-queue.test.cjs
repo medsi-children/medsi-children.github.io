@@ -158,8 +158,8 @@ test('report checks run locally before queue acceptance and preserve the submitt
 });
 test('surname and relationship corrections preserve the chat after legacy login retirement',async()=>{
   const {DatabaseSync}=require('node:sqlite'),db=new DatabaseSync(':memory:');
-  db.exec("CREATE TABLE chat_profiles(phone10 TEXT PRIMARY KEY,parent_name TEXT,child_name TEXT,relationship TEXT,child_genitive TEXT); CREATE TABLE chat_messages(phone10 TEXT,message TEXT); CREATE TABLE report_inactivity_state(phone10 TEXT PRIMARY KEY,first_seen_at INTEGER,last_new_report_at INTEGER DEFAULT 0,last_prompt_days INTEGER DEFAULT 0,roster_order INTEGER DEFAULT 0);");
-  db.prepare('INSERT INTO chat_profiles VALUES(?,?,?,?,?)').run('9990000001','Анна','Никита Иванова','Мама','');
+  db.exec("CREATE TABLE chat_profiles(phone10 TEXT PRIMARY KEY,parent_name TEXT,child_name TEXT,relationship TEXT,child_genitive TEXT,profile_generation TEXT NOT NULL DEFAULT '',child_admission_id TEXT NOT NULL DEFAULT ''); CREATE TABLE chat_messages(phone10 TEXT,message TEXT); CREATE TABLE report_inactivity_state(phone10 TEXT PRIMARY KEY,first_seen_at INTEGER,last_new_report_at INTEGER DEFAULT 0,last_prompt_days INTEGER DEFAULT 0,roster_order INTEGER DEFAULT 0);");
+  db.prepare('INSERT INTO chat_profiles(phone10,parent_name,child_name,relationship,child_genitive) VALUES(?,?,?,?,?)').run('9990000001','Анна','Никита Иванова','Мама','');
   db.prepare('INSERT INTO chat_messages VALUES(?,?)').run('9990000001','Synthetic history');
   const wrap=sql=>({args:[],bind(...args){this.args=args;return this},all:async()=>({results:[]}),run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}});
   const context={Response,console};vm.createContext(context);vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {','const worker = {'),context);
@@ -362,6 +362,7 @@ test('Cloudflare-first deletion closes the profile immediately and persists a du
   db.exec(read('services/cloudflare/chat-worker/migrations/0014_report_state_import_runs.sql'));
   db.exec(read('services/cloudflare/chat-worker/migrations/0015_parent_passkeys.sql'));
   db.exec(read('services/cloudflare/chat-worker/migrations/0016_drop_legacy_parent_access.sql'));
+  db.exec(read('services/cloudflare/chat-worker/migrations/0017_profile_and_report_generations.sql'));
   db.prepare('INSERT INTO chat_profiles(phone10,parent_name,child_name,relationship,child_genitive) VALUES(?,?,?,?,?)')
     .run('9990000001','Анна','Никита Иванов','Мама','Никиты Иванова');
   db.prepare("INSERT INTO chat_messages(message_key,phone10,side,type,text,created_at,status,read_by_parent,read_by_educator) VALUES(?,?,?,?,?,?,?,?,?)")
@@ -392,7 +393,7 @@ test('Cloudflare-first deletion closes the profile immediately and persists a du
 
 test('Worker retries Apps Script deletion when critical cleanup is incomplete', async()=>{
   const {DatabaseSync}=require('node:sqlite');
-  const db=new DatabaseSync(':memory:');db.exec(read('services/cloudflare/chat-worker/migrations/0012_parent_deletion_queue.sql'));
+  const db=new DatabaseSync(':memory:');db.exec(read('services/cloudflare/chat-worker/migrations/0012_parent_deletion_queue.sql'));db.exec("ALTER TABLE parent_deletion_queue ADD COLUMN profile_generation TEXT NOT NULL DEFAULT '';");
   db.prepare("INSERT INTO parent_deletion_queue(operation_id,phone10,parent_name,child_name,status,attempts,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)")
     .run('delete_synthetic123456','9990000001','Анна','Никита Иванов','pending',0,1,1);
   const wrap=sql=>({args:[],bind(...args){this.args=args;return this},first:async function(){return db.prepare(sql).get(...this.args)},all:async function(){return {results:db.prepare(sql).all(...this.args)}},run:async function(){return {meta:{changes:db.prepare(sql).run(...this.args).changes}}}});
@@ -407,7 +408,7 @@ test('Worker retries Apps Script deletion when critical cleanup is incomplete', 
 test('REPORTS reconcile cannot resurrect a profile while deletion is pending', async () => {
   const {DatabaseSync}=require('node:sqlite');
   const db=new DatabaseSync(':memory:');
-  db.exec('CREATE TABLE chat_profiles(phone10 TEXT PRIMARY KEY,parent_name TEXT,child_name TEXT,relationship TEXT,child_genitive TEXT);');
+  db.exec("CREATE TABLE chat_profiles(phone10 TEXT PRIMARY KEY,parent_name TEXT,child_name TEXT,relationship TEXT,child_genitive TEXT,profile_generation TEXT NOT NULL DEFAULT '',child_admission_id TEXT NOT NULL DEFAULT '');");
   db.exec('CREATE TABLE chat_messages(phone10 TEXT); CREATE TABLE chat_pins(phone10 TEXT); CREATE TABLE report_snapshots(phone10 TEXT); CREATE TABLE report_current(phone10 TEXT); CREATE TABLE parent_access_requests(phone10 TEXT,status TEXT,decision TEXT,updated_at INTEGER); CREATE TABLE parent_registration_outbox(phone10 TEXT); CREATE TABLE parent_registration_attempts(phone10 TEXT);');
   db.exec(read('services/cloudflare/chat-worker/migrations/0012_parent_deletion_queue.sql'));
   db.prepare("INSERT INTO parent_deletion_queue(operation_id,phone10,parent_name,child_name,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)")

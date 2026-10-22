@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const repo = path.join(__dirname, '..');
+const read = name => fs.readFileSync(path.join(repo, name), 'utf8');
 
 function makeDatabase() {
   const { DatabaseSync } = require('node:sqlite');
@@ -216,5 +217,58 @@ test('old approvals without a device secret cannot issue a session through the c
     const consumed = await (await context.getParentAccessStatus(request('auth_22345678901234567890123456789012'), env)).json();
     assert.equal(consumed.status, 'NOT_FOUND');
     assert.equal(consumed.parentSession, undefined);
+  } finally { db.close(); }
+});
+
+test('new registration stores its attempt as the profile generation without changing the access flow', async () => {
+  const { db, env } = makeDatabase();
+  const context = { Response, console, Date, TextEncoder, Uint8Array, btoa,
+    crypto: require('node:crypto').webcrypto };
+  vm.createContext(context);
+  vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {', 'const worker = {'), context);
+  try {
+    env.LAB_D1_SESSION_SECRET = 'synthetic-session-secret';
+    const attemptId = 'reg_synthetic-generation-001';
+    const response = await context.registerParent({ json: async () => ({
+      phone:'89990000001', parentName:'Анна Синтетическая', childName:'Миша Примеров', attemptId
+    }) }, env);
+    const result = await response.json();
+    assert.equal(result.ok, true);
+    assert.equal(db.prepare('SELECT profile_generation FROM chat_profiles WHERE phone10=?').get('9990000001').profile_generation, attemptId);
+    assert.equal(db.prepare('SELECT attempt_id FROM parent_registration_outbox WHERE phone10=?').get('9990000001').attempt_id, attemptId);
+    assert.ok(result.d1Session && result.d1Session.ok);
+  } finally { db.close(); }
+});
+
+test('profile reconciliation rejects a different generation and fills only missing admission metadata', async () => {
+  const { db, env } = makeDatabase();
+  const context = { Response, console, Date, TextEncoder, Uint8Array, btoa,
+    crypto: require('node:crypto').webcrypto };
+  vm.createContext(context);
+  vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {', 'const worker = {'), context);
+  try {
+    const current = 'reg_current-synthetic-generation';
+    const stale = 'reg_stale-synthetic-generation';
+    db.prepare(`INSERT INTO chat_profiles
+      (phone10,parent_name,child_name,profile_generation,child_admission_id)
+      VALUES(?,?,?,?,?)`).run('9990000001','Анна','Миша Примеров',current,'');
+    const request = profile => ({ json: async () => ({ profiles:[profile], full:false }) });
+    await context.reconcileProfiles(request({
+      phone:'9990000001', parentName:'Старое имя', childName:'Старое имя ребёнка', profileGeneration:stale,
+      childAdmissionId:'adm_stale'
+    }), env);
+    let row = db.prepare('SELECT parent_name,child_name,profile_generation,child_admission_id FROM chat_profiles WHERE phone10=?').get('9990000001');
+    assert.equal(row.parent_name, 'Анна');
+    assert.equal(row.child_name, 'Миша Примеров');
+    assert.equal(row.profile_generation, current);
+    assert.equal(row.child_admission_id, '');
+
+    await context.reconcileProfiles(request({
+      phone:'9990000001', parentName:'Анна', childName:'Миша Примеров',
+      profileGeneration:current, childAdmissionId:'adm_current'
+    }), env);
+    row = db.prepare('SELECT profile_generation,child_admission_id FROM chat_profiles WHERE phone10=?').get('9990000001');
+    assert.equal(row.profile_generation, current);
+    assert.equal(row.child_admission_id, 'adm_current');
   } finally { db.close(); }
 });
