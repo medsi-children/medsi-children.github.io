@@ -2152,10 +2152,11 @@ export default {
       const rows=await env.CHAT_DB.prepare(`SELECT c.phone10 FROM report_current c JOIN chat_profiles p ON p.phone10=c.phone10
         WHERE c.kind='morning' AND TRIM(c.text)<>'' AND c.child_admission_id=p.child_admission_id`).all();
       let reserved=0,sent=0,failed=0;
-      for(const row of rows.results || []) {
-        const claim=await env.CHAT_DB.prepare(`INSERT INTO report_push_dedup(phone10,kind,report_date,last_push_at)
-          VALUES(?,'morning',?,?) ON CONFLICT(phone10,kind,report_date) DO UPDATE SET last_push_at=excluded.last_push_at
-          WHERE report_push_dedup.last_push_at<?`).bind(row.phone10,reportDate,Date.now(),recoveryStartedAt).run();
+      const claims=await env.CHAT_DB.batch((rows.results || []).map(row=>env.CHAT_DB.prepare(`INSERT INTO report_push_dedup(phone10,kind,report_date,last_push_at)
+        VALUES(?,'morning',?,?) ON CONFLICT(phone10,kind,report_date) DO UPDATE SET last_push_at=excluded.last_push_at
+        WHERE report_push_dedup.last_push_at<?`).bind(row.phone10,reportDate,Date.now(),recoveryStartedAt)));
+      for(const [index,row] of (rows.results || []).entries()) {
+        const claim=claims[index];
         if(!claim.meta || !claim.meta.changes)continue;
         reserved++;
         try { const push=await env.PUSH_WORKER.fetch('https://medsi-push-worker.internal/notify',{
