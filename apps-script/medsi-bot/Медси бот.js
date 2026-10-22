@@ -1440,7 +1440,12 @@ function cleanupReportSubmissions_() {
 function claimReportSubmission_(id, typeRaw, fingerprint, legacyFingerprint) {
   if (!id) return { claimed:true, state:null };
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  // The Worker owns a durable retry queue. If another Apps Script task holds
+  // the shared lock, return quickly and let that queue retry instead of making
+  // a report request wait up to ten seconds.
+  if (!lock.tryLock(500)) {
+    return { claimed:false, state:{ status:'processing', type:typeRaw, fingerprint:fingerprint, updatedAt:Date.now() }, deferred:true };
+  }
   try {
     const existing = readReportSubmission_(id);
     if (existing) {

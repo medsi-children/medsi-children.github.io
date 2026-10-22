@@ -13,7 +13,7 @@ function apps() {
       base64EncodeWebSafe:bytes=>Buffer.from(bytes).toString('base64url')},
     SpreadsheetApp:{openById:()=>({getSheetByName:()=>({getDataRange:()=>({getValues:()=>[[]]})})})},
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value)})},
-    LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}}),getUserLock:()=>({waitLock(){},releaseLock(){}})}};
+    LockService:{getScriptLock:()=>({waitLock(){},tryLock(){return true},releaseLock(){}}),getUserLock:()=>({waitLock(){},releaseLock(){}})}};
   vm.createContext(context);
   ['report-rules.js','report-names.js','report-parser.js','Медси бот.js','report-admissions.js','medsi-contacts.js','parent-relationships.js'].forEach(file=>vm.runInContext(read('apps-script/medsi-bot/'+file),context));
   return context;
@@ -62,6 +62,15 @@ test('failed report claims can retry; completed and active claims stay idempoten
   x.writeReportSubmission_(id,{type:'morning',fingerprint:'one',status:'completed',updatedAt:Date.now()});
   assert.equal(x.claimReportSubmission_(id,'morning','one').claimed,false);
   assert.equal(x.claimReportSubmission_(id,'morning','different').mismatch,true);
+});
+test('report submission claim defers quickly when a shared Apps Script lock is busy',()=>{
+  const x=apps(), id='report_busy_synthetic'; let timeout=0;
+  x.LockService.getScriptLock=()=>({tryLock(ms){timeout=ms;return false},releaseLock(){}});
+  const claim=x.claimReportSubmission_(id,'morning','synthetic');
+  assert.equal(timeout,500);
+  assert.equal(claim.claimed,false);
+  assert.equal(claim.deferred,true);
+  assert.equal(claim.state.status,'processing');
 });
 test('manual source processing reads A1 and clears an old error after valid distribution',()=>{
   const x=apps(); let note='Old error',distributed=false;
