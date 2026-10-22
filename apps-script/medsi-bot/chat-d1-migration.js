@@ -4,8 +4,17 @@
  */
 function d1AdminRequest_(path, method, payload) {
   const response = UrlFetchApp.fetch('https://medsi-chat-worker.medsi-children.workers.dev' + path, { method:method || 'get', contentType:'application/json', muteHttpExceptions:true, headers:{Authorization:'Bearer ' + getWorkerSharedSecret_()}, payload:payload ? JSON.stringify(payload) : undefined });
-  const value = JSON.parse(response.getContentText() || '{}');
-  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300 || !value.ok) throw new Error(value.message || 'D1 HTTP ' + response.getResponseCode());
+  const status = response.getResponseCode();
+  const text = response.getContentText() || '{}';
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch (error) {
+    const workerCode = text.match(/^error code:\s*(\d+)/i);
+    const detail = workerCode ? '; Cloudflare error code ' + workerCode[1] : '; response was not JSON';
+    throw new Error('D1 HTTP ' + status + detail);
+  }
+  if (status < 200 || status >= 300 || !value.ok) throw new Error(value.message || 'D1 HTTP ' + status);
   return value;
 }
 

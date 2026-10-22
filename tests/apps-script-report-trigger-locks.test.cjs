@@ -6,6 +6,16 @@ const vm = require('node:vm');
 
 const root = path.join(__dirname, '..', 'apps-script', 'medsi-bot');
 
+test('D1 admin requests report Cloudflare runtime errors without masking them as JSON parse errors', () => {
+  const context = {
+    UrlFetchApp: { fetch: () => ({ getResponseCode: () => 500, getContentText: () => 'error code: 1101' }) },
+    getWorkerSharedSecret_: () => 'synthetic-secret'
+  };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'chat-d1-migration.js'), 'utf8'), context);
+  assert.throws(() => context.d1AdminRequest_('/admin/reconcile', 'post', {}), /D1 HTTP 500; Cloudflare error code 1101/);
+});
+
 test('spreadsheet change trigger skips ordinary cell edits', () => {
   const context = { Logger: { log() {} } };
   vm.createContext(context);
