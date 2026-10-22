@@ -2135,42 +2135,6 @@ export default {
     if (request.method === 'GET' && url.pathname === '/admin/bot-logs') {
       return json({ ok: false }, 410);
     }
-    // Temporary, narrowly scoped recovery control; remove after the incident.
-    if (request.method === 'POST' && url.pathname === '/admin/report-recovery') {
-      const token = env.MEDSI_REPORT_RECOVERY_TOKEN;
-      if (!token || !equal(request.headers.get('authorization') || '', 'Bearer ' + token)) return json({ok:false},403);
-      const input = await body(request) || {};
-      let result={ok:true,skipped:true,reason:'previously verified against REPORTS'};
-      if(input.skipSync!==true) {
-        const response = await fetch(env.APP_SCRIPT_URL, {
-          method:'POST', headers:{'content-type':'text/plain;charset=utf-8'},
-          body:JSON.stringify({action:'d1ReportCurrentSync',authorization:env.CHAT_ADMIN_TOKEN})
-        });
-        result = await response.json().catch(()=>null);
-        if (!response.ok || !result || !result.ok) {
-          return json({ok:false,stage:'sync',message:result && result.message || 'Sync failed'},502);
-        }
-      }
-      if (input.notify !== 'morning') return json({ok:true,sync:result});
-      const recoveryStartedAt=1792686901510;
-      const reportDate=reportDateInMoscow(Date.now());
-      const rows=await env.CHAT_DB.prepare(`SELECT c.phone10 FROM report_current c JOIN chat_profiles p ON p.phone10=c.phone10
-        WHERE c.kind='morning' AND TRIM(c.text)<>'' AND c.child_admission_id=p.child_admission_id`).all();
-      let reserved=0,sent=0,failed=0;
-      const claims=await env.CHAT_DB.batch((rows.results || []).map(row=>env.CHAT_DB.prepare(`INSERT INTO report_push_dedup(phone10,kind,report_date,last_push_at)
-        VALUES(?,'morning',?,?) ON CONFLICT(phone10,kind,report_date) DO UPDATE SET last_push_at=excluded.last_push_at
-        WHERE report_push_dedup.last_push_at<?`).bind(row.phone10,reportDate,Date.now(),recoveryStartedAt)));
-      for(const [index,row] of (rows.results || []).entries()) {
-        const claim=claims[index];
-        if(!claim.meta || !claim.meta.changes)continue;
-        reserved++;
-        try { const push=await env.PUSH_WORKER.fetch('https://medsi-push-worker.internal/notify',{
-          method:'POST',headers:{authorization:'Bearer '+env.MEDSI_CHAT_PUSH_SECRET,'content-type':'application/json'},
-          body:JSON.stringify({role:'parent',phone:row.phone10,notification:{title:'Утренний отчёт доступен',body:'Откройте Медси Бот, чтобы прочитать актуальный утренний отчёт.',url:'/index.html?openMorning=1',tag:'medsi-report-morning-recovery'}})
-        });const stats=await push.json();sent+=Number(stats.sent||0);failed+=Number(stats.failed||0);if(!push.ok)failed++;}catch(_){failed++;}
-      }
-      return json({ok:true,sync:result,notifications:{eligible:rows.results.length,reserved,sent,failed}});
-    }
     if (url.pathname.startsWith('/admin/')) {
       if (!await requireAdmin(request, env)) return json({ ok: false, message: 'Unauthorized' }, 401);
       if (request.method === 'POST' && url.pathname === '/admin/import') return importBatch(request, env);
