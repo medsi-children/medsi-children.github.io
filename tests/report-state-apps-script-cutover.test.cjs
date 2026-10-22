@@ -57,3 +57,57 @@ test('after cutover minute distribution sync sends only real report events to D1
     { phone:'9990000002', hasNewReport:true, rosterOrder:1 }
   ]);
 });
+
+test('after cutover legacy sheet writers and sheet initializers cannot recreate deleted tabs', () => {
+  const { context, properties } = app();
+  properties.set('REPORT_STATE_D1_CUTOVER', 'true');
+  assert.equal(context.syncReportNotificationState_({}, true).skipped, true);
+  assert.equal(context.initializeReportNotificationState_().skipped, true);
+  assert.equal(context.syncPsychologyNotificationState_('Synthetic report').skipped, true);
+  assert.equal(context.syncLegacyReportInactivityState_([]).skipped, true);
+  assert.throws(() => context.ensureReportStateSheet_(), /находится в D1/);
+  assert.throws(() => context.ensureReportInactivityStateSheet_(), /находится в D1/);
+});
+
+test('cutover flag is set only after read-state and active-roster imports are confirmed', () => {
+  const { context, properties } = app();
+  const calls = [];
+  context.Utilities = { formatDate: () => '20261022', getUuid: () => 'synthetic-uuid' };
+  context.initializeReportNotificationState_ = () => {};
+  context.ensureReportStateSheet_ = () => ({
+    getLastRow: () => 2,
+    getRange: () => ({ getValues: () => [['89990000001','9990000001','sheet-v1','', '', '', '', '', false, false, false]] })
+  });
+  context.ensureReportInactivityStateSheet_ = () => ({
+    getLastRow: () => 1,
+    getRange: () => ({ getValues: () => [] })
+  });
+  context.getDataSheet_ = () => ({
+    getLastRow: () => 2,
+    getRange: () => ({ getValues: () => [['89990000001']] })
+  });
+  context.d1AdminRequest_ = (path, method, payload) => {
+    calls.push(path);
+    if (path.endsWith('/versions')) return { versions:[{ phone:'9990000001',kind:'morning',version:'v2:current' }] };
+    if (path.endsWith('/import')) return { received:payload.items.length,verified:payload.items.length };
+    return { received:payload.items.length };
+  };
+  const result = context.migrateReportNotificationStateToD1();
+  assert.equal(result.cutover, true);
+  assert.equal(properties.get('REPORT_STATE_D1_CUTOVER'), 'true');
+  assert.deepEqual(calls, ['/admin/report-current/versions','/admin/report-read-state/import','/admin/report-inactivity/sync']);
+});
+
+test('a version mismatch leaves the old Google Sheet path active', () => {
+  const { context, properties } = app();
+  context.Utilities = { formatDate: () => '20261022', getUuid: () => 'synthetic-uuid' };
+  context.initializeReportNotificationState_ = () => {};
+  context.ensureReportStateSheet_ = () => ({ getLastRow:()=>2, getRange:()=>({getValues:()=>[['89990000001','9990000001','old-fingerprint','', '', '', '', '', false, false, false]]}) });
+  context.ensureReportInactivityStateSheet_ = () => ({ getLastRow:()=>1, getRange:()=>({getValues:()=>[]}) });
+  context.getDataSheet_ = () => ({ getLastRow:()=>1, getRange:()=>({getValues:()=>[]}) });
+  context.d1AdminRequest_ = path => path.endsWith('/versions')
+    ? {versions:[{phone:'9990000001',kind:'morning',version:'v2:current'}]}
+    : path.endsWith('/import') ? {received:1,verified:0} : {received:0};
+  assert.throws(() => context.migrateReportNotificationStateToD1(), /не полностью|не все отметки/i);
+  assert.notEqual(properties.get('REPORT_STATE_D1_CUTOVER'), 'true');
+});

@@ -1971,6 +1971,7 @@ function testValidateAndWriteReport(param, tutorTokenRaw) {
 
 /** ========= СОСТОЯНИЕ НЕПРОЧИТАННЫХ ОТЧЁТОВ ========= **/
 function ensureReportStateSheet_() {
+  if (reportStateUsesD1_()) throw new Error('Состояние прочитанности отчётов находится в D1; лист больше не используется.');
   const ss = getSpreadsheet_();
   let sh = ss.getSheetByName(REPORT_STATE_SHEET_NAME);
   const headers = [[
@@ -2043,6 +2044,7 @@ function buildReportUpdatesByPhone_(phones, morningValues, eveningValues, psycho
 }
 
 function syncReportNotificationState_(updates, pruneMissing) {
+  if (reportStateUsesD1_()) return { ok:true, skipped:true };
   if (!updates || !Object.keys(updates).length) return;
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
@@ -2152,6 +2154,7 @@ function syncReportNotificationState_(updates, pruneMissing) {
 }
 
 function initializeReportNotificationState_() {
+  if (reportStateUsesD1_()) return { ok:true, skipped:true };
   const dataSheet = getDataSheet_();
   if (!dataSheet || dataSheet.getLastRow() < 2) return;
   const count = dataSheet.getLastRow() - 1;
@@ -2165,6 +2168,7 @@ function initializeReportNotificationState_() {
 }
 
 function syncPsychologyNotificationState_(textRaw) {
+  if (reportStateUsesD1_()) return { ok:true, skipped:true };
   const dataSheet = getDataSheet_();
   if (!dataSheet || dataSheet.getLastRow() < 2) return;
   const phones = dataSheet.getRange(2, 1, dataSheet.getLastRow() - 1, 1).getValues().flat();
@@ -2423,6 +2427,7 @@ function getReportChildDeletionPreview(phoneRaw, tutorTokenRaw) {
 }
 
 function ensureReportInactivityStateSheet_() {
+  if(reportStateUsesD1_())throw new Error('Состояние напоминаний находится в D1; лист больше не используется.');
   const ss=getSpreadsheet_();let sh=ss.getSheetByName(REPORT_INACTIVITY_STATE_SHEET_NAME);
   if(!sh){sh=ss.insertSheet(REPORT_INACTIVITY_STATE_SHEET_NAME);sh.getRange(1,1,1,4).setValues([['PHONE10','LAST_NEW_REPORT_AT','FIRST_SEEN_AT','LAST_PROMPT_DAYS']]);sh.hideSheet();}
   return sh;
@@ -2457,6 +2462,7 @@ function syncReportInactivityState_(updates) {
 }
 
 function syncLegacyReportInactivityState_(updates) {
+  if(reportStateUsesD1_())return {ok:true,skipped:true};
   const sh=ensureReportInactivityStateSheet_(),now=new Date(),last=sh.getLastRow(),rows=last>=2?sh.getRange(2,1,last-1,4).getValues():[],byPhone={};
   rows.forEach((row,index)=>{const phone=last10_(row[0]);if(phone)byPhone[phone]=index;});
   (updates||[]).forEach(update=>{const phone=last10_(update&&update.phone);if(!phone)return;const index=byPhone[phone];if(index===undefined){byPhone[phone]=rows.length;rows.push([phone,update.hasNewReport?now:'',now,'']);}else if(update.hasNewReport){rows[index][1]=now;rows[index][3]='';}});
