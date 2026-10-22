@@ -18,7 +18,9 @@
   <link rel="stylesheet" href="/chat-overlay/chat-surface-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-2">
   <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261005-2">
-  <link rel="stylesheet" href="/parents/install-hint.css?v=20261003-3">
+  <link rel="stylesheet" href="/parents/install-hint.css?v=20261022-2">
+  <link rel="stylesheet" href="/parents/install-prompt.css?v=20261022-5">
+  <script defer src="/parents/install-prompt.js?v=20261022-3"></script>
   <link rel="preload" as="image" href="/parents/blob.webp" fetchpriority="high">
   <link rel="preload" as="script" href="/parents/smart-bot-widget.js?v=20261012-group-therapy-label-1">
   <script defer src="/chat-overlay/message-emoji.js?v=20261003-delivery-1"></script>
@@ -81,6 +83,37 @@
   <p>Восстанавливаем подключение к Медси Боту…</p>
   <button class="btn" type="button" onclick="location.reload()">Обновить</button>
 </div>
+<dialog id="installPrompt" class="install-prompt" aria-labelledby="installPromptTitle" aria-describedby="installPromptDescription">
+  <button id="installPromptClose" class="install-prompt-close" type="button" aria-label="Закрыть">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>
+  </button>
+  <div class="install-prompt-card">
+    <div class="install-prompt-brand" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+    <h2 id="installPromptTitle">Медси Бот под рукой</h2>
+    <p id="installPromptDescription">Медси Ботом удобнее пользоваться как приложением. Добавьте его на домашний экран телефона, чтобы легко и быстро открывать ежедневные отчёты и чат с воспитателями.</p>
+    <div class="install-prompt-tabs" role="group" aria-label="Выберите устройство">
+      <button type="button" data-install-platform="iphone" aria-pressed="false">iPhone</button>
+      <button type="button" data-install-platform="android" aria-pressed="false">Android</button>
+    </div>
+    <div class="install-prompt-guides">
+      <ol class="install-prompt-steps" data-install-steps="iphone" data-install-label="iPhone" hidden>
+        <li>Нажмите кнопку <strong class="install-prompt-share">Поделиться<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7 8m5-5 5 5M5 11v9h14v-9"/></svg></strong>.</li>
+        <li>Найдите кнопку <strong>На экран Домой</strong>.</li>
+        <li>Нажмите <strong>Добавить</strong>.</li>
+      </ol>
+      <ol class="install-prompt-steps" data-install-steps="android" data-install-label="Android" hidden>
+        <li>Нажмите меню ⋮ в браузере.</li>
+        <li>Выберите <strong>Установить приложение</strong>.</li>
+        <li>Нажмите <strong>Установить</strong>.</li>
+      </ol>
+    </div>
+    <p class="install-prompt-result">После этого бот появится на домашнем экране как приложение.</p>
+    <div class="install-prompt-actions">
+      <button id="installPromptInstall" class="btn primary" type="button" hidden>Установить</button>
+      <button id="installPromptContinue" class="install-prompt-dismiss" type="button">Нет, спасибо</button>
+    </div>
+  </div>
+</dialog>
 <script>
 (function(){
   var loaded={},chatPending=null;
@@ -117,7 +150,7 @@
     }).catch(function(){});
     series(['/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20261007-verified-subscription-1'],true).then(function(){window.MedsiParentApp.helpersReady();}).catch(function(){});
     ["/parents/psychology-format.js?v=20261009-psych-conclusion-1", "/parents/chat-opening.js?v=20260907-1", "/parents/report-disclaimer.js?v=20260907-1", "/chat-overlay/gesture-navigation.js?v=20260907-hint-1"].forEach(function(src){load(src,1).catch(function(){});});
-    load('/parents/install-hint.js?v=20261003-2',1).catch(function(){});
+    load('/parents/install-hint.js?v=20261022-2',1).catch(function(){});
   }).catch(function(){clearTimeout(notice);status.classList.remove('hidden');});
 })();
 </script>
