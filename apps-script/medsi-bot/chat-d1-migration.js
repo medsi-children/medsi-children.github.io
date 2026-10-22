@@ -94,14 +94,13 @@ function snapshotCurrentReportsForD1_(kindRaw) {
         kind:kind,
         text:text,
         version:reportContentVersionForD1_(rowsByPhone[phone] || [], kind),
-        profileGeneration:String(profile.profileGeneration || ''),
         childAdmissionId:String(profile.childAdmissionId || ''),
         updatedAt:updatedAt
       });
     });
     if (needsPsychology) {
       reports.push({ phone:phone, kind:'psychology', text:psychologyText, version:reportFingerprint_(psychologyText),
-        profileGeneration:String(profile.profileGeneration || ''), childAdmissionId:String(profile.childAdmissionId || ''), updatedAt:updatedAt });
+        childAdmissionId:String(profile.childAdmissionId || ''), updatedAt:updatedAt });
     }
   });
   return reports;
@@ -116,7 +115,7 @@ function reportCurrentD1Fingerprints_(reports, publicationDates) {
     // updatedAt is deliberately excluded: a periodic Sheets distribution must
     // not turn an unchanged report into a fresh D1 write/publication.
     grouped[kind].push([phone, String(item && item.text || ''), String(item && item.version || ''),
-      String(item && item.profileGeneration || ''), String(item && item.childAdmissionId || '')]);
+      String(item && item.childAdmissionId || '')]);
   });
   const fingerprints = {};
   Object.keys(grouped).forEach(function(kind) {

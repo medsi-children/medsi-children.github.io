@@ -869,10 +869,10 @@ async function upsertReportSnapshots(request, env) {
     const text = String(item && item.text || '').trim();
     const revision = Number(item && item.revision || 0);
     const publicationId = String(item && item.publicationId || '').trim();
-    const profileGeneration = String(item && item.profileGeneration || '').trim();
     const childAdmissionId = String(item && item.childAdmissionId || '').trim();
     if (!phone || !['morning', 'evening', 'psychology'].includes(kind) || !/^\d{4}-\d{2}-\d{2}$/.test(reportDate) || !text ||
-        !Number.isSafeInteger(revision) || revision < 1 || !/^[A-Za-z0-9_-]{8,180}$/.test(publicationId)) return;
+        !Number.isSafeInteger(revision) || revision < 1 || !/^[A-Za-z0-9_-]{8,180}$/.test(publicationId) ||
+        !/^[A-Za-z0-9_-]{8,120}$/.test(childAdmissionId)) return;
 
     const key = `${phone}|${kind}|${reportDate}`;
     if (seen.has(key)) return;
@@ -881,7 +881,7 @@ async function upsertReportSnapshots(request, env) {
       phone,
       kind,
       reportDate,
-      text: text.slice(0, 30000), revision, publicationId, profileGeneration, childAdmissionId,
+      text: text.slice(0, 30000), revision, publicationId, profileGeneration:'', childAdmissionId,
       capturedAt: Number(item.capturedAt || 0) || Date.now()
     });
   });
@@ -912,8 +912,7 @@ async function upsertReportSnapshots(request, env) {
         WHERE phone10=? AND kind=? AND report_date=? AND revision < ?
           AND EXISTS (SELECT 1 FROM report_current c JOIN chat_profiles p ON p.phone10=c.phone10
             WHERE c.phone10=? AND c.kind=? AND c.text=? AND c.revision=? AND c.publication_id=?
-              AND c.profile_generation=? AND c.child_admission_id=? AND p.profile_generation=c.profile_generation
-              AND (p.child_admission_id='' OR p.child_admission_id=c.child_admission_id))
+              AND c.child_admission_id=? AND p.child_admission_id=c.child_admission_id)
       `).bind(
         candidate.text,
         candidate.capturedAt,
@@ -930,7 +929,6 @@ async function upsertReportSnapshots(request, env) {
         candidate.text,
         candidate.revision,
         candidate.publicationId,
-        candidate.profileGeneration,
         candidate.childAdmissionId
       ).run();
 
@@ -959,12 +957,11 @@ async function upsertReportSnapshots(request, env) {
       SELECT ?,?,?,?,?,?,?,?,?
       WHERE EXISTS (SELECT 1 FROM report_current c JOIN chat_profiles p ON p.phone10=c.phone10
         WHERE c.phone10=? AND c.kind=? AND c.text=? AND c.revision=? AND c.publication_id=?
-          AND c.profile_generation=? AND c.child_admission_id=? AND p.profile_generation=c.profile_generation
-          AND (p.child_admission_id='' OR p.child_admission_id=c.child_admission_id))
+          AND c.child_admission_id=? AND p.child_admission_id=c.child_admission_id)
       ON CONFLICT(phone10,kind,report_date) DO NOTHING
     `).bind(candidate.phone,candidate.kind,candidate.reportDate,candidate.text,candidate.capturedAt,
       candidate.profileGeneration,candidate.childAdmissionId,candidate.publicationId,candidate.revision,
-      candidate.phone,candidate.kind,candidate.text,candidate.revision,candidate.publicationId,candidate.profileGeneration,
+      candidate.phone,candidate.kind,candidate.text,candidate.revision,candidate.publicationId,
       candidate.childAdmissionId).run();
 
     const changes = Number(result && result.meta && result.meta.changes || 0);
@@ -1060,8 +1057,8 @@ async function upsertCurrentReports(request, env, ctx) {
     const kind = String(item && item.kind || '').trim().toLowerCase();
     if (!phone || !publicationKinds.includes(kind)) return;
     const publication = publications[kind];
-    const profileGeneration = String(item.profileGeneration || '').trim().slice(0,180);
     const childAdmissionId = String(item.childAdmissionId || '').trim().slice(0,120);
+    if (!/^[A-Za-z0-9_-]{8,120}$/.test(childAdmissionId)) return;
     const publicationRevision = nextRevisions[kind];
     const key = `${phone}|${kind}`;
     if (seen.has(key)) return;
@@ -1076,7 +1073,7 @@ async function upsertCurrentReports(request, env, ctx) {
     // refresh that timestamp before today's actual report is published.
     const isExplicitDailyPublication = kind === notificationKind && reportDate && text;
     const storedVersion = isExplicitDailyPublication ? `${incomingVersion}|d:${reportDate}` : incomingVersion;
-    const row = { phone,kind,text,version:storedVersion,profileGeneration,childAdmissionId,
+    const row = { phone,kind,text,version:storedVersion,profileGeneration:'',childAdmissionId,
       revision:publicationRevision,publicationId:publication.publicationId };
     itemsByKey.set(key,row);
 
@@ -1098,7 +1095,7 @@ async function upsertCurrentReports(request, env, ctx) {
         OR EXISTS (SELECT 1 FROM report_publication_state s WHERE s.kind=? AND s.revision=?
           AND s.source_fingerprint IS NOT ?))
         AND EXISTS (SELECT 1 FROM chat_profiles p WHERE p.phone10=?
-          AND p.profile_generation=? AND (p.child_admission_id='' OR p.child_admission_id=?))
+          AND p.child_admission_id=?)
       ON CONFLICT(phone10,kind) DO UPDATE SET
         text=excluded.text,
         version=CASE WHEN report_current.text IS excluded.text
@@ -1112,12 +1109,11 @@ async function upsertCurrentReports(request, env, ctx) {
         publication_id=excluded.publication_id
       WHERE excluded.revision > report_current.revision
         AND EXISTS (SELECT 1 FROM chat_profiles p WHERE p.phone10=excluded.phone10
-          AND p.profile_generation=excluded.profile_generation
-          AND (p.child_admission_id='' OR p.child_admission_id=excluded.child_admission_id))
-    `).bind(phone,kind,text,storedVersion,Number(item.updatedAt||0)||Date.now(),profileGeneration,
+          AND p.child_admission_id=excluded.child_admission_id)
+    `).bind(phone,kind,text,storedVersion,Number(item.updatedAt||0)||Date.now(),'',
       childAdmissionId,publicationRevision,publication.publicationId,
       Number(publication.expectedRevision),kind,kind,Number(publication.expectedRevision),publication.sourceFingerprint,
-      phone,profileGeneration,childAdmissionId));
+      phone,childAdmissionId));
   });
 
   publicationKinds.forEach(kind => {
@@ -1125,15 +1121,14 @@ async function upsertCurrentReports(request, env, ctx) {
     const expected = Number(publication.expectedRevision);
     const next = expected + 1;
     const manifest = Array.from(itemsByKey.values()).filter(item=>item.kind===kind).map(item=>({
-      phone:item.phone,profileGeneration:item.profileGeneration,childAdmissionId:item.childAdmissionId
+      phone:item.phone,childAdmissionId:item.childAdmissionId
     }));
     statements.push(env.CHAT_DB.prepare(`INSERT INTO report_publication_state
       (kind,revision,source_fingerprint,publication_id,updated_at)
       SELECT ?,?,?,?,?
       WHERE NOT EXISTS (SELECT 1 FROM json_each(?) j WHERE NOT EXISTS (
         SELECT 1 FROM chat_profiles p WHERE p.phone10=json_extract(j.value,'$.phone')
-          AND p.profile_generation=json_extract(j.value,'$.profileGeneration')
-          AND (p.child_admission_id='' OR p.child_admission_id=json_extract(j.value,'$.childAdmissionId'))
+          AND p.child_admission_id=json_extract(j.value,'$.childAdmissionId')
       ))
       ON CONFLICT(kind) DO UPDATE SET revision=excluded.revision,
         source_fingerprint=excluded.source_fingerprint,publication_id=excluded.publication_id,
@@ -1161,10 +1156,9 @@ async function upsertCurrentReports(request, env, ctx) {
     const active = await env.CHAT_DB.prepare(`SELECT 1 AS ok FROM report_current c
       JOIN chat_profiles p ON p.phone10=c.phone10
       WHERE c.phone10=? AND c.kind=? AND c.revision=? AND c.publication_id=?
-        AND c.profile_generation=? AND p.profile_generation=c.profile_generation
-        AND (c.child_admission_id='' OR p.child_admission_id='' OR c.child_admission_id=p.child_admission_id)
+        AND c.child_admission_id=? AND p.child_admission_id=c.child_admission_id
         AND c.text=? AND c.version=? LIMIT 1`).bind(item.phone,item.kind,item.revision,item.publicationId,
-          item.profileGeneration,item.text,item.version).first();
+          item.childAdmissionId,item.text,item.version).first();
     if (active) appliedRows.add(key);
   }
   const updated = appliedRows.size;

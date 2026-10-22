@@ -133,7 +133,6 @@ function captureReportHistoryKind_(kindRaw, reportDate) {
       kind: kind,
       reportDate: reportDate,
       text: report.text,
-      profileGeneration:String(profile.profileGeneration || ''),
       childAdmissionId:String(profile.childAdmissionId || ''),
       revision:revision,
       publicationId:publicationId,

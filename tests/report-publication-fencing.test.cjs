@@ -72,7 +72,7 @@ test('Cloudflare rejects an older report batch after a newer publication wins', 
   } finally { x.db.close(); }
 });
 
-test('a newer source revision replaces current text, but an old profile generation cannot', async () => {
+test('a current admission publishes without a profile generation marker, while a previous admission is rejected', async () => {
   const x=fixture();
   try {
     await x.worker.upsertCurrentReports(request({
@@ -87,12 +87,25 @@ test('a newer source revision replaces current text, but an old profile generati
     assert.equal(result.states.morning.revision,2);
 
     result=await parse(await x.worker.upsertCurrentReports(request({
-      reports:[report('Old profile report','v2:old-profile',{profileGeneration:'reg_old_1234567890'})],
-      publications:{morning:publication(2,'source_oldprofile_1234','publication_oldprofile_1234')}
+      reports:[report('Current admission report','v2:current-admission',{profileGeneration:''})],
+      publications:{morning:publication(2,'source_currentadm_1234','publication_currentadm_1234')}
+    }),x.env));
+    assert.deepEqual(Array.from(result.rejectedKinds),[]);
+    assert.equal(result.rejectedRows,0);
+    assert.equal(x.db.prepare('SELECT text FROM report_current WHERE phone10=? AND kind=?').get('9000000001','morning').text,'Current admission report');
+    assert.equal(x.db.prepare('SELECT profile_generation FROM report_current WHERE phone10=? AND kind=?').get('9000000001','morning').profile_generation,'');
+    assert.equal(x.db.prepare('SELECT revision FROM report_publication_state WHERE kind=?').get('morning').revision,3);
+
+    result=await parse(await x.worker.upsertCurrentReports(request({
+      reports:[report('Previous admission report','v2:previous-admission',{
+        profileGeneration:'reg_old_1234567890',childAdmissionId:'adm_old_child_1234'
+      })],
+      publications:{morning:publication(3,'source_previousadm_1234','publication_previousadm_1234')}
     }),x.env));
     assert.deepEqual(Array.from(result.rejectedKinds),['morning']);
-    assert.equal(x.db.prepare('SELECT text FROM report_current WHERE phone10=? AND kind=?').get('9000000001','morning').text,'Second report');
-    assert.equal(x.db.prepare('SELECT revision FROM report_publication_state WHERE kind=?').get('morning').revision,2);
+    assert.equal(result.rejectedRows,1);
+    assert.equal(x.db.prepare('SELECT text FROM report_current WHERE phone10=? AND kind=?').get('9000000001','morning').text,'Current admission report');
+    assert.equal(x.db.prepare('SELECT revision FROM report_publication_state WHERE kind=?').get('morning').revision,3);
   } finally { x.db.close(); }
 });
 
@@ -109,13 +122,12 @@ test('history cannot be replaced by a stale or mismatched current publication', 
     assert.equal(x.db.prepare('SELECT COUNT(*) AS n FROM report_current').get().n,1);
     assert.deepEqual({ ...x.db.prepare('SELECT phone10,kind,text,revision,publication_id,profile_generation,child_admission_id FROM report_current').get() }, {
       phone10:'9000000001',kind:'morning',text:'Second report',revision:2,publication_id:'publication_second_1234',
-      profile_generation:'reg_new_1234567890',child_admission_id:'adm_child_123456'
+      profile_generation:'',child_admission_id:'adm_child_123456'
     });
     assert.ok(x.db.prepare(`SELECT 1 FROM report_current c JOIN chat_profiles p ON p.phone10=c.phone10
       WHERE c.phone10=? AND c.kind=? AND c.text=? AND c.revision=? AND c.publication_id=?
-        AND c.profile_generation=? AND c.child_admission_id=? AND p.profile_generation=c.profile_generation
-        AND (p.child_admission_id='' OR p.child_admission_id=c.child_admission_id)`)
-      .get('9000000001','morning','Second report',2,'publication_second_1234','reg_new_1234567890','adm_child_123456'));
+        AND c.child_admission_id=? AND p.child_admission_id=c.child_admission_id`)
+      .get('9000000001','morning','Second report',2,'publication_second_1234','adm_child_123456'));
     const snapshots = (revision,text,publicationId) => ({ snapshots:[{
       phone:'9000000001',kind:'morning',reportDate:'2026-10-22',text,capturedAt:200,
       profileGeneration:'reg_new_1234567890',childAdmissionId:'adm_child_123456',revision,publicationId
