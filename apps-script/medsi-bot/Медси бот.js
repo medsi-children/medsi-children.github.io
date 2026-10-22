@@ -8,7 +8,6 @@ const SHEET_PSYCHOLOGY        = 'PSYCHOLOGY';
 const DATABASE_SHEET_NAME     = 'DATABASE';
 const REPORT_STATE_SHEET_NAME = 'REPORT_NOTIFICATION_STATE';
 const REPORT_INACTIVITY_STATE_SHEET_NAME = 'REPORT_INACTIVITY_STATE';
-const PARENT_AUTH_SECRET_PROPERTY = 'PARENT_AUTH_SECRET';
 const CHAT_PHOTOS_FOLDER_NAME = 'MEDSI_CHAT_PHOTOS';
 const PUSH_WORKER_URL_FALLBACK = 'https://medsi-push-worker.medsi-children.workers.dev/notify';
 const PUSH_WORKER_SECRET_PROPERTY = 'MEDSI_CHAT_PUSH_SECRET';
@@ -476,7 +475,6 @@ function getApiMethodMap_() {
     verifyTutorAccess, verifyTutorSession, checkPhoneExists,
     testCheckRegistrationState, getParentProfileByPhone, getParentBootstrap,
     verifyParentSession, getParentRegistrationStatus,
-    requestParentReauthorization, getParentReauthorizationStatus,
     listPendingParentReauthorizations, decideParentReauthorization,
     mirrorCloudflareParentRegistration,
     getD1ChatSession, listD1ChatsForEducator, getD1ThreadForEducator,
@@ -555,16 +553,6 @@ function checkPhoneExists(phoneRaw) {
   return { ok: exists };
 }
 
-function getParentAuthSecret_() {
-  const props = PropertiesService.getScriptProperties();
-  let secret = String(props.getProperty(PARENT_AUTH_SECRET_PROPERTY) || '');
-  if (!secret) {
-    secret = Utilities.getUuid() + Utilities.getUuid();
-    props.setProperty(PARENT_AUTH_SECRET_PROPERTY, secret);
-  }
-  return secret;
-}
-
 function secureTextEqual_(leftRaw, rightRaw) {
   const left = String(leftRaw || '');
   const right = String(rightRaw || '');
@@ -574,21 +562,6 @@ function secureTextEqual_(leftRaw, rightRaw) {
   return diff === 0;
 }
 
-// Parent access is granted by registration or educator approval. The signed
-// session remains independent of the retired password sheet. Existing signed
-// sessions with older claim versions remain valid during the cleanup.
-function issueParentSession_(phoneRaw) {
-  const phone10 = last10_(phoneRaw);
-  const payload = Utilities.base64EncodeWebSafe(JSON.stringify({
-    phone10: phone10,
-    version: 'v2'
-  })).replace(/=+$/g, '');
-  const signature = Utilities.base64EncodeWebSafe(
-    Utilities.computeHmacSha256Signature(payload, getParentAuthSecret_())
-  ).replace(/=+$/g, '');
-  return payload + '.' + signature;
-}
-
 function isParentSessionValid_(phoneRaw, tokenRaw) {
   const token = String(tokenRaw || '').trim();
   const parts = token.split('.');
@@ -596,7 +569,6 @@ function isParentSessionValid_(phoneRaw, tokenRaw) {
   try {
     const claims = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString());
     const matchingPhone = last10_(claims.phone10) === last10_(phoneRaw);
-    const legacyClaim = !!String(claims.version || '') && !claims.role;
     const cloudflareClaim = claims.role === 'parent' && Number(claims.exp) > Date.now();
     if (!matchingPhone) return false;
 
@@ -614,20 +586,7 @@ function isParentSessionValid_(phoneRaw, tokenRaw) {
       return secureTextEqual_(parts[1], d1Signature);
     }
 
-    // Old Apps Script sessions remain valid only for profiles that existed
-    // before Cloudflare registration was introduced and are still the same
-    // family record in D1. This network lookup is legacy-only.
-    if (!legacyClaim) return false;
-    const parentSignature = Utilities.base64EncodeWebSafe(
-      Utilities.computeHmacSha256Signature(parts[0], getParentAuthSecret_())
-    ).replace(/=+$/g, '');
-    if (!secureTextEqual_(parts[1], parentSignature)) return false;
-    try {
-      const access = d1AdminRequest_('/admin/parent-legacy-access/' + encodeURIComponent(last10_(phoneRaw)), 'get');
-      return access.allowed === true;
-    } catch (_) {
-      return false;
-    }
+    return false;
   } catch (_) {
     return false;
   }
@@ -635,7 +594,7 @@ function isParentSessionValid_(phoneRaw, tokenRaw) {
 
 function requireParentAccess_(phoneRaw, tokenRaw) {
   if (!isParentSessionValid_(phoneRaw, tokenRaw)) {
-    throw new Error('Требуется подтверждение повторной авторизации.');
+    throw new Error('Требуется войти в аккаунт.');
   }
   return { ok: true };
 }

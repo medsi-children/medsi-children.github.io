@@ -33,8 +33,6 @@ function syncD1ProfilesFromReports() {
   // Timeweb/D1 is the active chat backend. Registration and chat state are
   // mirrored from REPORTS here without a legacy backend switch.
   ensureReportsD1ProfileSyncTriggers_();
-  try { ensureLegacyParentAccessRequestsImported_(); }
-  catch (error) { Logger.log('LEGACY_PARENT_ACCESS_IMPORT_DEFERRED ' + String(error && error.message || error)); }
   let registrationSync = { ok:true, synced:0 };
   try { registrationSync = flushCloudflareParentRegistrationOutbox_(); }
   catch (error) {

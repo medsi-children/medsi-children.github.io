@@ -497,40 +497,38 @@ async function notifyEducatorParentAccessBestEffort(env, profile, requestId) {
   if (!response.ok) throw new Error(`Educator access push HTTP ${response.status}`);
 }
 
-async function requestParentAccess(request, env, ctx, secure = false) {
+async function requestParentAccess(request, env, ctx) {
   const payload = await body(request) || {};
   const phone = phone10(payload.phone);
   const requestId = parentAccessRequestId(payload.requestId);
-  const requestSecret = secure ? parentAccessSecret(payload.requestSecret) : '';
-  if (!phone || !requestId || (secure && !requestSecret)) return json({ ok: false, message: 'Проверьте данные запроса.' }, 400);
-  const secretHash = secure ? await parentAccessSecretHash(requestSecret) : '';
+  const requestSecret = parentAccessSecret(payload.requestSecret);
+  if (!phone || !requestId || !requestSecret) return json({ ok: false, message: 'Проверьте данные запроса.' }, 400);
+  const secretHash = await parentAccessSecretHash(requestSecret);
   const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
   if (!profile) return json({ ok: false, code: 'NOT_FOUND', message: 'Этот номер не найден среди активных родителей.' }, 404);
 
   // A newly registered parent may use phone-only access during the first
   // 72 hours, unless they already opted into passkey authentication. Use the
   // immutable completed registration attempt, never a profile edit or retry.
-  if (secure) {
-    const registration = await env.CHAT_DB.prepare(`SELECT MIN(created_at) AS registered_at
-      FROM parent_registration_attempts WHERE phone10=? AND status='COMPLETED'`).bind(phone).first();
-    const account = await env.CHAT_DB.prepare('SELECT user_handle FROM parent_auth_profiles WHERE phone10=?').bind(phone).first();
-    const passkey = account && await env.CHAT_DB.prepare(`SELECT 1 AS present FROM parent_passkeys
-      WHERE user_handle=? AND revoked_at IS NULL LIMIT 1`).bind(account.user_handle).first();
-    const registeredAt = Number(registration && registration.registered_at || 0);
-    const now = Date.now();
-    if (!passkey && registeredAt > 0 && registeredAt <= now && now - registeredAt < 72 * 60 * 60 * 1000) {
-      if (!env.LAB_D1_SESSION_SECRET) return json({ ok:false, message:'Сервис авторизации временно недоступен.' }, 503);
-      const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env);
-      return json({ ok:true, status:'APPROVED', recoveryMode:'registration-grace', phone:'8' + phone,
-        parentName:profile.parent_name || '', childName:profile.child_name || '',
-        parentSession:session.token, d1Session:{ ok:true, ...session } });
-    }
+  const registration = await env.CHAT_DB.prepare(`SELECT MIN(created_at) AS registered_at
+    FROM parent_registration_attempts WHERE phone10=? AND status='COMPLETED'`).bind(phone).first();
+  const account = await env.CHAT_DB.prepare('SELECT user_handle FROM parent_auth_profiles WHERE phone10=?').bind(phone).first();
+  const passkey = account && await env.CHAT_DB.prepare(`SELECT 1 AS present FROM parent_passkeys
+    WHERE user_handle=? AND revoked_at IS NULL LIMIT 1`).bind(account.user_handle).first();
+  const registeredAt = Number(registration && registration.registered_at || 0);
+  const now = Date.now();
+  if (!passkey && registeredAt > 0 && registeredAt <= now && now - registeredAt < 72 * 60 * 60 * 1000) {
+    if (!env.LAB_D1_SESSION_SECRET) return json({ ok:false, message:'Сервис авторизации временно недоступен.' }, 503);
+    const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env);
+    return json({ ok:true, status:'APPROVED', recoveryMode:'registration-grace', phone:'8' + phone,
+      parentName:profile.parent_name || '', childName:profile.child_name || '',
+      parentSession:session.token, d1Session:{ ok:true, ...session } });
   }
 
   const prior = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at, request_secret_hash FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
   if (prior) {
     if (prior.phone10 !== phone) return json({ ok: false, message: 'Запрос относится к другому номеру телефона.' }, 409);
-    if ((secure && !equal(String(prior.request_secret_hash || ''), secretHash)) || (!secure && prior.request_secret_hash)) {
+    if (!equal(String(prior.request_secret_hash || ''), secretHash)) {
       return json({ ok: false, code: 'NOT_FOUND', message: 'Запрос не найден. Начните вход заново.' }, 404);
     }
     if (prior.status === 'PENDING' && Number(prior.expires_at) <= Date.now()) {
@@ -557,7 +555,7 @@ async function requestParentAccess(request, env, ctx, secure = false) {
     .bind(requestId, phone, code, createdAt, createdAt, expiresAt, secretHash).run();
   const saved = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at, request_secret_hash FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
   if (!saved || saved.phone10 !== phone) return json({ ok: false, message: 'Не удалось создать запрос на вход.' }, 503);
-  if ((secure && !equal(String(saved.request_secret_hash || ''), secretHash)) || (!secure && saved.request_secret_hash)) return json({ ok: false, code: 'NOT_FOUND', message: 'Запрос не найден. Начните вход заново.' }, 404);
+  if (!equal(String(saved.request_secret_hash || ''), secretHash)) return json({ ok: false, code: 'NOT_FOUND', message: 'Запрос не найден. Начните вход заново.' }, 404);
   const created = Number(inserted.meta && inserted.meta.changes || 0) > 0;
   if (created) {
     const pushJob = notifyEducatorParentAccessBestEffort(env, profile, requestId)
@@ -570,19 +568,19 @@ async function requestParentAccess(request, env, ctx, secure = false) {
     expiresAt: new Date(Number(saved.expires_at)).toISOString(), created });
 }
 
-async function getParentAccessStatus(request, env, secure = false) {
-  const payload = secure ? await body(request) || {} : null;
-  const url = new URL(request.url), phone = phone10(secure ? payload.phone : url.searchParams.get('phone'));
-  const requestId = parentAccessRequestId(secure ? payload.requestId : url.searchParams.get('requestId'));
-  const requestSecret = secure ? parentAccessSecret(payload.requestSecret) : '';
-  const secretHash = secure && requestSecret ? await parentAccessSecretHash(requestSecret) : '';
-  if (secure && !secretHash) return json({ ok: true, status: 'NOT_FOUND' });
+async function getParentAccessStatus(request, env) {
+  const payload = await body(request) || {};
+  const phone = phone10(payload.phone);
+  const requestId = parentAccessRequestId(payload.requestId);
+  const requestSecret = parentAccessSecret(payload.requestSecret);
+  const secretHash = requestSecret ? await parentAccessSecretHash(requestSecret) : '';
+  if (!secretHash) return json({ ok: true, status: 'NOT_FOUND' });
   if (!phone || !requestId) return json({ ok: true, status: 'NOT_FOUND' });
   const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
   if (!profile) return json({ ok: true, status: 'NOT_FOUND' });
   const row = await env.CHAT_DB.prepare('SELECT * FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
   if (!row || row.phone10 !== phone) return json({ ok: true, status: 'NOT_FOUND' });
-  if ((secure && !equal(String(row.request_secret_hash || ''), secretHash)) || (!secure && row.request_secret_hash)) return json({ ok: true, status: 'NOT_FOUND' });
+  if (!equal(String(row.request_secret_hash || ''), secretHash)) return json({ ok: true, status: 'NOT_FOUND' });
   let status = String(row.status || '').toUpperCase();
   const now = Date.now();
   const expired = Number(row.expires_at) <= now;
@@ -592,37 +590,27 @@ async function getParentAccessStatus(request, env, secure = false) {
   }
   if (status === 'APPROVED' || status === 'CONSUMED') {
     if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис авторизации временно недоступен.' }, 503);
-    if (secure) {
-      // Allow the same device to recover a lost HTTP response for 24 hours.
-      // A deterministic expiry makes the re-issued signed session identical.
-      if (status === 'CONSUMED' && now > Number(row.updated_at || 0) + 24 * 60 * 60 * 1000) {
-        return json({ ok:true, requestId, phone:'8' + phone, status:'EXPIRED' });
-      }
-      if (status === 'APPROVED') {
-        const consumed = await env.CHAT_DB.prepare(`UPDATE parent_access_requests SET status='CONSUMED', updated_at=?
+    // Allow the same device to recover a lost HTTP response for 24 hours.
+    // A deterministic expiry makes the re-issued signed session identical.
+    if (status === 'CONSUMED' && now > Number(row.updated_at || 0) + 24 * 60 * 60 * 1000) {
+      return json({ ok:true, requestId, phone:'8' + phone, status:'EXPIRED' });
+    }
+    if (status === 'APPROVED') {
+      const consumed = await env.CHAT_DB.prepare(`UPDATE parent_access_requests SET status='CONSUMED', updated_at=?
         WHERE request_id=? AND status='APPROVED' AND expires_at>? AND request_secret_hash=?`)
         .bind(now, requestId, now, secretHash).run();
-        if (Number(consumed.meta && consumed.meta.changes || 0) !== 1) {
-          const current = await env.CHAT_DB.prepare('SELECT status, updated_at FROM parent_access_requests WHERE request_id=? AND phone10=? AND request_secret_hash=?')
-            .bind(requestId, phone, secretHash).first();
-          if (!current || current.status !== 'CONSUMED' || now > Number(current.updated_at || 0) + 24 * 60 * 60 * 1000) {
-            return json({ ok:true, requestId, phone:'8' + phone, status:current && current.status || 'NOT_FOUND' });
-          }
-          row.updated_at = current.updated_at;
-        } else {
-          row.updated_at = now;
+      if (Number(consumed.meta && consumed.meta.changes || 0) !== 1) {
+        const current = await env.CHAT_DB.prepare('SELECT status, updated_at FROM parent_access_requests WHERE request_id=? AND phone10=? AND request_secret_hash=?')
+          .bind(requestId, phone, secretHash).first();
+        if (!current || current.status !== 'CONSUMED' || now > Number(current.updated_at || 0) + 24 * 60 * 60 * 1000) {
+          return json({ ok:true, requestId, phone:'8' + phone, status:current && current.status || 'NOT_FOUND' });
         }
+        row.updated_at = current.updated_at;
+      } else {
+        row.updated_at = now;
       }
-    } else {
-      // Legacy requests have no device secret. Complete only an unexpired,
-      // still-approved request, and never issue another session on replay.
-      if (status === 'CONSUMED') return json({ ok:true, requestId, phone:'8' + phone, status:'CONSUMED' });
-      const consumed = await env.CHAT_DB.prepare(`UPDATE parent_access_requests SET status='CONSUMED', updated_at=?
-        WHERE request_id=? AND status='APPROVED' AND expires_at>? AND request_secret_hash=''`)
-        .bind(now, requestId, now).run();
-      if (Number(consumed.meta && consumed.meta.changes || 0) !== 1) return json({ ok:true, requestId, phone:'8' + phone, status:'EXPIRED' });
     }
-    const stableExpiry = secure ? Number(row.expires_at) + 365 * 24 * 60 * 60 * 1000 : undefined;
+    const stableExpiry = Number(row.expires_at) + 365 * 24 * 60 * 60 * 1000;
     const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env, stableExpiry);
     return json({ ok: true, status: 'APPROVED', requestId, phone: '8' + phone,
       parentName: profile.parent_name || '', childName: profile.child_name || '',
@@ -646,34 +634,6 @@ async function listParentAccessRequests(env) {
     expiresAt: new Date(Number(row.expires_at)).toISOString(),
     actor: parentActorLabel(row)
   })) });
-}
-
-async function importParentAccessRequests(request, env) {
-  const payload = await body(request) || {};
-  const items = Array.isArray(payload.requests) ? payload.requests.slice(0, 500) : [];
-  let imported = 0, skipped = 0;
-  for (const item of items) {
-    const requestId = parentAccessRequestId(item && item.requestId);
-    const phone = phone10(item && item.phone);
-    const code = String(item && item.code || '').padStart(4, '0');
-    const status = String(item && item.status || '').toUpperCase();
-    const createdAt = Number(item && item.createdAt), updatedAt = Number(item && item.updatedAt);
-    const expiresAt = Number(item && item.expiresAt), decidedAt = Number(item && item.decidedAt) || null;
-    const decision = String(item && item.decision || '').toUpperCase();
-    if (!requestId || !phone || !/^\d{4}$/.test(code) || !['PENDING','APPROVED','CONSUMED','DENIED','EXPIRED'].includes(status) ||
-        !Number.isFinite(createdAt) || !Number.isFinite(updatedAt) || !Number.isFinite(expiresAt)) {
-      skipped++;
-      continue;
-    }
-    const profile = await env.CHAT_DB.prepare('SELECT phone10 FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
-    if (!profile) { skipped++; continue; }
-    const result = await env.CHAT_DB.prepare(`INSERT INTO parent_access_requests
-      (request_id, phone10, code, status, created_at, updated_at, expires_at, decided_at, decision)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING`)
-      .bind(requestId, phone, code, status, createdAt, updatedAt, expiresAt, decidedAt, decision).run();
-    imported += Number(result.meta && result.meta.changes || 0);
-  }
-  return json({ ok: true, imported, skipped });
 }
 
 async function decideParentAccessRequest(request, env) {
@@ -1380,7 +1340,6 @@ async function enqueueParentDeletion(request, env, auth, ctx) {
     env.CHAT_DB.prepare('DELETE FROM chat_pins WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM report_current WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM report_inactivity_state WHERE phone10 = ?').bind(phone),
-    env.CHAT_DB.prepare('DELETE FROM legacy_parent_access WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(now, phone)
@@ -1623,16 +1582,6 @@ async function reconcileProfiles(request, env) {
   active.forEach((profile, phone) => {
     const position = rosterOrder++;
     statements.push(env.CHAT_DB.prepare(`
-      DELETE FROM legacy_parent_access
-      WHERE phone10 = ?
-        AND EXISTS (
-          SELECT 1 FROM chat_profiles AS current
-          WHERE current.phone10 = ?
-            AND current.parent_name <> ?
-            AND current.child_name <> ?
-        )
-    `).bind(phone, phone, profile.parentName, profile.childName));
-    statements.push(env.CHAT_DB.prepare(`
       INSERT INTO chat_profiles (phone10, parent_name, child_name, relationship, child_genitive)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(phone10) DO UPDATE SET parent_name = excluded.parent_name,
@@ -1663,7 +1612,6 @@ async function reconcileProfiles(request, env) {
         deletions.push(env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(Date.now(), phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone));
-        deletions.push(env.CHAT_DB.prepare('DELETE FROM legacy_parent_access WHERE phone10 = ?').bind(phone));
         deletions.push(env.CHAT_DB.prepare('DELETE FROM chat_profiles WHERE phone10 = ?').bind(phone));
       });
       await env.CHAT_DB.batch(deletions);
@@ -1692,25 +1640,6 @@ async function getProfileForAdmin(env, phoneRaw) {
   } : null });
 }
 
-async function getLegacyParentAccess(env, phoneRaw) {
-  const phone = phone10(phoneRaw);
-  if (!phone) return json({ ok: false, allowed: false }, 400);
-  const result = await env.CHAT_DB.prepare(`
-    SELECT legacy.parent_name AS legacy_parent_name, legacy.child_name AS legacy_child_name,
-      profile.parent_name AS parent_name, profile.child_name AS child_name
-    FROM legacy_parent_access AS legacy
-    JOIN chat_profiles AS profile ON profile.phone10 = legacy.phone10
-    WHERE legacy.phone10 = ?
-  `).bind(phone).first();
-  const allowed = !!result && (
-    result.legacy_parent_name === result.parent_name || result.legacy_child_name === result.child_name
-  );
-  if (result && !allowed) {
-    await env.CHAT_DB.prepare('DELETE FROM legacy_parent_access WHERE phone10 = ?').bind(phone).run();
-  }
-  return json({ ok: true, allowed });
-}
-
 // These two lifecycle operations are intentionally admin-only.  REPORTS is
 // the authority; Apps Script invokes them after a protected snapshot/diff.
 // Neither endpoint is reachable through the browser chat session.
@@ -1734,7 +1663,6 @@ async function moveProfilePhone(request, env) {
     env.CHAT_DB.prepare('UPDATE report_snapshots SET phone10 = ? WHERE phone10 = ?').bind(to, from),
     env.CHAT_DB.prepare('UPDATE report_current SET phone10 = ? WHERE phone10 = ?').bind(to, from),
     env.CHAT_DB.prepare('UPDATE report_inactivity_state SET phone10 = ? WHERE phone10 = ?').bind(to, from),
-    env.CHAT_DB.prepare('DELETE FROM legacy_parent_access WHERE phone10 IN (?, ?)').bind(from, to),
     env.CHAT_DB.prepare('UPDATE chat_profiles SET phone10 = ?, parent_name = ?, child_name = ? WHERE phone10 = ?').bind(to, parentName, childName, from),
     env.CHAT_DB.prepare('INSERT INTO chat_profiles (phone10, parent_name, child_name) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM chat_profiles WHERE phone10 = ?)').bind(to, parentName, childName, to),
     env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(from),
@@ -1766,7 +1694,6 @@ async function deleteProfilePhone(request, env) {
     env.CHAT_DB.prepare('DELETE FROM report_current WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM report_inactivity_state WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM chat_profiles WHERE phone10 = ?').bind(phone),
-    env.CHAT_DB.prepare('DELETE FROM legacy_parent_access WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM parent_registration_outbox WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare('DELETE FROM parent_registration_attempts WHERE phone10 = ?').bind(phone),
     env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='DENIED', decision='REVOKED', updated_at=? WHERE phone10 = ? AND status IN ('PENDING','APPROVED')").bind(Date.now(), phone)
@@ -2118,7 +2045,6 @@ export default {
       if (request.method === 'POST' && url.pathname === '/admin/reconcile') return reconcileProfiles(request, env);
       if (request.method === 'GET' && url.pathname === '/admin/profile-phones') return listProfilePhones(env);
       if (request.method === 'GET' && url.pathname.startsWith('/admin/profile/')) return getProfileForAdmin(env, url.pathname.slice('/admin/profile/'.length));
-      if (request.method === 'GET' && url.pathname.startsWith('/admin/parent-legacy-access/')) return getLegacyParentAccess(env, url.pathname.slice('/admin/parent-legacy-access/'.length));
       if (request.method === 'POST' && url.pathname === '/admin/move-profile-phone') return moveProfilePhone(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/profile-s3-keys') return profileS3Keys(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/delete-profile-phone') return deleteProfilePhone(request, env);
@@ -2131,7 +2057,6 @@ export default {
       if (request.method === 'POST' && url.pathname === '/admin/report-inactivity/sync') return syncReportInactivity(request, env);
       if (request.method === 'GET' && url.pathname === '/admin/report-current/versions') return getCurrentReportVersions(env);
       if (request.method === 'GET' && url.pathname === '/admin/parent-access-requests') return listParentAccessRequests(env);
-      if (request.method === 'POST' && url.pathname === '/admin/parent-access-requests/import') return importParentAccessRequests(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-access-requests/decision') return decideParentAccessRequest(request, env);
       if (request.method === 'GET' && url.pathname === '/admin/verify') return verifySnapshot(env);
       return json({ ok: false, message: 'Not found' }, 404);
@@ -2151,15 +2076,9 @@ export default {
       return parentPasskeyAuthenticationVerify(request, env, { issueParentSession: (phone, secret) => issueParentSession(phone, secret, env) });
     }
     if (request.method === 'POST' && url.pathname === '/lab/parent-auth/request') {
-      return requestParentAccess(request, env, ctx, true);
-    }
-    if (request.method === 'POST' && url.pathname === '/lab/parent-auth/status') {
-      return getParentAccessStatus(request, env, true);
-    }
-    if (request.method === 'POST' && url.pathname === '/lab/parent-access/request') {
       return requestParentAccess(request, env, ctx);
     }
-    if (request.method === 'GET' && url.pathname === '/lab/parent-access/status') {
+    if (request.method === 'POST' && url.pathname === '/lab/parent-auth/status') {
       return getParentAccessStatus(request, env);
     }
     if (request.method === 'POST' && url.pathname === '/lab/upload-form') {

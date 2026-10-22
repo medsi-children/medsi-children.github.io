@@ -1,6 +1,4 @@
-/** ========= РЕГИСТРАЦИЯ И ПОВТОРНАЯ АВТОРИЗАЦИЯ РОДИТЕЛЕЙ ========= **/
-const PARENT_ACCESS_REQUESTS_SHEET_NAME = 'PARENT_ACCESS_REQUESTS';
-const PARENT_ACCESS_D1_IMPORT_PROPERTY_ = 'PARENT_ACCESS_D1_IMPORTED_AT';
+/** ========= РЕГИСТРАЦИЯ И ВХОД РОДИТЕЛЕЙ ========= **/
 
 function normalizeParentAccessId_(value) {
   const id = String(value || '').trim();
@@ -171,81 +169,6 @@ function getParentRegistrationStatus(phoneRaw, attemptIdRaw) {
   }
 }
 
-function cloudflareParentAccessRequest_(method, path, payload) {
-  const base = 'https://medsi-chat-worker.medsi-children.workers.dev';
-  const options = { method:method, muteHttpExceptions:true };
-  let url = base + path;
-  if (method === 'post') {
-    options.contentType = 'application/json';
-    options.payload = JSON.stringify(payload || {});
-  } else if (path === '/lab/parent-access/status') {
-    url += '?phone=' + encodeURIComponent(String(payload.phone || '')) +
-      '&requestId=' + encodeURIComponent(String(payload.requestId || ''));
-  }
-  const response = UrlFetchApp.fetch(url, options);
-  let value = {};
-  try { value = JSON.parse(response.getContentText() || '{}'); } catch (_) {}
-  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
-    return Object.assign({ ok:false }, value, { ok:false });
-  }
-  return value;
-}
-
-function parentAccessTimestamp_(value) {
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-// One-time compatibility bridge for requests created before Cloudflare became
-// the registration/access store. In particular, an already approved request
-// must still complete on the parent's phone after the cutover.
-function ensureLegacyParentAccessRequestsImported_() {
-  const props = PropertiesService.getScriptProperties();
-  if (props.getProperty(PARENT_ACCESS_D1_IMPORT_PROPERTY_)) return { ok:true, alreadyImported:true };
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    if (props.getProperty(PARENT_ACCESS_D1_IMPORT_PROPERTY_)) return { ok:true, alreadyImported:true };
-    const sheet = getSpreadsheet_().getSheetByName(PARENT_ACCESS_REQUESTS_SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) {
-      props.setProperty(PARENT_ACCESS_D1_IMPORT_PROPERTY_, String(Date.now()));
-      return { ok:true, imported:0 };
-    }
-    const requests = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues().map(function(row) {
-      const status = String(row[3] || '').trim().toUpperCase();
-      if (!['PENDING','APPROVED'].includes(status)) return null;
-      const phone = last10_(row[1]);
-      const requestId = normalizeParentAccessId_(row[0]);
-      const createdAt = parentAccessTimestamp_(row[4]);
-      const updatedAt = parentAccessTimestamp_(row[5]) || createdAt;
-      const expiresAt = parentAccessTimestamp_(row[6]);
-      if (!phone || !requestId || !createdAt || !expiresAt) return null;
-      // D1's access request table requires an active profile. Seed only the
-      // matching profile from the existing REPORTS row before importing.
-      syncD1ProfileForPhone_(phone);
-      return {
-        requestId:requestId, phone:'8' + phone,
-        code:String(row[2] || '').trim().padStart(4, '0'), status:status,
-        createdAt:createdAt, updatedAt:updatedAt, expiresAt:expiresAt,
-        decidedAt:parentAccessTimestamp_(row[7]) || null,
-        decision:String(row[8] || '').trim().toUpperCase()
-      };
-    }).filter(Boolean);
-    let imported = 0;
-    for (let i = 0; i < requests.length; i += 100) {
-      const result = d1AdminRequest_('/admin/parent-access-requests/import', 'post', { requests:requests.slice(i, i + 100) });
-      imported += Number(result.imported || 0);
-      if (Number(result.skipped || 0)) throw new Error('Не все старые запросы на авторизацию удалось перенести. Импорт будет повторён.');
-    }
-    props.setProperty(PARENT_ACCESS_D1_IMPORT_PROPERTY_, String(Date.now()));
-    return { ok:true, imported:imported };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
 function parentReauthorizationActor_(phoneRaw) {
   const phone10 = last10_(phoneRaw);
   const profile = getMedsiContactProfiles_()[phone10];
@@ -256,41 +179,6 @@ function parentReauthorizationActor_(phoneRaw) {
   const childFull = [childBase, profile.childFamily].filter(Boolean).join(' ');
   const childGenitive = parentChildGenitive_(childFull);
   return childGenitive ? role + ' ' + childGenitive : role + ': ' + parent + ' (ребёнок: ' + childFull + ')';
-}
-
-function requestParentReauthorization(phoneRaw, requestIdRaw) {
-  const phone10 = last10_(phoneRaw);
-  const requestId = normalizeParentAccessId_(requestIdRaw);
-  if (!phone10 || !requestId) return { ok: false, message: 'Проверьте номер телефона.' };
-  try {
-    ensureLegacyParentAccessRequestsImported_();
-    let result = cloudflareParentAccessRequest_('post', '/lab/parent-access/request', {
-      phone:'8' + phone10, requestId:requestId
-    });
-    if (result && result.code === 'NOT_FOUND' && getReportRowsByPhone_(phone10).length) {
-      // Only an old family missing its D1 mirror needs the REPORTS lookup.
-      syncD1ProfileForPhone_(phone10);
-      result = cloudflareParentAccessRequest_('post', '/lab/parent-access/request', {
-        phone:'8' + phone10, requestId:requestId
-      });
-    }
-    if (!result || result.ok === false) return result || { ok:false, message:'Не удалось отправить запрос.' };
-    // Cloudflare sends the educator push when it commits a new request.
-    return result;
-  } catch (e) {
-    return { ok: false, message: 'Не удалось отправить запрос: ' + String(e && e.message || e) };
-  }
-}
-
-function getParentReauthorizationStatus(phoneRaw, requestIdRaw) {
-  const phone10 = last10_(phoneRaw);
-  const requestId = normalizeParentAccessId_(requestIdRaw);
-  if (!phone10 || !requestId) return { ok:true, status:'NOT_FOUND' };
-  try {
-    ensureLegacyParentAccessRequestsImported_();
-    return cloudflareParentAccessRequest_('get', '/lab/parent-access/status', { phone:'8' + phone10, requestId:requestId });
-  }
-  catch (e) { return { ok:false, message:'Не удалось проверить авторизацию: ' + String(e && e.message || e) }; }
 }
 
 function listPendingParentReauthorizations(tutorTokenRaw) {

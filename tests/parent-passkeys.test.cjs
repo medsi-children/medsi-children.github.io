@@ -150,8 +150,8 @@ test('the educator fallback can safely repeat delivery after a lost response for
     assert.notEqual(stored.request_secret_hash, secret);
     assert.equal(stored.status, 'PENDING');
 
-    const legacyAttempt = await context.requestParentAccess(request({ ...payload, requestSecret: undefined }), env, null, false);
-    assert.equal(legacyAttempt.status, 404);
+    const legacyAttempt = await context.requestParentAccess(request({ ...payload, requestSecret: undefined }), env, null);
+    assert.equal(legacyAttempt.status, 400);
     const wrongSecretStatus = await context.getParentAccessStatus(request({ ...payload, requestSecret: secret + 'x' }), env, true);
     assert.equal((await wrongSecretStatus.json()).status, 'NOT_FOUND');
 
@@ -193,7 +193,7 @@ test('phone-only access is allowed only during the original 72-hour registration
   } finally { db.close(); }
 });
 
-test('expired or already consumed legacy approvals cannot issue another session', async () => {
+test('old approvals without a device secret cannot issue a session through the current flow', async () => {
   const { db, env } = makeDatabase();
   const context = { Response, URL, console, Date, TextEncoder, Uint8Array, btoa, atob, crypto: require('node:crypto').webcrypto };
   vm.createContext(context);
@@ -206,12 +206,15 @@ test('expired or already consumed legacy approvals cannot issue another session'
       VALUES(?,?,? ,?,?,?,?,'')`);
     insert.run('auth_12345678901234567890123456789012', phone, '1234', 'APPROVED', Date.now()-200000, Date.now()-100000, Date.now()-50000);
     insert.run('auth_22345678901234567890123456789012', phone, '1234', 'CONSUMED', Date.now()-200000, Date.now()-100000, Date.now()+1000000);
-    const request = id => ({ url:new URL('https://worker.test/lab/parent-access/status?phone=8'+phone+'&requestId='+id) });
-    const expired = await (await context.getParentAccessStatus(request('auth_12345678901234567890123456789012'), env, false)).json();
-    assert.equal(expired.status, 'EXPIRED');
+    const request = id => ({
+      json:async()=>({ phone:'8'+phone, requestId:id, requestSecret:'A'.repeat(43) }),
+      url:'https://worker.test/lab/parent-auth/status'
+    });
+    const expired = await (await context.getParentAccessStatus(request('auth_12345678901234567890123456789012'), env)).json();
+    assert.equal(expired.status, 'NOT_FOUND');
     assert.equal(expired.parentSession, undefined);
-    const consumed = await (await context.getParentAccessStatus(request('auth_22345678901234567890123456789012'), env, false)).json();
-    assert.equal(consumed.status, 'CONSUMED');
+    const consumed = await (await context.getParentAccessStatus(request('auth_22345678901234567890123456789012'), env)).json();
+    assert.equal(consumed.status, 'NOT_FOUND');
     assert.equal(consumed.parentSession, undefined);
   } finally { db.close(); }
 });
