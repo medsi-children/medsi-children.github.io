@@ -179,16 +179,22 @@ async function authorized(request, env) {
   try {
     const claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
     if (Number(claims.exp) <= Date.now()) return null;
-    if (claims.role === 'parent') {
+    if (claims.role === 'parent' || (!claims.role && phone10(claims.phone10))) {
       const generation = await getParentAuthProfile(env, String(claims.phone10 || ''));
       if (!generation) return null;
       if (claims.authGeneration) {
         if (claims.authGeneration !== generation.generation_id) return null;
       } else {
-        // Existing sessions were issued without a profile generation. Permit
-        // them only when their issuance predates no later than this profile.
-        const issuedAt = Number(claims.exp) - 30 * 24 * 60 * 60 * 1000;
-        if (Number(generation.created_at || 0) > issuedAt) return null;
+        // Existing active profiles were seeded with created_at=0 during the
+        // auth migration, so their saved sessions keep working. Profiles
+        // created or recreated after that point must not inherit a token that
+        // has no generation (especially legacy Apps Script tokens without exp).
+        const createdAt = Number(generation.created_at || 0);
+        if (createdAt > 0) {
+          const expiresAt = Number(claims.exp);
+          const issuedAt = expiresAt - 30 * 24 * 60 * 60 * 1000;
+          if (!Number.isFinite(expiresAt) || expiresAt <= 0 || createdAt > issuedAt) return null;
+        }
       }
     }
     return claims;
@@ -223,11 +229,13 @@ async function parentAccessSecretHash(value) {
   return b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(value || '')))));
 }
 
-async function issueParentSession(phone, secret, env) {
+async function issueParentSession(phone, secret, env, expiresAtOverride) {
   // The parent's saved browser session should survive ordinary long stays and
   // the 30-day legacy reauthorization boundary. Profile deletion still revokes
   // it immediately through the generation check.
-  const exp = Date.now() + 365 * 24 * 60 * 60 * 1000;
+  const exp = Number(expiresAtOverride) > Date.now()
+    ? Number(expiresAtOverride)
+    : Date.now() + 365 * 24 * 60 * 60 * 1000;
   parentAuthProfileCache.delete(phone);
   const generation = env ? await getParentAuthProfile(env, phone) : null;
   if (!generation) throw new Error('Active parent profile is required to issue a session.');
@@ -499,6 +507,26 @@ async function requestParentAccess(request, env, ctx, secure = false) {
   const profile = await env.CHAT_DB.prepare('SELECT phone10, parent_name, child_name, relationship, child_genitive FROM chat_profiles WHERE phone10 = ?').bind(phone).first();
   if (!profile) return json({ ok: false, code: 'NOT_FOUND', message: 'Этот номер не найден среди активных родителей.' }, 404);
 
+  // A newly registered parent may use phone-only access during the first
+  // 72 hours, unless they already opted into passkey authentication. Use the
+  // immutable completed registration attempt, never a profile edit or retry.
+  if (secure) {
+    const registration = await env.CHAT_DB.prepare(`SELECT MIN(created_at) AS registered_at
+      FROM parent_registration_attempts WHERE phone10=? AND status='COMPLETED'`).bind(phone).first();
+    const account = await env.CHAT_DB.prepare('SELECT user_handle FROM parent_auth_profiles WHERE phone10=?').bind(phone).first();
+    const passkey = account && await env.CHAT_DB.prepare(`SELECT 1 AS present FROM parent_passkeys
+      WHERE user_handle=? AND revoked_at IS NULL LIMIT 1`).bind(account.user_handle).first();
+    const registeredAt = Number(registration && registration.registered_at || 0);
+    const now = Date.now();
+    if (!passkey && registeredAt > 0 && registeredAt <= now && now - registeredAt < 72 * 60 * 60 * 1000) {
+      if (!env.LAB_D1_SESSION_SECRET) return json({ ok:false, message:'Сервис авторизации временно недоступен.' }, 503);
+      const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env);
+      return json({ ok:true, status:'APPROVED', recoveryMode:'registration-grace', phone:'8' + phone,
+        parentName:profile.parent_name || '', childName:profile.child_name || '',
+        parentSession:session.token, d1Session:{ ok:true, ...session } });
+    }
+  }
+
   const prior = await env.CHAT_DB.prepare('SELECT phone10, code, status, created_at, expires_at, request_secret_hash FROM parent_access_requests WHERE request_id = ?').bind(requestId).first();
   if (prior) {
     if (prior.phone10 !== phone) return json({ ok: false, message: 'Запрос относится к другому номеру телефона.' }, 409);
@@ -557,21 +585,45 @@ async function getParentAccessStatus(request, env, secure = false) {
   if ((secure && !equal(String(row.request_secret_hash || ''), secretHash)) || (!secure && row.request_secret_hash)) return json({ ok: true, status: 'NOT_FOUND' });
   let status = String(row.status || '').toUpperCase();
   const now = Date.now();
-  if (status === 'PENDING' && Number(row.expires_at) <= now) {
-    await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE request_id=? AND status='PENDING'").bind(now, requestId).run();
+  const expired = Number(row.expires_at) <= now;
+  if ((status === 'PENDING' || status === 'APPROVED') && expired) {
+    await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='EXPIRED', updated_at=? WHERE request_id=? AND status IN ('PENDING','APPROVED')").bind(now, requestId).run();
     status = 'EXPIRED';
   }
   if (status === 'APPROVED' || status === 'CONSUMED') {
     if (!env.LAB_D1_SESSION_SECRET) return json({ ok: false, message: 'Сервис авторизации временно недоступен.' }, 503);
     if (secure) {
-      if (status === 'CONSUMED') return json({ ok: true, requestId, phone: '8' + phone, status: 'CONSUMED' });
-      const consumed = await env.CHAT_DB.prepare(`UPDATE parent_access_requests SET status='CONSUMED', updated_at=?
+      // Allow the same device to recover a lost HTTP response for 24 hours.
+      // A deterministic expiry makes the re-issued signed session identical.
+      if (status === 'CONSUMED' && now > Number(row.updated_at || 0) + 24 * 60 * 60 * 1000) {
+        return json({ ok:true, requestId, phone:'8' + phone, status:'EXPIRED' });
+      }
+      if (status === 'APPROVED') {
+        const consumed = await env.CHAT_DB.prepare(`UPDATE parent_access_requests SET status='CONSUMED', updated_at=?
         WHERE request_id=? AND status='APPROVED' AND expires_at>? AND request_secret_hash=?`)
         .bind(now, requestId, now, secretHash).run();
-      if (Number(consumed.meta && consumed.meta.changes || 0) !== 1) return json({ ok: true, requestId, phone: '8' + phone, status: 'CONSUMED' });
+        if (Number(consumed.meta && consumed.meta.changes || 0) !== 1) {
+          const current = await env.CHAT_DB.prepare('SELECT status, updated_at FROM parent_access_requests WHERE request_id=? AND phone10=? AND request_secret_hash=?')
+            .bind(requestId, phone, secretHash).first();
+          if (!current || current.status !== 'CONSUMED' || now > Number(current.updated_at || 0) + 24 * 60 * 60 * 1000) {
+            return json({ ok:true, requestId, phone:'8' + phone, status:current && current.status || 'NOT_FOUND' });
+          }
+          row.updated_at = current.updated_at;
+        } else {
+          row.updated_at = now;
+        }
+      }
+    } else {
+      // Legacy requests have no device secret. Complete only an unexpired,
+      // still-approved request, and never issue another session on replay.
+      if (status === 'CONSUMED') return json({ ok:true, requestId, phone:'8' + phone, status:'CONSUMED' });
+      const consumed = await env.CHAT_DB.prepare(`UPDATE parent_access_requests SET status='CONSUMED', updated_at=?
+        WHERE request_id=? AND status='APPROVED' AND expires_at>? AND request_secret_hash=''`)
+        .bind(now, requestId, now).run();
+      if (Number(consumed.meta && consumed.meta.changes || 0) !== 1) return json({ ok:true, requestId, phone:'8' + phone, status:'EXPIRED' });
     }
-    if (!secure && status === 'APPROVED') await env.CHAT_DB.prepare("UPDATE parent_access_requests SET status='CONSUMED', updated_at=? WHERE request_id=? AND status='APPROVED'").bind(now, requestId).run();
-    const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env);
+    const stableExpiry = secure ? Number(row.expires_at) + 365 * 24 * 60 * 60 * 1000 : undefined;
+    const session = await issueParentSession(phone, env.LAB_D1_SESSION_SECRET, env, stableExpiry);
     return json({ ok: true, status: 'APPROVED', requestId, phone: '8' + phone,
       parentName: profile.parent_name || '', childName: profile.child_name || '',
       parentSession: session.token, d1Session: { ok: true, ...session } });

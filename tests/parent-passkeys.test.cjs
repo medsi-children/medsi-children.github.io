@@ -107,6 +107,15 @@ test('new parent sessions bind to a profile generation while existing pre-migrat
     const legacyToken = payload + '.' + await context.hmac(env.LAB_D1_SESSION_SECRET, payload);
     context.parentAuthProfileCache.delete('9990000004');
     assert.ok(await context.authorized(requestFor(legacyToken), env));
+    db.prepare('UPDATE parent_auth_profiles SET created_at=? WHERE phone10=?').run(Date.now(), '9990000004');
+    context.parentAuthProfileCache.delete('9990000004');
+    const noExpiryPayload = context.b64url(new TextEncoder().encode(JSON.stringify({
+      phone10:'9990000004', version:'v2'
+    })));
+    const noExpiryLegacyToken = noExpiryPayload + '.' + await context.hmac(env.LAB_D1_SESSION_SECRET, noExpiryPayload);
+    assert.equal(await context.authorized(requestFor(noExpiryLegacyToken), env), null);
+    db.prepare('UPDATE parent_auth_profiles SET created_at=0 WHERE phone10=?').run('9990000004');
+    context.parentAuthProfileCache.delete('9990000004');
     const renewedResponse = await context.worker.fetch(new Request('https://worker.test/lab/parent-session/renew', {
       method: 'POST', headers: { 'x-medsi-chat-session': legacyToken, 'content-type': 'application/json' }, body: '{}'
     }), env, {});
@@ -119,7 +128,7 @@ test('new parent sessions bind to a profile generation while existing pre-migrat
   } finally { db.close(); }
 });
 
-test('the educator fallback is bound to a random device secret and can deliver a session only once', async () => {
+test('the educator fallback can safely repeat delivery after a lost response for the same device secret', async () => {
   const { db, env } = makeDatabase();
   const context = { Response, URL, console, Date, TextEncoder, Uint8Array, btoa, atob, crypto: require('node:crypto').webcrypto };
   vm.createContext(context);
@@ -152,7 +161,57 @@ test('the educator fallback is bound to a random device secret and can deliver a
     assert.ok(approved.parentSession);
     assert.equal(db.prepare('SELECT status FROM parent_access_requests WHERE request_id=?').get(payload.requestId).status, 'CONSUMED');
     const replay = await (await context.getParentAccessStatus(request(payload), env, true)).json();
-    assert.equal(replay.status, 'CONSUMED');
-    assert.equal(replay.parentSession, undefined);
+    assert.equal(replay.status, 'APPROVED');
+    assert.equal(replay.parentSession, approved.parentSession);
+  } finally { db.close(); }
+});
+
+test('phone-only access is allowed only during the original 72-hour registration window and only without a passkey', async () => {
+  const { db, env } = makeDatabase();
+  const context = { Response, URL, console, Date, TextEncoder, Uint8Array, btoa, atob, crypto: require('node:crypto').webcrypto };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(repo, 'services/cloudflare/chat-worker/src/index.js'), 'utf8').replace('export default {', 'globalThis.worker = {'), context);
+  env.LAB_D1_SESSION_SECRET = 'test-session-secret';
+  try {
+    const phone = '9990000006', requestId = 'auth_12345678901234567890123456789012';
+    db.prepare('INSERT INTO chat_profiles(phone10,parent_name,child_name) VALUES(?,?,?)').run(phone, 'Тест Родитель', 'Тест Ребёнок');
+    db.prepare(`INSERT INTO parent_registration_attempts(attempt_id,phone10,parent_name,child_name,status,created_at)
+      VALUES(?,?,?,?,?,?)`).run('reg_12345678901234567890123456789012', phone, 'Тест Родитель', 'Тест Ребёнок', 'COMPLETED', Date.now() - 24 * 60 * 60 * 1000);
+    const payload = { phone:'8' + phone, requestId, requestSecret:'A'.repeat(43) };
+    const request = value => ({ json:async()=>value, url:'https://worker.test/lab/parent-auth/request' });
+    const grace = await (await context.requestParentAccess(request(payload), env, null, true)).json();
+    assert.equal(grace.recoveryMode, 'registration-grace');
+    assert.ok(grace.parentSession);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM parent_access_requests').get().n, 0);
+
+    db.prepare(`INSERT INTO parent_passkeys(credential_id,user_handle,public_key,counter,created_at)
+      SELECT ?,user_handle,?,?,? FROM parent_auth_profiles WHERE phone10=?`)
+      .run('synthetic_credential_1234567890', new Uint8Array([1]), 0, Date.now(), phone);
+    const recovery = await (await context.requestParentAccess(request({ ...payload, requestId:'auth_22345678901234567890123456789012' }), env, null, true)).json();
+    assert.equal(recovery.status, 'PENDING');
+    assert.equal(recovery.parentSession, undefined);
+  } finally { db.close(); }
+});
+
+test('expired or already consumed legacy approvals cannot issue another session', async () => {
+  const { db, env } = makeDatabase();
+  const context = { Response, URL, console, Date, TextEncoder, Uint8Array, btoa, atob, crypto: require('node:crypto').webcrypto };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(repo, 'services/cloudflare/chat-worker/src/index.js'), 'utf8').replace('export default {', 'globalThis.worker = {'), context);
+  env.LAB_D1_SESSION_SECRET = 'test-session-secret';
+  try {
+    const phone = '9990000007';
+    db.prepare('INSERT INTO chat_profiles(phone10,parent_name,child_name) VALUES(?,?,?)').run(phone, 'Тест Родитель', 'Тест Ребёнок');
+    const insert = db.prepare(`INSERT INTO parent_access_requests(request_id,phone10,code,status,created_at,updated_at,expires_at,request_secret_hash)
+      VALUES(?,?,? ,?,?,?,?,'')`);
+    insert.run('auth_12345678901234567890123456789012', phone, '1234', 'APPROVED', Date.now()-200000, Date.now()-100000, Date.now()-50000);
+    insert.run('auth_22345678901234567890123456789012', phone, '1234', 'CONSUMED', Date.now()-200000, Date.now()-100000, Date.now()+1000000);
+    const request = id => ({ url:new URL('https://worker.test/lab/parent-access/status?phone=8'+phone+'&requestId='+id) });
+    const expired = await (await context.getParentAccessStatus(request('auth_12345678901234567890123456789012'), env, false)).json();
+    assert.equal(expired.status, 'EXPIRED');
+    assert.equal(expired.parentSession, undefined);
+    const consumed = await (await context.getParentAccessStatus(request('auth_22345678901234567890123456789012'), env, false)).json();
+    assert.equal(consumed.status, 'CONSUMED');
+    assert.equal(consumed.parentSession, undefined);
   } finally { db.close(); }
 });
