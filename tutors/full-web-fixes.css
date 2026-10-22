@@ -87,18 +87,57 @@
 }
 #reportError{white-space:pre-line}
 
-.tutor-settings-open{position:absolute;top:10px;left:10px;z-index:7;width:40px;height:40px;padding:9px;border:0;border-radius:50%;background:transparent;color:rgba(36,126,135,.24);cursor:pointer;transition:color .18s ease,background .18s ease}
-.tutor-settings-open:hover,.tutor-settings-open:focus-visible{color:rgba(22,160,169,.72);background:rgba(36,211,218,.08);outline:none}
-.tutor-settings-open svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
-.tutor-settings-backdrop{position:fixed;inset:0;z-index:1100;display:grid;place-items:center;padding:18px;background:rgba(18,54,62,.28);backdrop-filter:blur(5px);overflow:auto}
-.tutor-settings-card{position:relative;width:min(100%,520px);max-height:min(90dvh,800px);overflow:auto;padding:26px 22px 22px;border:1px solid var(--stroke2);border-radius:22px;background:#fff;box-shadow:0 18px 60px rgba(20,74,83,.2)}
-.tutor-settings-card h2{margin:0 38px 16px 0;color:var(--fg);font-size:1.45rem}
-.tutor-settings-close{position:absolute;top:14px;right:14px;width:36px;height:36px;border:1px solid var(--stroke2);border-radius:50%;background:#f4fcfc;color:var(--muted);font-size:24px;line-height:1;cursor:pointer}
-.tutor-setting-block{display:grid;gap:9px;padding:16px 0;border-top:1px solid rgba(15,199,206,.14)}
-.tutor-setting-block h3{margin:0;color:var(--fg);font-size:1rem;line-height:1.3}
-.tutor-setting-block p{margin:0;color:var(--muted);font-size:.9rem;line-height:1.4}
-.tutor-setting-block label{font-size:.9rem;font-weight:700}
-.tutor-setting-block .btn{width:100%;font-size:1rem;min-height:48px}
-.tutor-setting-status{min-height:0}
-.tutor-danger{border-color:rgba(210,74,74,.25);background:#fff6f6;color:#b64040}
-@media(max-width:560px){.tutor-settings-card{padding:23px 17px 17px}.tutor-settings-open{top:6px;left:6px;width:36px;height:36px}}
+/* Settings have their own compact scale instead of inheriting dashboard controls. */
+.tutor-settings-open{position:absolute;top:8px;left:8px;z-index:7;display:grid;place-items:center;width:52px;height:52px;padding:9px;border:0;border-radius:16px;background:transparent;cursor:pointer;transition:background .18s ease,transform .18s ease}
+.tutor-settings-open img{display:block;width:32px;height:32px;opacity:.65;transition:opacity .18s ease}
+.tutor-settings-open:hover,.tutor-settings-open:focus-visible{background:#edf8f9;outline:2px solid transparent}
+.tutor-settings-open:hover img,.tutor-settings-open:focus-visible img{opacity:1}
+.tutor-settings-open:focus-visible{outline-color:#75cbd0;outline-offset:2px}
+.tutor-settings-backdrop{position:fixed;inset:0;z-index:1100;display:grid;place-items:center;padding:20px;background:rgba(18,54,62,.26);-webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);overflow:hidden}
+.tutor-settings-card{display:flex;flex-direction:column;width:min(100%,540px);max-height:calc(100dvh - 40px);min-height:0;overflow:hidden;border:1px solid rgba(255,255,255,.85);border-radius:28px;background:#fbfefe;box-shadow:0 24px 80px rgba(18,68,77,.2);font-size:15px;line-height:1.45;text-align:left}
+.tutor-settings-header{display:flex;flex:none;align-items:center;gap:12px;padding:22px 24px 18px}
+.tutor-settings-emblem{display:grid;place-items:center;flex:none;width:46px;height:46px;border-radius:15px;background:#eaf7f8}
+.tutor-settings-emblem img{display:block}
+.tutor-settings-header h2{flex:1;margin:0;color:#16474f;font-size:25px;font-weight:750;line-height:1.2;letter-spacing:-.7px}
+.tutor-settings-close{display:grid;place-items:center;flex:none;width:36px;height:36px;padding:0;border:1px solid #dcecee;border-radius:50%;background:#fff;cursor:pointer;transition:background .18s ease}
+.tutor-settings-close:hover{background:#edf8f9}
+.tutor-settings-close img{display:block}
+.tutor-settings-body{display:grid;gap:12px;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 24px 24px;scrollbar-width:thin;scrollbar-color:#c8e2e4 transparent}
+.tutor-setting-block{display:grid;gap:12px;padding:18px;border:1px solid #dceef0;border-radius:20px;background:#fff}
+.tutor-setting-heading{display:flex;align-items:center;gap:12px;min-width:0}
+.tutor-setting-icon{display:grid;place-items:center;flex:none;width:40px;height:40px;border-radius:13px;background:#eff9fa}
+.tutor-setting-icon img{display:block}
+.tutor-setting-block h3{margin:0;color:#16474f;font-size:16px;font-weight:700;line-height:1.3;letter-spacing:-.2px}
+.tutor-setting-block p{margin:4px 0 0;color:#729097;font-size:13px;line-height:1.4}
+.tutor-setting-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.tutor-setting-action{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.tutor-setting-block select{width:100%;min-width:0;min-height:46px;padding:10px 32px 10px 13px;border:1px solid #d9e9eb;border-radius:12px;background:#f8fcfc;color:#28545c;font-family:inherit;font-size:14px;line-height:1.4;text-overflow:ellipsis}
+.tutor-setting-block select:focus{outline:none;border-color:#67cbd1;box-shadow:0 0 0 3px rgba(40,189,199,.12)}
+.tutor-setting-block .btn{width:auto;min-height:46px;padding:10px 18px;border-radius:12px;font-size:14px;line-height:1.4;font-weight:700;box-shadow:none;text-shadow:none;transition:background .18s ease,opacity .18s ease}
+.tutor-setting-block .btn-teal{background:linear-gradient(135deg,#42cedb,#1eb8c4);border:1px solid transparent;color:#fff}
+.tutor-setting-block .tutor-notification-toggle{width:100%;border:1px solid #cde9ec;background:#eef9fa;color:#258d96}
+.tutor-setting-block .tutor-notification-toggle[data-enabled="1"]{background:#eaf7f2;border-color:#d1eadd;color:#388772}
+.tutor-setting-block .btn:disabled{opacity:.55;cursor:wait}
+.tutor-setting-block .tutor-setting-status:empty{display:none}
+.tutor-setting-block .tutor-setting-status{margin:0;font-size:12px;overflow-wrap:anywhere}
+.tutor-setting-block-danger{border-color:#efe1e3;background:#fffcfc}
+.tutor-setting-block-danger .tutor-setting-icon{background:#fcedef}
+.tutor-setting-block-danger h3{color:#925b62}
+.tutor-setting-block .tutor-danger{border:1px solid #ebd2d6;background:#fff5f6;color:#b9606b}
+.tutor-setting-block .tutor-danger:hover{background:#fcebed}
+@media(max-width:560px){
+  .tutor-settings-open{top:5px;left:5px;width:48px;height:48px;padding:8px}
+  .tutor-settings-backdrop{padding:12px}
+  .tutor-settings-card{max-height:calc(100dvh - 24px);border-radius:24px}
+  .tutor-settings-header{gap:10px;padding:18px 18px 16px}
+  .tutor-settings-header h2{font-size:23px}
+  .tutor-settings-body{gap:10px;padding:0 14px 16px}
+  .tutor-setting-block{gap:12px;padding:16px;border-radius:17px}
+  .tutor-setting-heading{gap:10px}
+  .tutor-setting-block h3{font-size:15px}
+  .tutor-setting-block p{font-size:12px}
+  .tutor-setting-block select{font-size:16px}
+  .tutor-setting-action{grid-template-columns:minmax(0,1fr)}
+  .tutor-setting-action .btn{width:100%;min-height:44px}
+}
+@media(prefers-reduced-motion:reduce){.tutor-settings-open,.tutor-settings-open img,.tutor-settings-close,.tutor-setting-block .btn{transition:none}}

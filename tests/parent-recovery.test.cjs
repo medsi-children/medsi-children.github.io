@@ -158,3 +158,30 @@ test('parent session bridge preserves the original cancellation signal',async()=
   assert.equal(received.url,'/__session/apps-script');
   assert.equal(received.options.signal,controller.signal);
 });
+
+test('educator preview opens the actual parent menu immediately and never renews through a saved parent account',async()=>{
+  const requests=[];
+  // Data may still be loading: showing the menu must not depend on the network.
+  const env=environment((url,options)=>{requests.push({url,options});return new Promise(()=>{})});
+  env.storage.set('medsi_parent_phone','9990000011');
+  env.storage.set('medsi_parent_auth_session_v1','existing-parent-session');
+  const before=[...env.storage];
+  const preview={phone:'9991112233',parentSession:'preview-session',parentName:'Тестовый родитель',childName:'Тестовый ребёнок',expiresAt:Date.now()+900000};
+  env.ctx.sessionStorage={getItem:key=>key==='medsi_parent_preview_once'?JSON.stringify(preview):null};
+  env.ctx.document.body.insertBefore=()=>{};
+  env.ctx.URL=URL;
+  env.ctx.location={href:'https://example.test/'};
+  const create=env.ctx.document.createElement;
+  env.ctx.document.createElement=()=>({...create(),querySelector:()=>({})});
+  const source=fs.readFileSync(path.join(root,'parents/full-web.js'),'utf8').replace('  boot();','  window.audit={warmD1,setSession(value){d1Session=value}};boot();');
+  vm.runInContext(source,env.ctx);
+  assert.equal(env.ctx.document.body.dataset.screen,'screenChoose');
+  assert.equal(env.elements.get('childChip').textContent,preview.childName);
+  assert.equal(env.ctx.window.MedsiParentApp.ready,true);
+  assert.deepEqual([...env.storage],before);
+  assert.equal((await env.ctx.window.audit.warmD1(true)).token,preview.parentSession);
+  env.ctx.window.audit.setSession({token:preview.parentSession,expiresAt:0});
+  await assert.rejects(()=>env.ctx.window.audit.warmD1(true),/Время предварительного просмотра истекло/);
+  assert.equal(requests.some(r=>r.url==='/__session/apps-script'),false);
+  assert.equal(requests.some(r=>r.options&&r.options.method==='POST'),false);
+});
