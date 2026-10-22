@@ -1639,8 +1639,10 @@ async function reconcileProfiles(request, env) {
           WHEN excluded.child_admission_id <> '' AND
             (chat_profiles.child_admission_id = '' OR chat_profiles.child_admission_id = excluded.child_admission_id)
           THEN excluded.child_admission_id ELSE chat_profiles.child_admission_id END
-      WHERE excluded.profile_generation = '' OR chat_profiles.profile_generation = ''
-        OR chat_profiles.profile_generation = excluded.profile_generation
+      WHERE (excluded.profile_generation = '' OR chat_profiles.profile_generation = ''
+        OR chat_profiles.profile_generation = excluded.profile_generation)
+        AND (excluded.child_admission_id = '' OR chat_profiles.child_admission_id = ''
+          OR chat_profiles.child_admission_id = excluded.child_admission_id)
     `).bind(phone, profile.parentName, profile.childName, profile.relationship, profile.childGenitive,
       profile.profileGeneration, profile.childAdmissionId));
     statements.push(env.CHAT_DB.prepare(`

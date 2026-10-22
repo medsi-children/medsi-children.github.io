@@ -14,11 +14,14 @@ function snapshotActiveProfilesForD1_() {
   const lastRow = sh ? sh.getLastRow() : 0;
   if (lastRow < 2) return [];
   const byPhone = {};
-  const rows = sh.getRange(2, 1, lastRow - 1, 7).getValues();
+  const rows = sh.getRange(2, 1, lastRow - 1, 8).getValues();
   rows.forEach(row => {
     const profile = buildProfileFromReportRow_(row);
     const phone = last10_(profile.phone);
-    if (phone) byPhone[phone] = { phone:phone, parentName:profile.parentName, childName:profile.childName };
+    if (phone) byPhone[phone] = {
+      phone:phone, parentName:profile.parentName, childName:profile.childName,
+      childAdmissionId:profile.childAdmissionId
+    };
   });
   return enrichProfilesWithRelationships_(Object.keys(byPhone).map(phone => byPhone[phone]), rows);
 }
@@ -211,7 +214,7 @@ function reportsD1ProfilesSnapshot_() {
   const sheet = getDataSheet_();
   const lastRow = sheet ? sheet.getLastRow() : 0;
   const rows = lastRow >= 2
-    ? sheet.getRange(2, 1, lastRow - 1, 7).getValues()
+    ? sheet.getRange(2, 1, lastRow - 1, 8).getValues()
     : [];
 
   rows.forEach(function(row) {
@@ -222,6 +225,7 @@ function reportsD1ProfilesSnapshot_() {
       phone: phone,
       parentName: String(profile.parentName || '').trim(),
       childName: String(profile.childName || '').trim(),
+      childAdmissionId: String(profile.childAdmissionId || '').trim(),
       // Keep the REPORTS display name and the full family name only in the
       // local lifecycle snapshot.  D1 still receives its existing public
       // profile payload above; these fields let a row-deletion trigger remove

@@ -52,7 +52,8 @@ function buildProfileFromReportRow_(r) {
   return {
     phone: normalizePhone_(r[0]),
     parentName,
-    childName
+    childName,
+    childAdmissionId: String(r[7] || '').trim()
   };
 }
 
@@ -2766,7 +2767,7 @@ function getProfileByPhone_(phoneRaw) {
   if (sh) {
     const lastRow = sh.getLastRow();
     if (lastRow >= 2) {
-      const values = sh.getRange(2, 1, lastRow - 1, 7).getValues(); // A:G
+      const values = sh.getRange(2, 1, lastRow - 1, 8).getValues(); // A:H, including admission ID
 
       for (const r of values) {
         if (last10_(r[0]) !== phone10) continue;

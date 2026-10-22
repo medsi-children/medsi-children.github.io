@@ -240,7 +240,7 @@ test('new registration stores its attempt as the profile generation without chan
   } finally { db.close(); }
 });
 
-test('profile reconciliation rejects a different generation and fills only missing admission metadata', async () => {
+test('profile reconciliation rejects a different generation or admission and fills missing metadata', async () => {
   const { db, env } = makeDatabase();
   const context = { Response, console, Date, TextEncoder, Uint8Array, btoa,
     crypto: require('node:crypto').webcrypto };
@@ -269,6 +269,24 @@ test('profile reconciliation rejects a different generation and fills only missi
     }), env);
     row = db.prepare('SELECT profile_generation,child_admission_id FROM chat_profiles WHERE phone10=?').get('9990000001');
     assert.equal(row.profile_generation, current);
+    assert.equal(row.child_admission_id, 'adm_current');
+
+    await context.reconcileProfiles(request({
+      phone:'9990000001', parentName:'Старый профиль', childName:'Другая Саша',
+      profileGeneration:current, childAdmissionId:'adm_previous'
+    }), env);
+    row = db.prepare('SELECT parent_name,child_name,profile_generation,child_admission_id FROM chat_profiles WHERE phone10=?').get('9990000001');
+    assert.equal(row.parent_name, 'Анна');
+    assert.equal(row.child_name, 'Миша Примеров');
+    assert.equal(row.profile_generation, current);
+    assert.equal(row.child_admission_id, 'adm_current');
+
+    await context.reconcileProfiles(request({
+      phone:'9990000001', parentName:'Анна', childName:'Миша Иванов',
+      profileGeneration:current, childAdmissionId:'adm_current'
+    }), env);
+    row = db.prepare('SELECT child_name,child_admission_id FROM chat_profiles WHERE phone10=?').get('9990000001');
+    assert.equal(row.child_name, 'Миша Иванов');
     assert.equal(row.child_admission_id, 'adm_current');
   } finally { db.close(); }
 });
