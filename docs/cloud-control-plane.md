@@ -31,8 +31,8 @@ Google Apps Script или Cloudflare Dashboard не считаются прав�
 3. Изменение исходников одного Worker после `npm run verify` автоматически
    публикует только этот Worker. Параллельные публикации блокируются.
 4. D1 migrations остаются отдельной операцией через `deploy-cloudflare.yml` с
-   явным подтверждением. 22.10.2026 workflow был отклонён Cloudflare из-за
-   credentials; миграция `0015` применена проверенной локальной Cloudflare-сессией.
+   явным подтверждением. 22.10.2026 GitHub workflow не прошёл Cloudflare API
+   авторизацию; миграция `0015` применена проверенной локальной сессией.
 
 GitHub Actions не создают новые Apps Script deployment и не применяют
 D1-миграции автоматически. Секреты находятся только в GitHub Environments и
