@@ -8,11 +8,15 @@ const migrationSource = fs.readFileSync(
   path.join(__dirname, '..', 'apps-script', 'medsi-bot', 'chat-d1-migration.js'),
   'utf8'
 );
+const reportHistorySource = fs.readFileSync(
+  path.join(__dirname, '..', 'apps-script', 'medsi-bot', 'report-history.js'),
+  'utf8'
+);
 
 function api() {
   const context = { console };
   vm.createContext(context);
-  vm.runInContext(migrationSource, context);
+  vm.runInContext(migrationSource + '\n' + reportHistorySource, context);
   return context;
 }
 
@@ -41,6 +45,37 @@ test('production worker cron covers every requested Moscow refresh time', () => 
   );
   assert.match(toml, /0 12-15 \* \* \*/);
   assert.match(toml, /0 17-20 \* \* \*/);
+});
+
+test('background report sync does not consume a new publication date', () => {
+  const x = api();
+  const values = new Map();
+  const calls = [];
+  let today = '2026-10-21';
+  x.reportFingerprint_ = value => String(value);
+  x.last10_ = value => String(value).replace(/\D/g, '').slice(-10);
+  x.reportHistoryDate_ = () => today;
+  x.reportNotificationWindowOpen_ = () => true;
+  x.snapshotCurrentReportsForD1_ = () => [{ phone:'89990000001', kind:'morning', text:'Same report', version:'v2:body', updatedAt:1 }];
+  x.PropertiesService = { getScriptProperties: () => ({
+    getProperty: key => values.has(key) ? values.get(key) : null,
+    setProperty: (key, value) => values.set(key, value)
+  }) };
+  x.d1AdminRequest_ = (path, method, payload) => { calls.push({ path, payload }); return { ok:true, updated:1 }; };
+
+  x.syncD1CurrentReportsToWorker_('', '', false);
+  today = '2026-10-22';
+  const idle = x.syncD1CurrentReportsToWorker_('', '', false);
+  assert.equal(idle.skipped, true, 'a scheduled snapshot must not create a date-based D1 write');
+  assert.equal(calls.length, 1);
+
+  const publication = x.syncD1CurrentReportsToWorker_('', 'morning', false);
+  assert.equal(publication.changedKinds.includes('morning'), true);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].payload.notificationKind, 'morning');
+  assert.equal(values.get('REPORT_CURRENT_D1_PUBLICATION_DATE_MORNING'), today);
+  assert.equal(x.syncD1CurrentReportsToWorker_('', '', false).skipped, true);
+  assert.equal(calls.length, 2);
 });
 
 test('same-day correction updates one D1 row; unchanged and yesterday duplicates are skipped', async () => {
@@ -111,7 +146,7 @@ test('same-day correction updates one D1 row; unchanged and yesterday duplicates
 });
 
 test('yesterday publication cannot capture psychology as today', () => {
-  assert.match(migrationSource, /\['morning', 'evening', 'psychology'\]\.includes/);
+  assert.match(reportHistorySource, /\['morning', 'evening', 'psychology'\]\.includes/);
   assert.match(migrationSource, /recordReportHistoryPublication_\('psychology', text\)/);
   const x = api();
   x.readReportHistoryPublication_ = () => ({ date: '2026-10-06' });

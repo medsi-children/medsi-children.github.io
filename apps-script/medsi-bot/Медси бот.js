@@ -4519,7 +4519,16 @@ function distributeChildReports(triggerKindRaw) {
   );
   syncReportInactivityState_(inactivityUpdates);
   try {
-    syncD1CurrentReportsToWorker_(triggerKind === 'morning' || triggerKind === 'evening' ? triggerKind : '');
+    const reportDate = reportHistoryDate_(new Date());
+    const changedPublications = [];
+    ['morning', 'evening'].forEach(function(kind) {
+      if (triggerKind === kind || reportHistoryPublicationMatches_(kind, reportDate)) changedPublications.push(kind);
+    });
+    if (changedPublications.length > 1) {
+      changedPublications.forEach(function(kind) { syncD1CurrentReportsToWorker_('', kind); });
+    } else {
+      syncD1CurrentReportsToWorker_('', changedPublications[0] || '');
+    }
   } catch (error) {
     Logger.log('REPORT_CURRENT_SYNC_AFTER_DISTRIBUTION_FAILED ' + (error && error.message || error));
   }

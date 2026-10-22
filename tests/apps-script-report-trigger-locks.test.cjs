@@ -10,6 +10,7 @@ test('spreadsheet change trigger skips ordinary cell edits', () => {
   const context = { Logger: { log() {} } };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(root, 'chat-d1-migration.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'report-history.js'), 'utf8'), context);
   let calls = 0;
   context.reconcileReportsProfilesToD1_ = () => { calls += 1; };
 
@@ -27,7 +28,7 @@ test('simple onEdit can start without spreadsheet-scope access', () => {
     PropertiesService: { getScriptProperties: () => ({ getProperty: () => 'synthetic-sheet' }) }
   };
   vm.createContext(context);
-  for (const file of ['report-names.js', 'report-parser.js']) {
+  for (const file of ['report-names.js', 'report-parser.js', 'report-history.js']) {
     vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context);
   }
   vm.runInContext(fs.readFileSync(path.join(root, 'Медси бот.js'), 'utf8'), context);
@@ -52,7 +53,7 @@ test('report publication uses a dedicated user lock', () => {
     SpreadsheetApp: { openById: () => ({ getSheetByName: () => null }) }
   };
   vm.createContext(context);
-  for (const file of ['report-names.js', 'report-parser.js']) {
+  for (const file of ['report-names.js', 'report-parser.js', 'report-history.js']) {
     vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context);
   }
   vm.runInContext(fs.readFileSync(path.join(root, 'Медси бот.js'), 'utf8'), context);
@@ -77,7 +78,7 @@ test('report distribution lock serializes work without the global chat lock', ()
     Logger: { log() {} }
   };
   vm.createContext(context);
-  for (const file of ['report-names.js', 'report-parser.js']) {
+  for (const file of ['report-names.js', 'report-parser.js', 'report-history.js']) {
     vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context);
   }
   vm.runInContext(fs.readFileSync(path.join(root, 'Медси бот.js'), 'utf8'), context);
@@ -104,6 +105,7 @@ function profileSyncFixture() {
   };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(root, 'chat-d1-migration.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'report-history.js'), 'utf8'), context);
   const realUpsert = context.reconcileReportsProfilesToD1NonDestructive_;
   Object.assign(context, {
     getDataSheet_:() => ({}),

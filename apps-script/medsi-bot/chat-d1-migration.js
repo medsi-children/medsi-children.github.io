@@ -89,19 +89,70 @@ function snapshotCurrentReportsForD1_(kindRaw) {
   return reports;
 }
 
-function syncD1CurrentReportsToWorker_(kindRaw) {
+function reportCurrentD1Fingerprints_(reports, publicationDates) {
+  const grouped = { morning:[], evening:[], psychology:[] };
+  (Array.isArray(reports) ? reports : []).forEach(function(item) {
+    const kind = String(item && item.kind || '').trim().toLowerCase();
+    const phone = last10_(item && item.phone);
+    if (!phone || !grouped[kind]) return;
+    // updatedAt is deliberately excluded: a periodic Sheets distribution must
+    // not turn an unchanged report into a fresh D1 write/publication.
+    grouped[kind].push([phone, String(item && item.text || ''), String(item && item.version || '')]);
+  });
+  const fingerprints = {};
+  Object.keys(grouped).forEach(function(kind) {
+    grouped[kind].sort(function(a, b) { return a[0].localeCompare(b[0]); });
+    const hasPublishedText = grouped[kind].some(function(item) { return !!item[1]; });
+    // The date advances only on an explicit publication event, not on the
+    // background minute sync. Otherwise that sync could consume tomorrow's
+    // fingerprint before the actual report arrives.
+    const publicationDate = kind !== 'psychology' && hasPublishedText
+      ? String(publicationDates && publicationDates[kind] || '') : '';
+    fingerprints[kind] = reportFingerprint_(JSON.stringify([publicationDate, grouped[kind]]));
+  });
+  return fingerprints;
+}
+
+function syncD1CurrentReportsToWorker_(kindRaw, publicationKindRaw, forceRaw) {
   const requestedKind = String(kindRaw || '').trim().toLowerCase();
   const reports = snapshotCurrentReportsForD1_(requestedKind);
   const now = Date.now();
-  const notificationKind = requestedKind === 'morning' || requestedKind === 'evening' ? requestedKind : '';
   const reportDate = reportHistoryDate_(new Date(now));
+  const properties = PropertiesService.getScriptProperties();
+  const publicationDates = {};
+  ['morning', 'evening'].forEach(function(kind) {
+    publicationDates[kind] = properties.getProperty('REPORT_CURRENT_D1_PUBLICATION_DATE_' + kind.toUpperCase()) || '';
+  });
+  const requestedPublicationKind = String(publicationKindRaw || '').trim().toLowerCase();
+  const hasPublicationText = reports.some(function(item) {
+    return item && item.kind === requestedPublicationKind && String(item.text || '').trim();
+  });
+  const explicitPublication = ['morning', 'evening'].includes(requestedPublicationKind) && hasPublicationText;
+  if (explicitPublication) publicationDates[requestedPublicationKind] = reportDate;
+  const fingerprints = reportCurrentD1Fingerprints_(reports, publicationDates);
+  const kinds = requestedKind && fingerprints[requestedKind] ? [requestedKind] : Object.keys(fingerprints);
+  const changedKinds = kinds.filter(function(kind) {
+    return properties.getProperty('REPORT_CURRENT_D1_FINGERPRINT_' + kind.toUpperCase()) !== fingerprints[kind];
+  });
+  if (!changedKinds.length && forceRaw !== true) return { ok:true, reports:reports.length, updated:0, skipped:true, reason:'unchanged' };
+
+  const notificationKind = ['morning', 'evening'].includes(requestedPublicationKind) &&
+    explicitPublication && changedKinds.indexOf(requestedPublicationKind) >= 0 ? requestedPublicationKind : '';
   const result = d1AdminRequest_('/admin/report-current', 'post', {
     reports:reports,
     notificationKind:notificationKind,
     reportDate:reportDate,
     notificationEligible: reportNotificationWindowOpen_(notificationKind, new Date(now))
   });
-  return { ok:true, reports:reports.length, updated:Number(result.updated || 0) };
+  // Advance only after Worker confirms success, so a failed sync is retried
+  // by the next distribution instead of being hidden by a local cache.
+  kinds.forEach(function(kind) {
+    properties.setProperty('REPORT_CURRENT_D1_FINGERPRINT_' + kind.toUpperCase(), fingerprints[kind]);
+  });
+  if (explicitPublication) {
+    properties.setProperty('REPORT_CURRENT_D1_PUBLICATION_DATE_' + requestedPublicationKind.toUpperCase(), reportDate);
+  }
+  return { ok:true, reports:reports.length, updated:Number(result.updated || 0), changedKinds:changedKinds };
 }
 
 // Report pushes are intentionally limited to the publication windows shown
@@ -131,191 +182,11 @@ function reportContentVersionForD1_(rows, kindRaw) {
 
 function syncD1CurrentReportsToWorker() {
   try {
-    return syncD1CurrentReportsToWorker_();
+    return syncD1CurrentReportsToWorker_('', '', true);
   } catch (error) {
     Logger.log('REPORT_CURRENT_SYNC_FAILED ' + (error && error.message || error));
     return { ok:false, message:String(error && error.message || error) };
   }
-}
-
-function reportHistoryDate_(date) {
-  return Utilities.formatDate(date, 'Europe/Moscow', 'yyyy-MM-dd');
-}
-
-function reportHistoryShiftDays_(date, days) {
-  const shifted = new Date(date.getTime());
-  shifted.setDate(shifted.getDate() + Number(days || 0));
-  return shifted;
-}
-
-function reportHistoryPublicationKey_(kind, suffix) {
-  return 'REPORT_HISTORY_' + String(kind || '').toUpperCase() + '_' + suffix;
-}
-
-function readReportHistoryPublication_(kind) {
-  const raw = PropertiesService.getScriptProperties().getProperty(reportHistoryPublicationKey_(kind, 'PUBLICATION'));
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch (_) { return null; }
-}
-
-function recordReportHistoryPublication_(kind, textRaw, reportDateRaw) {
-  if (!['morning', 'evening', 'psychology'].includes(String(kind || '').toLowerCase())) return;
-  const normalizedKind = String(kind).toLowerCase();
-  const properties = PropertiesService.getScriptProperties();
-  const fingerprint = reportFingerprint_(textRaw);
-  properties.setProperty(reportHistoryPublicationKey_(normalizedKind, 'SOURCE'), fingerprint);
-  properties.setProperty(reportHistoryPublicationKey_(normalizedKind, 'PUBLICATION'), JSON.stringify({
-    date: String(reportDateRaw || reportHistoryDate_(new Date())),
-    at: Date.now(),
-    fingerprint: fingerprint
-  }));
-}
-
-
-function syncReportHistorySourceFingerprintSilently_(kindRaw, textRaw) {
-  const kind = String(kindRaw || '').toLowerCase();
-  if (!['morning', 'evening'].includes(kind)) return;
-  PropertiesService.getScriptProperties().setProperty(
-    reportHistoryPublicationKey_(kind, 'SOURCE'),
-    reportFingerprint_(textRaw)
-  );
-}
-
-function reportsD1SnapshotSignature_(snapshotRaw) {
-  const snapshot = snapshotRaw || {};
-  return Object.keys(snapshot).sort().map(function(phone) {
-    const profile = snapshot[phone] || {};
-    return [
-      phone,
-      String(profile.parentName || '').trim().toLowerCase(),
-      String(profile.childName || '').trim().toLowerCase(),
-      String(profile.reportChildName || '').trim().toLowerCase(),
-      String(profile.familyName || '').trim().toLowerCase()
-    ].join('|');
-  }).join('~');
-}
-
-function reportsD1SnapshotsDiffer_(left, right) {
-  return reportsD1SnapshotSignature_(left) !== reportsD1SnapshotSignature_(right);
-}
-
-function syncReportHistoryPublicationFromSource_(kind, textRaw, explicitPublication) {
-  const normalizedKind = String(kind || '').toLowerCase();
-  const properties = PropertiesService.getScriptProperties();
-  const key = reportHistoryPublicationKey_(normalizedKind, 'SOURCE');
-  const previous = properties.getProperty(key);
-  const fingerprint = reportFingerprint_(textRaw);
-  properties.setProperty(key, fingerprint);
-  if (explicitPublication || (previous !== null && previous !== fingerprint && fingerprint)) {
-    recordReportHistoryPublication_(normalizedKind, textRaw);
-  }
-}
-
-function reportHistoryPublicationMatches_(kind, reportDate) {
-  const publication = readReportHistoryPublication_(kind);
-  return !!publication && String(publication.date || '') === String(reportDate || '');
-}
-
-const REPORT_HISTORY_REFRESH_HOURS_ = {
-  morning: [15, 16, 17],
-  psychology: [16, 18, 21, 23],
-  evening: [20, 21, 22, 23]
-};
-
-function reportHistoryKindsForHour_(hourRaw) {
-  const hour = Number(hourRaw);
-  return Object.keys(REPORT_HISTORY_REFRESH_HOURS_).filter(function(kind) {
-    return REPORT_HISTORY_REFRESH_HOURS_[kind].indexOf(hour) >= 0;
-  });
-}
-
-function psychologyHistoryText_() {
-  const sheet = getSheet_(SHEET_PSYCHOLOGY);
-  return sheet ? String(sheet.getRange(1, 1).getValue() || '').trim() : '';
-}
-
-function captureReportHistoryKind_(kindRaw, reportDate) {
-  const kind = String(kindRaw || '').trim().toLowerCase();
-  if (!['morning', 'evening', 'psychology'].includes(kind)) {
-    return { ok:false, kind:kind, reportDate:reportDate, message:'Unknown report kind.' };
-  }
-
-  const snapshots = [];
-  const psychologyText = kind === 'psychology' ? psychologyHistoryText_() : '';
-
-  snapshotActiveProfilesForD1_().forEach(function(profile) {
-    const phone = last10_(profile.phone);
-    let report;
-
-    if (kind === 'psychology') {
-      report = { ok:true, hasReport:!!psychologyText, text:psychologyText };
-    } else {
-      report = buildParentReportSnapshot_(phone, kind);
-    }
-
-    if (!phone || !report.ok || !report.hasReport || !String(report.text || '').trim()) return;
-    snapshots.push({
-      phone: phone,
-      kind: kind,
-      reportDate: reportDate,
-      text: report.text,
-      capturedAt: Date.now()
-    });
-  });
-
-  const beforeDate = reportHistoryDate_(reportHistoryShiftDays_(new Date(), -45));
-  const result = d1AdminRequest_('/admin/report-snapshots', 'post', {
-    snapshots: snapshots,
-    beforeDate: beforeDate,
-    skipIfMatchesPrevious: true
-  });
-
-  return {
-    ok: true,
-    kind: kind,
-    reportDate: reportDate,
-    saved: Number(result.saved || 0),
-    updated: Number(result.updated || 0),
-    skippedDuplicate: Number(result.skippedDuplicate || 0),
-    skippedExisting: Number(result.skippedExisting || 0)
-  };
-}
-
-function captureDueReportHistorySnapshots_() {
-  const now = new Date();
-  const hour = Number(Utilities.formatDate(now, 'Europe/Moscow', 'H'));
-  const today = reportHistoryDate_(now);
-  const captured = [];
-
-  reportHistoryKindsForHour_(hour).forEach(function(kind) {
-    if (reportHistoryPublicationMatches_(kind, today)) {
-      captured.push(captureReportHistoryKind_(kind, today));
-    } else {
-      captured.push({
-        ok:true,
-        kind:kind,
-        reportDate:today,
-        skipped:true,
-        reason:'No ' + kind + ' publication for this date.'
-      });
-    }
-  });
-
-  return { ok:true, hour:hour, captured:captured };
-}
-
-function captureScheduledReportHistory() {
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) return { ok:true, skipped:true, message:'Another report-history capture is running.' };
-  try {
-    return captureDueReportHistorySnapshots_();
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function captureReportHistoryNow() {
-  return captureScheduledReportHistory();
 }
 
 function syncD1ProfileForPhone_(phoneRaw) {
