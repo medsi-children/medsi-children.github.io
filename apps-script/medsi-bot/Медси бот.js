@@ -3593,8 +3593,22 @@ function rawReportOwnerMatches_(owner, targets) {
   return targets.some(function(child) { return (owner.phones || []).indexOf(rawReportOwnerContactKey_(child)) >= 0; });
 }
 
-function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution, previousReports, allowNew) {
-  const props = PropertiesService.getScriptProperties();
+function loadRawReportOwnershipRecords_(kind, parsed) {
+  const records = {};
+  ((parsed && parsed.blocks) || []).forEach(function(block) {
+    const key = rawReportOwnershipKey_(kind, block);
+    if (records[key] === undefined) records[key] = rawReportOwnershipProperty_(key);
+  });
+  return records;
+}
+
+// Pure ownership decision. Coordinators persist its proposed writes only after
+// their source and roster barriers have passed.
+function planRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution, previousReports, allowNew, recordsRaw, nowRaw) {
+  const records = recordsRaw || {};
+  const guardedDistribution = {
+    byRow:Object.assign({}, distribution && distribution.byRow || {})
+  };
   const resolutions = resolveReportBlocksByExclusion_(parsed.blocks, contextByBase);
   const groups = {};
   parsed.blocks.forEach(function(block, index) {
@@ -3610,7 +3624,7 @@ function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution
     const resolution = resolutions[index];
     const targets = resolution.status === 'ok' ? reportResolutionTargets_(resolution) : [];
     let owner = null;
-    const raw = rawReportOwnershipProperty_(key);
+    const raw = records[key] || '';
     if (raw) {
       try { owner = JSON.parse(raw); }
       catch (_) { owner = { blocked:true }; }
@@ -3632,8 +3646,8 @@ function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution
       const identities = uniqueStrings_(targets.map(rawReportOwnerIdentity_));
       const admissionIds = uniqueStrings_(targets.map(function(child) { return String(child.childAdmissionId || '').trim(); }).filter(Boolean));
       owner = targets.length && phones.length && identities.length === 1 && indices.length === 1 && (allowNew || hasExistingAssignment)
-        ? { identity:identities[0], phones:phones, childAdmissionId:admissionIds.length === 1 ? admissionIds[0] : '', at:Date.now() }
-        : { blocked:true, at:Date.now() };
+        ? { identity:identities[0], phones:phones, childAdmissionId:admissionIds.length === 1 ? admissionIds[0] : '', at:Number(nowRaw) || 0 }
+        : { blocked:true, at:Number(nowRaw) || 0 };
       writes[key] = JSON.stringify(owner);
     }
     indices.forEach(function(blockIndex) {
@@ -3659,18 +3673,44 @@ function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution
       assigned.forEach(function(child) { blockedRows[child.index] = true; });
     });
   });
-  // Persist the ownership decision before writing any REPORTS cell. A property
-  // failure must stop distribution, not silently fall back to name-only routing.
+  Object.keys(blockedRows).forEach(function(row) { delete guardedDistribution.byRow[row]; });
+  guardedDistribution.ownershipBlockedRows = Object.keys(blockedRows).length;
+  return { distribution:guardedDistribution, proposedOwnershipWrites:writes, blockedRows:blockedRows };
+}
+
+function commitRawReportOwnershipWrites_(writesRaw) {
+  const writes = writesRaw || {};
+  const props = PropertiesService.getScriptProperties();
+  // Persist before writing a parent-visible report. A property failure must
+  // stop distribution instead of falling back to name-only routing.
   Object.keys(writes).forEach(function(key) {
     props.setProperty(key, writes[key]);
     cacheRawReportOwnershipProperty_(key, writes[key]);
   });
-  Object.keys(blockedRows).forEach(function(row) { delete distribution.byRow[row]; });
-  distribution.ownershipBlockedRows = Object.keys(blockedRows).length;
+}
+
+function logRawReportOwnershipPlan_(kind, plan) {
+  const writes = plan && plan.proposedOwnershipWrites || {};
+  const blockedRows = plan && plan.blockedRows || {};
   if (Object.keys(writes).length || Object.keys(blockedRows).length) {
     Logger.log('RAW_REPORT_OWNERSHIP_GUARD ' + JSON.stringify({ kind:kind, recorded:Object.keys(writes).length, blockedRows:Object.keys(blockedRows).length }));
   }
-  return distribution;
+}
+
+function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution, previousReports, allowNew) {
+  const records = loadRawReportOwnershipRecords_(kind, parsed);
+  const plan = planRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution,
+    previousReports, allowNew, records, Date.now());
+  commitRawReportOwnershipWrites_(plan.proposedOwnershipWrites);
+  logRawReportOwnershipPlan_(kind, plan);
+  return plan.distribution;
+}
+
+function assertReportDistributionSourceUnchanged_(sheet, expectedRaw) {
+  const current = String(getLatestReport(sheet, 1) || '');
+  if (current !== String(expectedRaw || '')) {
+    throw new Error('Исходный отчёт изменился во время расчёта; устаревшее распределение отменено.');
+  }
 }
 
 // Final read barrier: even a concurrent staff row move cannot expose a body
@@ -4216,19 +4256,26 @@ function redistributeChildReportKindMaintenanceCore_(kindRaw) {
     count
   );
   const contextByBase = buildDistributionContext_(children, []);
-  const plan = computeReportKindPlan_(kind, getLatestReport(sourceSheet, 1) || '', children, contextByBase);
+  const rawText = getLatestReport(sourceSheet, 1) || '';
+  const plan = computeReportKindPlan_(kind, rawText, children, contextByBase);
   if (!plan.ok) return plan;
-  const distribution = applyRawReportOwnershipGuard_(kind, plan.parsed, contextByBase,
+  const ownershipPlan = planRawReportOwnershipGuard_(kind, plan.parsed, contextByBase,
     plan.distribution,
-    dataSheet.getRange(2, kind === 'morning' ? 5 : 6, count, 1).getValues().map(function(row) { return row[0]; }), false);
+    dataSheet.getRange(2, kind === 'morning' ? 5 : 6, count, 1).getValues().map(function(row) { return row[0]; }),
+    false, loadRawReportOwnershipRecords_(kind, plan.parsed), Date.now());
   const MISSING = 'Пока ещё нет отчёта 🙏';
-  const output = buildReportRowValues_(baseNames, distribution.byRow, MISSING);
+  const output = buildReportRowValues_(baseNames, ownershipPlan.distribution.byRow, MISSING);
 
   const targetColumn = kind === 'morning' ? 5 : 6;
   assertReportDistributionRosterUnchanged_(dataSheet, children, count);
+  assertReportDistributionSourceUnchanged_(sourceSheet, rawText);
+  commitRawReportOwnershipWrites_(ownershipPlan.proposedOwnershipWrites);
+  assertReportDistributionRosterUnchanged_(dataSheet, children, count);
+  assertReportDistributionSourceUnchanged_(sourceSheet, rawText);
   dataSheet.getRange(2, targetColumn, count, 1).setValues(output);
-  if (distribution.ownershipBlockedRows) setRawReportSourceNote_(sourceSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
-  return { ok:true, rows:count, ownershipBlockedRows:Number(distribution.ownershipBlockedRows || 0) };
+  logRawReportOwnershipPlan_(kind, ownershipPlan);
+  if (ownershipPlan.distribution.ownershipBlockedRows) setRawReportSourceNote_(sourceSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
+  return { ok:true, rows:count, ownershipBlockedRows:Number(ownershipPlan.distribution.ownershipBlockedRows || 0) };
 }
 
 function maintainRawReportsAfterProfilesChangeCore_(previousSnapshotRaw, reasonRaw) {
@@ -4497,12 +4544,14 @@ function distributeChildReports(triggerKindRaw) {
   const morningText = getLatestReport(morningSheet, 1) || "";
   const eveningText = getLatestReport(eveningSheet, 1) || "";
   const triggerKind = String(triggerKindRaw || '').toLowerCase();
-  syncReportHistoryPublicationFromSource_('morning', morningText, triggerKind === 'morning');
-  syncReportHistoryPublicationFromSource_('evening', eveningText, triggerKind === 'evening');
 
   const lastRow = dataSheet.getLastRow();
   const count   = Math.max(lastRow - 1, 0);
-  if (count === 0) return;
+  if (count === 0) {
+    syncReportHistoryPublicationFromSource_('morning', morningText, triggerKind === 'morning');
+    syncReportHistoryPublicationFromSource_('evening', eveningText, triggerKind === 'evening');
+    return;
+  }
 
   const rawNames = dataSheet.getRange(2, 3, count, 1).getValues().flat();
   const families = dataSheet.getRange(2, 4, count, 1).getValues().flat();
@@ -4525,14 +4574,16 @@ function distributeChildReports(triggerKindRaw) {
   const eveningPlan = computeReportKindPlan_('evening', eveningText, children, contextByBase);
   if (!morningPlan.ok || !eveningPlan.ok) return;
 
-  const morningDistribution = applyRawReportOwnershipGuard_('morning', morningPlan.parsed, contextByBase,
-    morningPlan.distribution, previousReports.map(function(row) { return row[0]; }), false);
-  const eveningDistribution = applyRawReportOwnershipGuard_('evening', eveningPlan.parsed, contextByBase,
-    eveningPlan.distribution, previousReports.map(function(row) { return row[1]; }), false);
+  const morningOwnershipPlan = planRawReportOwnershipGuard_('morning', morningPlan.parsed, contextByBase,
+    morningPlan.distribution, previousReports.map(function(row) { return row[0]; }), false,
+    loadRawReportOwnershipRecords_('morning', morningPlan.parsed), Date.now());
+  const eveningOwnershipPlan = planRawReportOwnershipGuard_('evening', eveningPlan.parsed, contextByBase,
+    eveningPlan.distribution, previousReports.map(function(row) { return row[1]; }), false,
+    loadRawReportOwnershipRecords_('evening', eveningPlan.parsed), Date.now());
 
   const MISSING = "Пока ещё нет отчёта 🙏";
-  const morningOut = buildReportRowValues_(baseNames, morningDistribution.byRow, MISSING);
-  const eveningOut = buildReportRowValues_(baseNames, eveningDistribution.byRow, MISSING);
+  const morningOut = buildReportRowValues_(baseNames, morningOwnershipPlan.distribution.byRow, MISSING);
+  const eveningOut = buildReportRowValues_(baseNames, eveningOwnershipPlan.distribution.byRow, MISSING);
   const inactivityUpdates = [];
 
   for (let i = 0; i < count; i++) {
@@ -4547,11 +4598,24 @@ function distributeChildReports(triggerKindRaw) {
   }
 
   assertReportDistributionRosterUnchanged_(dataSheet, children, count);
+  assertReportDistributionSourceUnchanged_(morningSheet, morningText);
+  assertReportDistributionSourceUnchanged_(eveningSheet, eveningText);
+  commitRawReportOwnershipWrites_(morningOwnershipPlan.proposedOwnershipWrites);
+  commitRawReportOwnershipWrites_(eveningOwnershipPlan.proposedOwnershipWrites);
+  assertReportDistributionRosterUnchanged_(dataSheet, children, count);
+  assertReportDistributionSourceUnchanged_(morningSheet, morningText);
+  assertReportDistributionSourceUnchanged_(eveningSheet, eveningText);
   dataSheet.getRange(2, 5, count, 1).setValues(morningOut);
   assertReportDistributionRosterUnchanged_(dataSheet, children, count);
+  assertReportDistributionSourceUnchanged_(morningSheet, morningText);
+  assertReportDistributionSourceUnchanged_(eveningSheet, eveningText);
   dataSheet.getRange(2, 6, count, 1).setValues(eveningOut);
-  if (morningDistribution.ownershipBlockedRows) setRawReportSourceNote_(morningSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
-  if (eveningDistribution.ownershipBlockedRows) setRawReportSourceNote_(eveningSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
+  syncReportHistoryPublicationFromSource_('morning', morningText, triggerKind === 'morning');
+  syncReportHistoryPublicationFromSource_('evening', eveningText, triggerKind === 'evening');
+  logRawReportOwnershipPlan_('morning', morningOwnershipPlan);
+  logRawReportOwnershipPlan_('evening', eveningOwnershipPlan);
+  if (morningOwnershipPlan.distribution.ownershipBlockedRows) setRawReportSourceNote_(morningSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
+  if (eveningOwnershipPlan.distribution.ownershipBlockedRows) setRawReportSourceNote_(eveningSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
   // Один пакетный снимок после распределения. Повторные запуски с тем же
   // содержимым не меняют версию и не создают ложных уведомлений.
   if (!reportStateUsesD1_()) syncReportNotificationState_(buildReportUpdatesByPhone_(reportPhones, morningOut, eveningOut), true);

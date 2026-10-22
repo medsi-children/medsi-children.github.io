@@ -18,7 +18,7 @@ function fixture(children){
   const context={Logger:{log(){}},SpreadsheetApp:{openById:()=>({getSheetByName:name=>sheets[name]||null})},PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key)||'',getProperties:()=>Object.fromEntries(properties),setProperty:(key,value)=>properties.set(key,value)})},Utilities:{DigestAlgorithm:{SHA_256:'sha256'},Charset:{UTF_8:'utf8'},computeDigest:(_,s)=>Array.from(crypto.createHash('sha256').update(s).digest()),base64EncodeWebSafe:bytes=>Buffer.from(bytes).toString('base64url')},LockService:{getUserLock:()=>lock}};
   vm.createContext(context);
   for(const file of ['report-rules.js','report-names.js','report-parser.js','report-distribution.js','Медси бот.js'])vm.runInContext(fs.readFileSync(path.join(directory,file),'utf8'),context);
-  Object.assign(context,{removeLegacyDistributionLogSheet_(){},syncReportHistoryPublicationFromSource_(){},syncReportNotificationState_(){effects.push('notifications')},syncReportInactivityState_(){effects.push('inactivity')},syncD1CurrentReportsToWorker_(){effects.push('d1')}});
+  Object.assign(context,{removeLegacyDistributionLogSheet_(){},syncReportHistoryPublicationFromSource_(kind){effects.push('history:'+kind)},syncReportNotificationState_(){effects.push('notifications')},syncReportInactivityState_(){effects.push('inactivity')},syncD1CurrentReportsToWorker_(){effects.push('d1')}});
   function publish(kind,text){sheets[kind==='morning'?'MORNING':'EVENING'].rows[0][0]=text;context.rememberRawReportPublicationOwnership_(kind,text,text);}
   function output(){return reports.rows.slice(1).map(row=>[row[0],row[4],row[5]])}
   return {context,reports,sheets,properties,writes,effects,publish,output};
@@ -65,6 +65,30 @@ test('shared kind planner is repeatable and has no Sheets or ownership side effe
   assert.deepEqual([...f.properties],before);
   assert.deepEqual(f.writes,[]);
   assert.equal(f.context.computeReportKindPlan_('night','',children,contextByBase).ok,false);
+});
+test('a raw edit during distribution cancels stale sheet writes and ownership records',()=>{
+  for(const maintenance of [false,true]){
+    const f=fixture([{name:'Екатерина Г',family:'Громова',phone:'89990000001'}]);
+    const sheet=f.sheets.MORNING;
+    const original='Катя Г: Старый синтетический текст.';
+    f.publish('morning',original);
+    const ownersBefore=[...f.properties].filter(([key])=>key.startsWith('RAW_REPORT_OWNER_'));
+    const plan=f.context.planRawReportOwnershipGuard_.bind(f.context);
+    let changed=false;
+    f.context.planRawReportOwnershipGuard_=function(...args){
+      const result=plan(...args);
+      if(!changed){sheet.rows[0][0]='Катя Г: Новый синтетический текст.';changed=true;}
+      return result;
+    };
+    if(maintenance){
+      assert.throws(()=>f.context.redistributeChildReportKindMaintenanceCore_('morning'),/исходный отчёт изменился/i);
+    }else{
+      assert.throws(()=>f.context.distributeChildReports('morning'),/исходный отчёт изменился/i);
+    }
+    assert.deepEqual(f.writes.filter(write=>write.name==='REPORTS'&&(write.c===5||write.c===6)),[]);
+    assert.deepEqual([...f.properties].filter(([key])=>key.startsWith('RAW_REPORT_OWNER_')),ownersBefore);
+    assert.deepEqual(f.effects.filter(effect=>effect.startsWith('history:')),[]);
+  }
 });
 test('discharge followed by a namesake arrival stays blocked through both complete writers',()=>{
   const old={name:'Саша Б',family:'Бурова',phone:'89990000001'};
