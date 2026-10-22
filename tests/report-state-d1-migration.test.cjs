@@ -91,3 +91,17 @@ test('inactivity import keeps absolute dates and tiers; live sync cannot undo ed
     assert.equal(staleAck.status, 404);
   } finally { db.close(); }
 });
+
+test('deleting a profile also deletes its D1 inactivity state', async () => {
+  const { db, context, env } = makeDatabase();
+  try {
+    db.prepare('INSERT INTO chat_profiles(phone10,parent_name,child_name) VALUES(?,?,?)')
+      .run('9990000003', 'Synthetic', 'Synthetic child');
+    db.prepare('INSERT INTO report_inactivity_state(phone10,last_new_report_at,first_seen_at,last_prompt_days) VALUES(?,?,?,?)')
+      .run('9990000003', 10, 1, 7);
+    env.CHAT_MEDIA = { delete: async () => {} };
+    const response = await context.deleteProfilePhone({ json: async () => ({ phone: '89990000003' }) }, env);
+    assert.equal((await response.json()).ok, true);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM report_inactivity_state WHERE phone10=?').get('9990000003').n, 0);
+  } finally { db.close(); }
+});
