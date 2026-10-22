@@ -20,6 +20,7 @@ function api(nameVariantRows = []) {
   const context = {
     console,
     Logger: { log() {} },
+    Utilities: { getUuid: (() => { let next = 0; return () => '00000000-0000-4000-8000-' + String(++next).padStart(12, '0'); })() },
     SpreadsheetApp: {
       openById: () => ({
         getSheetByName: name => name === 'NAME_VARIANTS' ? nameVariantsSheet : emptySheet
@@ -36,6 +37,7 @@ function api(nameVariantRows = []) {
   for (const file of ['report-names.js', 'report-parser.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../apps-script/medsi-bot', file), 'utf8'), context);
   }
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../apps-script/medsi-bot/report-admissions.js'), 'utf8'), context);
   vm.runInContext(source, context);
   return context;
 }
@@ -586,6 +588,50 @@ test('final parent read barrier rejects another admission even if the wrong text
   assert.equal(x.rawReportRowOwnershipAllows_('evening', ['89990000002','','Александр Б','Березкин','','Александр: Синтетический приватный текст.']), false);
 });
 
+test('admission ID lets another guardian see the same child report but blocks a later admission', () => {
+  const x = api();
+  const mom = child(x, 'Миша Б', 'Быков', '89990000001');
+  const dad = child(x, 'Миша Б', 'Быков', '89990000002');
+  const later = child(x, 'Миша Б', 'Быков', '89990000003');
+  mom.childAdmissionId = dad.childAdmissionId = 'admission-current';
+  later.childAdmissionId = 'admission-later';
+  x.rawReportOwnerIdentity_ = () => 'same-child-identity';
+  const owner = { identity:'same-child-identity', childAdmissionId:'admission-current', phones:['old-contact|old-token'] };
+  assert.equal(x.rawReportOwnerMatches_(owner, [dad]), true);
+  assert.equal(x.rawReportOwnerMatches_(owner, [later]), false);
+});
+
+test('REPORTS backfill shares one ID for the same active child and creates a fresh one after removal', () => {
+  const x = api([['Екатерина','Катя']]);
+  const values = [
+    ['89990000001','Synthetic','Екатерина Г','Глотова','','','',''],
+    ['89990000002','Synthetic','Катя Г','Глотова','','','','']
+  ];
+  let header = '';
+  let hidden = false;
+  const sheet = {
+    getMaxColumns:() => 8,
+    getLastRow:() => values.length + 1,
+    getRange:(row, column, count, width) => ({
+      getValue:() => row === 1 && column === 8 ? header : '',
+      setValue:value => { if (row === 1 && column === 8) header = value; },
+      getValues:() => values.slice(row - 2, row - 2 + (count || 1)).map(item => item.slice(column - 1, column - 1 + (width || 1))),
+      setValues:items => items.forEach((item, index) => { values[row - 2 + index][column - 1] = item[0]; })
+    }),
+    isColumnHiddenByUser:() => false,
+    hideColumns:() => { hidden = true; }
+  };
+  x.ensureReportAdmissionIds_(sheet);
+  assert.equal(header, 'ID поступления (служебный)');
+  assert.equal(hidden, true);
+  assert.ok(values[0][7]);
+  assert.equal(values[0][7], values[1][7]);
+  const oldId = values[0][7];
+  values.splice(0, values.length, ['89990000003','Synthetic','Екатерина Г','Глотова','','','','']);
+  x.ensureReportAdmissionIds_(sheet);
+  assert.notEqual(values[0][7], oldId);
+});
+
 test('a second parent of the same active child can see an existing owned report', () => {
   const x = api(); const f = ownershipFixture(x);
   const mom = child(x, 'Миша Б', 'Быков', '89990000001'); mom.index = 0;
@@ -598,7 +644,7 @@ test('a second parent of the same active child can see an existing owned report'
 
 test('roster reordering before write cancels distribution instead of writing into the wrong row', () => {
   const x = api(); const target = child(x, 'Миша Б', 'Быков', '89990000001'); target.index = 0;
-  const sheet = {getLastRow:()=>2,getRange:()=>({getValues:()=>[['89990000002','','Миша Б','Быков']]})};
+  const sheet = {getLastRow:()=>2,getRange:(row,column)=>({getValues:()=>column===8?[['']]:[['89990000002','','Миша Б','Быков']]})};
   assert.throws(()=>x.assertReportDistributionRosterUnchanged_(sheet,[target],1), /REPORTS изменились/);
 });
 

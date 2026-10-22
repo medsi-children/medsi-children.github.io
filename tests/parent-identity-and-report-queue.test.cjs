@@ -15,7 +15,7 @@ function apps() {
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value)})},
     LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}}),getUserLock:()=>({waitLock(){},releaseLock(){}})}};
   vm.createContext(context);
-  ['report-rules.js','report-names.js','report-parser.js','Медси бот.js','medsi-contacts.js','parent-relationships.js'].forEach(file=>vm.runInContext(read('apps-script/medsi-bot/'+file),context));
+  ['report-rules.js','report-names.js','report-parser.js','Медси бот.js','report-admissions.js','medsi-contacts.js','parent-relationships.js'].forEach(file=>vm.runInContext(read('apps-script/medsi-bot/'+file),context));
   return context;
 }
 test('full child name uses child gender and produces a full genitive label',()=>{
@@ -48,6 +48,7 @@ test('legacy registration corrects only an inherited surname; explicit surname i
   for(const [child,expected] of [['Никита','Иванов'],['Никита Петров','Петров'],['Никита Иванова','Иванова']]) {
     const x=apps(), saved=[];
     x.getDataSheet_=()=>({getLastRow:()=>1,appendRow:row=>saved.push(row)});
+    x.reportAdmissionIdForNewChild_=()=> 'synthetic-admission';
     x.appendToDatabase_=()=>{};
     x.smartRegisterFromInboxCore_('89990000001','Анна Иванова',child,true);
     assert.equal(saved[0][3],expected);

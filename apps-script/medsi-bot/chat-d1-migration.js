@@ -374,6 +374,7 @@ function reconcileReportsProfilesToD1_(reason) {
     const requestToken = props.getProperty('REPORTS_D1_SYNC_REQUEST');
     const sheet = getDataSheet_();
     if (!sheet) throw new Error('Лист REPORTS не найден; удаление профилей остановлено.');
+    if (typeof ensureReportAdmissionIds_ === 'function') ensureReportAdmissionIds_(sheet);
     if (typeof fillMissingParentRelationships_ === 'function') fillMissingParentRelationships_(sheet);
     previousSnapshot = loadReportsD1ProfilesSnapshot_();
     current = reportsD1ProfilesSnapshot_();

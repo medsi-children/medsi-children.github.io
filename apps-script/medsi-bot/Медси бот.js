@@ -66,7 +66,7 @@ function getReportRowsByPhone_(phoneRaw) {
   const lastRow = sh.getLastRow();
   if (lastRow < 2) return [];
 
-  const values = sh.getRange(2, 1, lastRow - 1, 8).getValues(); // A:H
+  const values = sh.getRange(2, 1, lastRow - 1, 8).getValues(); // A:H, including admission ID
   return values.filter(r => last10_(r[0]) === phone10);
 }
 
@@ -791,6 +791,7 @@ function smartRegisterFromInboxCore_(phoneRaw, parentNameRaw, childNameRaw, defe
   // A repeated admission with the same contact starts a new ownership epoch.
   const admissionKey = 'REPORT_ADMISSION_' + phone10;
   const admissionToken = Utilities.getUuid();
+  const childAdmissionId = reportAdmissionIdForNewChild_(sh, childFirst, familyForStore);
   PropertiesService.getScriptProperties().setProperty(admissionKey, admissionToken);
   cacheRawReportOwnershipProperty_(admissionKey, admissionToken);
   sh.appendRow([
@@ -801,7 +802,7 @@ function smartRegisterFromInboxCore_(phoneRaw, parentNameRaw, childNameRaw, defe
     '',
     '',
     defaultParentRelationship_(parentFirst),
-    ''
+    childAdmissionId
   ]);
 
   appendToDatabase_(phone, parentFirst, childFirst, familyForStore);
@@ -3256,10 +3257,14 @@ function attachPhonesToReportChildren_(children, dataSheet, count) {
   if (!dataSheet || count <= 0) return children;
 
   const phones = dataSheet.getRange(2, 1, count, 1).getValues().flat();
+  let admissionIds = [];
+  try { admissionIds = dataSheet.getRange(2, REPORT_CHILD_ADMISSION_COLUMN_, count, 1).getValues().flat(); }
+  catch (_) { admissionIds = []; }
   children.forEach((child, i) => {
     const phone = normalizePhone_(phones[i]);
     child.phone = phone;
     child.phone10 = last10_(phone);
+    child.childAdmissionId = String(admissionIds[i] || '').trim();
     if (!child.suffixKey) child.identityKey = 'phone:' + (child.phone10 || child.index);
   });
 
@@ -3580,9 +3585,12 @@ function rawReportOwnerContactKey_(child) {
 function rawReportOwnerMatches_(owner, targets) {
   if (!owner || owner.blocked || !targets.length) return false;
   const identities = uniqueStrings_(targets.map(rawReportOwnerIdentity_));
-  return identities.length === 1 && identities[0] === owner.identity && targets.some(function(child) {
-    return (owner.phones || []).indexOf(rawReportOwnerContactKey_(child)) >= 0;
-  });
+  if (identities.length !== 1 || identities[0] !== owner.identity) return false;
+  if (owner.childAdmissionId) {
+    const admissionIds = uniqueStrings_(targets.map(function(child) { return String(child.childAdmissionId || '').trim(); }).filter(Boolean));
+    return admissionIds.length === 1 && admissionIds[0] === owner.childAdmissionId;
+  }
+  return targets.some(function(child) { return (owner.phones || []).indexOf(rawReportOwnerContactKey_(child)) >= 0; });
 }
 
 function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution, previousReports, allowNew) {
@@ -3622,8 +3630,9 @@ function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution
       });
       const phones = uniqueStrings_(targets.map(rawReportOwnerContactKey_).filter(Boolean));
       const identities = uniqueStrings_(targets.map(rawReportOwnerIdentity_));
+      const admissionIds = uniqueStrings_(targets.map(function(child) { return String(child.childAdmissionId || '').trim(); }).filter(Boolean));
       owner = targets.length && phones.length && identities.length === 1 && indices.length === 1 && (allowNew || hasExistingAssignment)
-        ? { identity:identities[0], phones:phones, at:Date.now() }
+        ? { identity:identities[0], phones:phones, childAdmissionId:admissionIds.length === 1 ? admissionIds[0] : '', at:Date.now() }
         : { blocked:true, at:Date.now() };
       writes[key] = JSON.stringify(owner);
     }
@@ -3638,6 +3647,11 @@ function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution
         }).filter(Boolean)));
         if (phones.length !== (owner.phones || []).length) {
           owner.phones = phones;
+          writes[key] = JSON.stringify(owner);
+        }
+        const admissionIds = uniqueStrings_(assigned.map(function(child) { return String(child.childAdmissionId || '').trim(); }).filter(Boolean));
+        if (!owner.childAdmissionId && admissionIds.length === 1) {
+          owner.childAdmissionId = admissionIds[0];
           writes[key] = JSON.stringify(owner);
         }
         return;
@@ -3664,6 +3678,7 @@ function applyRawReportOwnershipGuard_(kind, parsed, contextByBase, distribution
 function rawReportRowOwnershipAllows_(kind, row) {
   const child = buildReportChildren_([normalizeReportChildName_(row[2], row[3])], [row[3]])[0];
   child.phone10 = last10_(row[0]);
+  child.childAdmissionId = String(row[7] || '').trim();
   const text = row[kind === 'morning' ? 4 : 5];
   const key = rawReportOwnershipKey_(kind, { baseKey:child.baseKey, body:comparableReportBody_(text) });
   const raw = rawReportOwnershipProperty_(key);
@@ -3675,11 +3690,15 @@ function rawReportRowOwnershipAllows_(kind, row) {
 function assertReportDistributionRosterUnchanged_(sheet, children, count) {
   if (Math.max(sheet.getLastRow() - 1, 0) !== count) throw new Error('Список детей изменился; распределение будет повторено.');
   const current = sheet.getRange(2, 1, count, 4).getValues();
+  let currentAdmissionIds = [];
+  try { currentAdmissionIds = sheet.getRange(2, REPORT_CHILD_ADMISSION_COLUMN_, count, 1).getValues().flat(); }
+  catch (_) { currentAdmissionIds = []; }
   if (current.some(function(row, index) {
     const child = children[index];
     return last10_(row[0]) !== last10_(child.phone10 || child.phone) ||
       normalizeReportChildName_(row[2], row[3]) !== child.fullName ||
-      normalizeFamilyName_(row[3]) !== normalizeFamilyName_(child.family);
+      normalizeFamilyName_(row[3]) !== normalizeFamilyName_(child.family) ||
+      String(currentAdmissionIds[index] || '').trim() !== String(child.childAdmissionId || '').trim();
   })) throw new Error('Строки REPORTS изменились; распределение будет повторено.');
 }
 
