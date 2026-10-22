@@ -154,7 +154,7 @@ function syncD1CurrentReportsToWorker_(kindRaw, publicationKindRaw, forceRaw) {
   const stateResponse = d1AdminRequest_('/admin/report-current/state', 'get');
   const states = stateResponse.states || {};
   const changedKinds = kinds.filter(function(kind) {
-    return String(states[kind] && states[kind].sourceFingerprint || '') !== fingerprints[kind];
+    return forceRaw === true || String(states[kind] && states[kind].sourceFingerprint || '') !== fingerprints[kind];
   });
   kinds.forEach(function(kind) {
     if (changedKinds.indexOf(kind) < 0) properties.setProperty('REPORT_CURRENT_D1_FINGERPRINT_' + kind.toUpperCase(), fingerprints[kind]);
@@ -177,6 +177,7 @@ function syncD1CurrentReportsToWorker_(kindRaw, publicationKindRaw, forceRaw) {
   const result = d1AdminRequest_('/admin/report-current', 'post', {
     reports:reports.filter(function(item) { return changedKinds.indexOf(String(item.kind || '').toLowerCase()) >= 0; }),
     publications:publications,
+    repair:forceRaw === true,
     notificationKind:notificationKind,
     reportDate:reportDate,
     notificationEligible: reportNotificationWindowOpen_(notificationKind, new Date(now))

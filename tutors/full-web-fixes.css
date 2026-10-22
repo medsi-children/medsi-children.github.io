@@ -141,3 +141,6 @@
   .tutor-setting-action .btn{width:100%;min-height:44px}
 }
 @media(prefers-reduced-motion:reduce){.tutor-settings-open,.tutor-settings-open img,.tutor-settings-close,.tutor-setting-block .btn{transition:none}}
+
+/* Anchor the gear to the scene, outside the animated menu section. */
+body:not([data-screen="screenChoose"]) .tutor-settings-open{display:none}

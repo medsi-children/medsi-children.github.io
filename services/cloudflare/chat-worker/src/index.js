@@ -1030,6 +1030,16 @@ async function upsertCurrentReports(request, env, ctx) {
       !/^[A-Za-z0-9_-]{8,180}$/.test(String(item.sourceFingerprint || ''));
   })) return json({ ok:false, code:'INVALID_REPORT_PUBLICATION', message:'Expected a revision-fenced publication for each report kind.' }, 400);
 
+  const repair = payload.repair === true;
+  // Gate every write on the complete admission manifest. A rejected batch must
+  // not leave some rows ahead of the shared publication revision.
+  const manifests = Object.fromEntries(publicationKinds.map(kind => [kind,[]]));
+  reports.forEach(item => {
+    const kind=String(item && item.kind || '').trim().toLowerCase();
+    if(!manifests[kind])return;
+    const phone=phone10(item && item.phone),childAdmissionId=String(item && item.childAdmissionId || '').trim().slice(0,120);
+    manifests[kind].push({phone:phone || '',childAdmissionId,valid:!!phone && /^[A-Za-z0-9_-]{8,120}$/.test(childAdmissionId)});
+  });
   const notificationKind = ['morning','evening'].includes(String(payload.notificationKind || '').toLowerCase())
     ? String(payload.notificationKind).toLowerCase() : '';
   const reportDate = /^\d{4}-\d{2}-\d{2}$/.test(String(payload.reportDate || '')) ? String(payload.reportDate) : '';
@@ -1093,7 +1103,10 @@ async function upsertCurrentReports(request, env, ctx) {
       SELECT ?,?,?,?,?,?,?,?,?
       WHERE ((? = 0 AND NOT EXISTS (SELECT 1 FROM report_publication_state s WHERE s.kind=?))
         OR EXISTS (SELECT 1 FROM report_publication_state s WHERE s.kind=? AND s.revision=?
-          AND s.source_fingerprint IS NOT ?))
+          AND (s.source_fingerprint IS NOT ? OR ?=1)))
+        AND NOT EXISTS (SELECT 1 FROM json_each(?) j WHERE json_extract(j.value,'$.valid')<>1 OR NOT EXISTS (
+          SELECT 1 FROM chat_profiles p WHERE p.phone10=json_extract(j.value,'$.phone')
+            AND p.child_admission_id=json_extract(j.value,'$.childAdmissionId')))
         AND EXISTS (SELECT 1 FROM chat_profiles p WHERE p.phone10=?
           AND p.child_admission_id=?)
       ON CONFLICT(phone10,kind) DO UPDATE SET
@@ -1112,7 +1125,7 @@ async function upsertCurrentReports(request, env, ctx) {
           AND p.child_admission_id=excluded.child_admission_id)
     `).bind(phone,kind,text,storedVersion,Number(item.updatedAt||0)||Date.now(),'',
       childAdmissionId,publicationRevision,publication.publicationId,
-      Number(publication.expectedRevision),kind,kind,Number(publication.expectedRevision),publication.sourceFingerprint,
+      Number(publication.expectedRevision),kind,kind,Number(publication.expectedRevision),publication.sourceFingerprint,repair?1:0,JSON.stringify(manifests[kind]),
       phone,childAdmissionId));
   });
 
@@ -1120,13 +1133,11 @@ async function upsertCurrentReports(request, env, ctx) {
     const publication = publications[kind];
     const expected = Number(publication.expectedRevision);
     const next = expected + 1;
-    const manifest = Array.from(itemsByKey.values()).filter(item=>item.kind===kind).map(item=>({
-      phone:item.phone,childAdmissionId:item.childAdmissionId
-    }));
+    const manifest = manifests[kind];
     statements.push(env.CHAT_DB.prepare(`INSERT INTO report_publication_state
       (kind,revision,source_fingerprint,publication_id,updated_at)
       SELECT ?,?,?,?,?
-      WHERE NOT EXISTS (SELECT 1 FROM json_each(?) j WHERE NOT EXISTS (
+      WHERE NOT EXISTS (SELECT 1 FROM json_each(?) j WHERE json_extract(j.value,'$.valid')<>1 OR NOT EXISTS (
         SELECT 1 FROM chat_profiles p WHERE p.phone10=json_extract(j.value,'$.phone')
           AND p.child_admission_id=json_extract(j.value,'$.childAdmissionId')
       ))
@@ -1134,8 +1145,8 @@ async function upsertCurrentReports(request, env, ctx) {
         source_fingerprint=excluded.source_fingerprint,publication_id=excluded.publication_id,
         updated_at=excluded.updated_at
       WHERE report_publication_state.revision=?
-        AND report_publication_state.source_fingerprint IS NOT excluded.source_fingerprint
-    `).bind(kind,next,publication.sourceFingerprint,publication.publicationId,Date.now(),JSON.stringify(manifest),expected));
+        AND (report_publication_state.source_fingerprint IS NOT excluded.source_fingerprint OR ?=1)
+    `).bind(kind,next,publication.sourceFingerprint,publication.publicationId,Date.now(),JSON.stringify(manifest),expected,repair?1:0));
   });
 
   if (statements.length) await env.CHAT_DB.batch(statements);
@@ -2149,7 +2160,7 @@ export default {
         reserved++;
         try { const push=await env.PUSH_WORKER.fetch('https://medsi-push-worker.internal/notify',{
           method:'POST',headers:{authorization:'Bearer '+env.MEDSI_CHAT_PUSH_SECRET,'content-type':'application/json'},
-          body:JSON.stringify({role:'parent',phone:row.phone10,notification:{title:'Утренний отчёт доступен',body:'Откройте Медси Бот, чтобы прочитать актуальный утренний отчёт.',url:'/?openMorning=1',tag:'medsi-report-morning-recovery'}})
+          body:JSON.stringify({role:'parent',phone:row.phone10,notification:{title:'Утренний отчёт доступен',body:'Откройте Медси Бот, чтобы прочитать актуальный утренний отчёт.',url:'/index.html?openMorning=1',tag:'medsi-report-morning-recovery'}})
         });const stats=await push.json();sent+=Number(stats.sent||0);failed+=Number(stats.failed||0);if(!push.ok)failed++;}catch(_){failed++;}
       }
       return json({ok:true,sync:result,notifications:{eligible:rows.results.length,reserved,sent,failed}});

@@ -200,3 +200,17 @@ test('preview never installs the saved parent fetch wrapper or prewarms another 
   assert.equal(calls,0);
   assert.deepEqual([...env.storage],before);
 });
+
+test('opening a report bypasses a fresh cached result while preserving it if the network fails',async()=>{
+  let calls=0,healthy=true;
+  const env=parent(async()=>{calls++;if(!healthy)throw Object.assign(new Error('Unavailable'),{status:403});return response({ok:true,reports:[{kind:'morning',text:'Current report',version:'current',updatedAt:100}]})});
+  env.api.setup(session);
+  for(const kind of ['morning','evening','psychology'])env.api.cache[kind]={ok:true,text:'Cached report',hasReport:true,fetchedAt:Date.now()};
+  assert.equal((await env.api.warmReport('morning')).text,'Cached report');
+  assert.equal(calls,0);
+  assert.equal((await env.api.warmReport('morning',true)).text,'Current report');
+  assert.equal(calls,1);
+  healthy=false;
+  assert.equal(await env.api.warmReport('morning',true),null);
+  assert.equal(env.api.cache.morning.text,'Current report');
+});

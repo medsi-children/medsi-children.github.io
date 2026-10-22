@@ -139,3 +139,27 @@ test('history cannot be replaced by a stale or mismatched current publication', 
     assert.equal(x.db.prepare('SELECT text FROM report_snapshots WHERE phone10=?').get('9000000001').text,'Second report');
   } finally { x.db.close(); }
 });
+
+test('one stale child rejects the complete publication before any current row is replaced',async()=>{
+  const x=fixture();try{
+    await x.worker.upsertCurrentReports(request({reports:[report('Original report','v2:original')],publications:{morning:publication(0,'source_initial_1234','publication_initial_1234')}}),x.env);
+    const result=await parse(await x.worker.upsertCurrentReports(request({reports:[report('Partial newer report','v2:partial'),report('Stale child report','v2:stale',{phone:'9000000002',childAdmissionId:'adm_missing_123456'})],publications:{morning:publication(1,'source_partial_1234','publication_partial_1234')}}),x.env));
+    assert.ok(result.rejectedRows>0);
+    assert.equal(x.db.prepare('SELECT text FROM report_current WHERE phone10=?').get('9000000001').text,'Original report');
+    assert.equal(x.db.prepare("SELECT revision FROM report_publication_state WHERE kind='morning'").get().revision,1);
+  }finally{x.db.close()}
+});
+
+test('an explicit repair restores persisted rows even when the publication fingerprint says unchanged',async()=>{
+  const x=fixture();try{
+    await x.worker.upsertCurrentReports(request({reports:[report('Current report','v2:current')],publications:{morning:publication(0,'source_current_1234','publication_current_1234')}}),x.env);
+    x.db.prepare("UPDATE report_current SET text='Older persisted report'").run();
+    const result=await parse(await x.worker.upsertCurrentReports(request({repair:true,reports:[report('Current report','v2:current')],publications:{morning:publication(1,'source_current_1234','publication_repair_1234')}}),x.env));
+    assert.equal(result.rejectedRows,0);
+    assert.equal(x.db.prepare('SELECT text FROM report_current').get().text,'Current report');
+    assert.equal(x.db.prepare("SELECT revision FROM report_publication_state WHERE kind='morning'").get().revision,2);
+    const stale=await parse(await x.worker.upsertCurrentReports(request({repair:true,reports:[report('Old retry','v2:old')],publications:{morning:publication(1,'source_older_1234','publication_older_1234')}}),x.env));
+    assert.ok(stale.rejectedRows>0);
+    assert.equal(x.db.prepare('SELECT text FROM report_current').get().text,'Current report');
+  }finally{x.db.close()}
+});
