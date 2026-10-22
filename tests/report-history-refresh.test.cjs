@@ -56,12 +56,19 @@ test('background report sync does not consume a new publication date', () => {
   x.last10_ = value => String(value).replace(/\D/g, '').slice(-10);
   x.reportHistoryDate_ = () => today;
   x.reportNotificationWindowOpen_ = () => true;
+  x.Utilities = { getUuid:()=>'synthetic-publication-id-1234' };
   x.snapshotCurrentReportsForD1_ = () => [{ phone:'89990000001', kind:'morning', text:'Same report', version:'v2:body', updatedAt:1 }];
   x.PropertiesService = { getScriptProperties: () => ({
     getProperty: key => values.has(key) ? values.get(key) : null,
     setProperty: (key, value) => values.set(key, value)
   }) };
-  x.d1AdminRequest_ = (path, method, payload) => { calls.push({ path, payload }); return { ok:true, updated:1 }; };
+  const d1State = {};
+  x.d1AdminRequest_ = (path, method, payload) => {
+    if (method === 'get') return { ok:true, states:Object.fromEntries(Object.entries(d1State).map(([kind,value])=>[kind,{...value}])) };
+    calls.push({ path, payload });
+    Object.entries(payload.publications).forEach(([kind,value])=>{d1State[kind]={revision:value.expectedRevision+1,sourceFingerprint:value.sourceFingerprint,publicationId:value.publicationId};});
+    return { ok:true, updated:1, rejectedRows:0, rejectedKinds:[], states:d1State };
+  };
 
   x.syncD1CurrentReportsToWorker_('', '', false);
   today = '2026-10-22';
@@ -106,10 +113,10 @@ test('same-day correction updates one D1 row; unchanged and yesterday duplicates
               if (/INSERT INTO report_snapshots/.test(sql)) {
                 const key = args.slice(0, 3).join('|');
                 if (rows.has(key)) return { meta: { changes: 0 } };
-                rows.set(key, { text: args[3], capturedAt: args[4] });
+                rows.set(key, { text: args[3], capturedAt: args[4], revision:args[8] });
                 inserts++;
               } else if (/UPDATE report_snapshots/.test(sql)) {
-                rows.set(args.slice(2, 5).join('|'), { text: args[0], capturedAt: args[1] });
+                rows.set(args.slice(6, 9).join('|'), { text: args[0], capturedAt: args[1], revision:args[5] });
                 updates++;
               } else if (/DELETE FROM report_snapshots/.test(sql)) {
                 return { meta: { changes: 0 } };
@@ -131,13 +138,14 @@ test('same-day correction updates one D1 row; unchanged and yesterday duplicates
   };
   vm.createContext(context);
   vm.runInContext(worker.slice(start, end), context);
-  const capture = (date, text) => context.upsertReportSnapshots({
-    snapshots: [{ phone: '79001234567', kind: 'psychology', reportDate: date, text, capturedAt: 42 }],
+  const capture = (date, text, revision=1) => context.upsertReportSnapshots({
+    snapshots: [{ phone: '79001234567', kind: 'psychology', reportDate: date, text, capturedAt: 42,
+      revision,publicationId:'publication_synthetic_1234',profileGeneration:'reg_synthetic_123456',childAdmissionId:'adm_synthetic_1234' }],
     skipIfMatchesPrevious: true
   }, { CHAT_DB: database });
   assert.equal((await capture('2026-10-07', 'Начало')).saved, 1);
-  assert.equal((await capture('2026-10-07', 'Начало. Заключение')).updated, 1);
-  assert.equal((await capture('2026-10-07', 'Начало.  Заключение')).skippedDuplicate, 1);
+  assert.equal((await capture('2026-10-07', 'Начало. Заключение',2)).updated, 1);
+  assert.equal((await capture('2026-10-07', 'Начало.  Заключение',2)).skippedDuplicate, 1);
   assert.equal((await capture('2026-10-08', 'Начало. Заключение')).skippedDuplicate, 1);
   assert.equal(rows.size, 1);
   assert.equal(inserts, 1);

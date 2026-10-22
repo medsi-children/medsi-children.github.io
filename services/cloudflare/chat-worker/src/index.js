@@ -967,7 +967,12 @@ async function upsertReportSnapshots(request, env) {
     const kind = String(item && item.kind || '').trim().toLowerCase();
     const reportDate = String(item && item.reportDate || '').trim();
     const text = String(item && item.text || '').trim();
-    if (!phone || !['morning', 'evening', 'psychology'].includes(kind) || !/^\d{4}-\d{2}-\d{2}$/.test(reportDate) || !text) return;
+    const revision = Number(item && item.revision || 0);
+    const publicationId = String(item && item.publicationId || '').trim();
+    const profileGeneration = String(item && item.profileGeneration || '').trim();
+    const childAdmissionId = String(item && item.childAdmissionId || '').trim();
+    if (!phone || !['morning', 'evening', 'psychology'].includes(kind) || !/^\d{4}-\d{2}-\d{2}$/.test(reportDate) || !text ||
+        !Number.isSafeInteger(revision) || revision < 1 || !/^[A-Za-z0-9_-]{8,180}$/.test(publicationId)) return;
 
     const key = `${phone}|${kind}|${reportDate}`;
     if (seen.has(key)) return;
@@ -976,7 +981,7 @@ async function upsertReportSnapshots(request, env) {
       phone,
       kind,
       reportDate,
-      text: text.slice(0, 30000),
+      text: text.slice(0, 30000), revision, publicationId, profileGeneration, childAdmissionId,
       capturedAt: Number(item.capturedAt || 0) || Date.now()
     });
   });
@@ -989,28 +994,44 @@ async function upsertReportSnapshots(request, env) {
 
   for (const candidate of candidates) {
     const existing = await env.CHAT_DB.prepare(`
-      SELECT text
+      SELECT text, revision, publication_id, profile_generation, child_admission_id
       FROM report_snapshots
       WHERE phone10 = ? AND kind = ? AND report_date = ?
       LIMIT 1
     `).bind(candidate.phone, candidate.kind, candidate.reportDate).first();
 
     if (existing) {
-      if (normalizeText(existing.text) === normalizeText(candidate.text)) {
+      if (Number(existing.revision||0) >= candidate.revision) {
         skippedDuplicate++;
         continue;
       }
 
       const result = await env.CHAT_DB.prepare(`
         UPDATE report_snapshots
-        SET text = ?, captured_at = ?
-        WHERE phone10 = ? AND kind = ? AND report_date = ?
+        SET text=?, captured_at=?, profile_generation=?, child_admission_id=?, publication_id=?, revision=?
+        WHERE phone10=? AND kind=? AND report_date=? AND revision < ?
+          AND EXISTS (SELECT 1 FROM report_current c JOIN chat_profiles p ON p.phone10=c.phone10
+            WHERE c.phone10=? AND c.kind=? AND c.text=? AND c.revision=? AND c.publication_id=?
+              AND c.profile_generation=? AND c.child_admission_id=? AND p.profile_generation=c.profile_generation
+              AND (p.child_admission_id='' OR p.child_admission_id=c.child_admission_id))
       `).bind(
         candidate.text,
         candidate.capturedAt,
+        candidate.profileGeneration,
+        candidate.childAdmissionId,
+        candidate.publicationId,
+        candidate.revision,
         candidate.phone,
         candidate.kind,
-        candidate.reportDate
+        candidate.reportDate,
+        candidate.revision,
+        candidate.phone,
+        candidate.kind,
+        candidate.text,
+        candidate.revision,
+        candidate.publicationId,
+        candidate.profileGeneration,
+        candidate.childAdmissionId
       ).run();
 
       updated += Number(result && result.meta && result.meta.changes || 0);
@@ -1033,10 +1054,18 @@ async function upsertReportSnapshots(request, env) {
     }
 
     const result = await env.CHAT_DB.prepare(`
-      INSERT INTO report_snapshots (phone10, kind, report_date, text, captured_at)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(phone10, kind, report_date) DO NOTHING
-    `).bind(candidate.phone, candidate.kind, candidate.reportDate, candidate.text, candidate.capturedAt).run();
+      INSERT INTO report_snapshots
+        (phone10,kind,report_date,text,captured_at,profile_generation,child_admission_id,publication_id,revision)
+      SELECT ?,?,?,?,?,?,?,?,?
+      WHERE EXISTS (SELECT 1 FROM report_current c JOIN chat_profiles p ON p.phone10=c.phone10
+        WHERE c.phone10=? AND c.kind=? AND c.text=? AND c.revision=? AND c.publication_id=?
+          AND c.profile_generation=? AND c.child_admission_id=? AND p.profile_generation=c.profile_generation
+          AND (p.child_admission_id='' OR p.child_admission_id=c.child_admission_id))
+      ON CONFLICT(phone10,kind,report_date) DO NOTHING
+    `).bind(candidate.phone,candidate.kind,candidate.reportDate,candidate.text,candidate.capturedAt,
+      candidate.profileGeneration,candidate.childAdmissionId,candidate.publicationId,candidate.revision,
+      candidate.phone,candidate.kind,candidate.text,candidate.revision,candidate.publicationId,candidate.profileGeneration,
+      candidate.childAdmissionId).run();
 
     const changes = Number(result && result.meta && result.meta.changes || 0);
     if (changes) saved += changes;
@@ -1081,118 +1110,186 @@ async function getParentReportHistory(env, auth) {
   });
 }
 
+async function getCurrentReportPublicationState(env) {
+  const result = await env.CHAT_DB.prepare(`SELECT kind, revision, source_fingerprint, publication_id
+    FROM report_publication_state`).all();
+  const states = {};
+  (result.results || []).forEach(row => {
+    states[row.kind] = { revision:Number(row.revision || 0), sourceFingerprint:row.source_fingerprint || '', publicationId:row.publication_id || '' };
+  });
+  return json({ ok:true, states });
+}
+
 async function upsertCurrentReports(request, env, ctx) {
   const payload = await body(request) || {};
   const reports = Array.isArray(payload.reports) ? payload.reports.slice(0, 500) : [];
-  const notificationKind = ['morning', 'evening'].includes(String(payload.notificationKind || '').toLowerCase())
-    ? String(payload.notificationKind).toLowerCase()
-    : '';
-  const reportDate = /^\d{4}-\d{2}-\d{2}$/.test(String(payload.reportDate || ''))
-    ? String(payload.reportDate)
-    : '';
-  const notificationEligible = payload.notificationEligible === true &&
-    reportNotificationWindowOpen(notificationKind, Date.now());
+  const publications = payload.publications && typeof payload.publications === 'object' ? payload.publications : {};
+  const validKinds = ['morning','evening','psychology'];
+  const publicationKinds = validKinds.filter(kind => publications[kind]);
+  if (!publicationKinds.length || publicationKinds.some(kind => {
+    const item = publications[kind] || {};
+    return !Number.isSafeInteger(Number(item.expectedRevision)) || Number(item.expectedRevision) < 0 ||
+      !/^[A-Za-z0-9_-]{8,180}$/.test(String(item.publicationId || '')) ||
+      !/^[A-Za-z0-9_-]{8,180}$/.test(String(item.sourceFingerprint || ''));
+  })) return json({ ok:false, code:'INVALID_REPORT_PUBLICATION', message:'Expected a revision-fenced publication for each report kind.' }, 400);
+
+  const notificationKind = ['morning','evening'].includes(String(payload.notificationKind || '').toLowerCase())
+    ? String(payload.notificationKind).toLowerCase() : '';
+  const reportDate = /^\d{4}-\d{2}-\d{2}$/.test(String(payload.reportDate || '')) ? String(payload.reportDate) : '';
+  const notificationEligible = payload.notificationEligible === true && reportNotificationWindowOpen(notificationKind, Date.now());
   const previousReports = new Map();
   if (notificationKind && reportDate) {
-    const previous = await env.CHAT_DB.prepare(
-      'SELECT phone10, version, text, updated_at FROM report_current WHERE kind = ?'
-    ).bind(notificationKind).all();
+    const previous = await env.CHAT_DB.prepare('SELECT phone10, version, text, updated_at FROM report_current WHERE kind = ?').bind(notificationKind).all();
     (previous.results || []).forEach(row => previousReports.set(row.phone10, row));
   }
+
   const statements = [];
   const seen = new Set();
-  const notificationTargets = [];
+  const itemsByKey = new Map();
+  const notificationCandidates = [];
+  const nextRevisions = {};
+  publicationKinds.forEach(kind => {
+    const publication = publications[kind];
+    const expected = Number(publication.expectedRevision);
+    const next = expected + 1;
+    nextRevisions[kind] = next;
+  });
+
   reports.forEach(item => {
     const phone = phone10(item && item.phone);
     const kind = String(item && item.kind || '').trim().toLowerCase();
-    if (!phone || !['morning', 'evening', 'psychology'].includes(kind)) return;
+    if (!phone || !publicationKinds.includes(kind)) return;
+    const publication = publications[kind];
+    const profileGeneration = String(item.profileGeneration || '').trim().slice(0,180);
+    const childAdmissionId = String(item.childAdmissionId || '').trim().slice(0,120);
+    const publicationRevision = nextRevisions[kind];
     const key = `${phone}|${kind}`;
     if (seen.has(key)) return;
     seen.add(key);
-    const text = String(item && item.text || '').trim();
-    const incomingVersion = String(item && item.version || '').slice(0, 180);
+    const text = String(item.text || '').trim().slice(0,30000);
+    const incomingVersion = String(item.version || '').slice(0,180);
     const previous = kind === notificationKind ? previousReports.get(phone) : null;
-    const previousDate = previous ? reportDateInMoscow(previous.updated_at) : '';
-    const refreshPublicationDate = !!(previous && text && notificationEligible && reportDate && previousDate !== reportDate);
-    const storedVersion = refreshPublicationDate ? `${incomingVersion}|d:${reportDate}` : incomingVersion;
+    const previousVersion = String(previous && previous.version || '');
+    const previousPublicationDate = (previousVersion.match(/\|d:(\d{4}-\d{2}-\d{2})$/) || [])[1] ||
+      (previous && previousVersion.indexOf('v2:') !== 0 ? reportDateInMoscow(previous.updated_at) : '');
+    // Use the explicit report event date, never updated_at: a profile sync can
+    // refresh that timestamp before today's actual report is published.
+    const isExplicitDailyPublication = kind === notificationKind && reportDate && text;
+    const storedVersion = isExplicitDailyPublication ? `${incomingVersion}|d:${reportDate}` : incomingVersion;
+    const row = { phone,kind,text,version:storedVersion,profileGeneration,childAdmissionId,
+      revision:publicationRevision,publicationId:publication.publicationId };
+    itemsByKey.set(key,row);
+
     if (kind === notificationKind && reportDate && text && notificationEligible) {
-      const previousVersion = String(previous && previous.version || '');
-      const previousBaseVersion = previousVersion.replace(/\|d:\d{4}-\d{2}-\d{2}$/, '');
-      // During rollout, old rows contain a fingerprint of the rendered text
-      // (which included the child name).  If the canonical body is unchanged,
-      // treat the first v2 sync as the same publication and do not emit a
-      // migration-time push.
-      const sameCanonicalTextOnVersionMigration = previous &&
-        incomingVersion.indexOf('v2:') === 0 &&
+      const previousBaseVersion = previousVersion.replace(/\|d:\d{4}-\d{2}-\d{2}$/,'');
+      const sameCanonicalTextOnVersionMigration = previous && incomingVersion.indexOf('v2:') === 0 &&
         previousVersion.indexOf('v2:') !== 0 &&
         canonicalReportTextForNotification(previous.text) === canonicalReportTextForNotification(text);
       const samePublishedReport = previous &&
         (previousBaseVersion === incomingVersion || sameCanonicalTextOnVersionMigration) &&
-        previousDate === reportDate;
-      if (!samePublishedReport) notificationTargets.push({ phone, kind, reportDate });
+        previousPublicationDate === reportDate;
+      if (!samePublishedReport) notificationCandidates.push({ phone,kind,reportDate,publicationId:publication.publicationId });
     }
-    statements.push(env.CHAT_DB.prepare(`
-      INSERT INTO report_current (phone10, kind, text, version, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(phone10, kind) DO UPDATE SET
-        text = excluded.text,
-        version = CASE
-          WHEN report_current.text IS excluded.text
-            AND substr(report_current.version, 1, length(excluded.version)) = excluded.version
-            AND substr(report_current.version, length(excluded.version) + 1, 3) = '|d:'
-          THEN report_current.version
-          ELSE excluded.version
-        END,
-        read_version = CASE
-          WHEN COALESCE(TRIM(report_current.text), '') = '' AND COALESCE(TRIM(excluded.text), '') <> '' THEN ''
-          ELSE report_current.read_version
-        END,
-        updated_at = excluded.updated_at
-      WHERE report_current.text IS NOT excluded.text
-        OR (report_current.version IS NOT excluded.version AND NOT (
-          report_current.text IS excluded.text
-          AND substr(report_current.version, 1, length(excluded.version)) = excluded.version
-          AND substr(report_current.version, length(excluded.version) + 1, 3) = '|d:'
-        ))
-        OR (? = 1 AND report_current.updated_at IS NOT excluded.updated_at)
-    `).bind(
-      phone,
-      kind,
-      String(item && item.text || '').slice(0, 30000),
-      storedVersion,
-      Number(item && item.updatedAt || 0) || Date.now(),
-      refreshPublicationDate ? 1 : 0
-    ));
+
+    statements.push(env.CHAT_DB.prepare(`INSERT INTO report_current
+      (phone10,kind,text,version,updated_at,profile_generation,child_admission_id,revision,publication_id)
+      SELECT ?,?,?,?,?,?,?,?,?
+      WHERE ((? = 0 AND NOT EXISTS (SELECT 1 FROM report_publication_state s WHERE s.kind=?))
+        OR EXISTS (SELECT 1 FROM report_publication_state s WHERE s.kind=? AND s.revision=?
+          AND s.source_fingerprint IS NOT ?))
+        AND EXISTS (SELECT 1 FROM chat_profiles p WHERE p.phone10=?
+          AND p.profile_generation=? AND (p.child_admission_id='' OR p.child_admission_id=?))
+      ON CONFLICT(phone10,kind) DO UPDATE SET
+        text=excluded.text,
+        version=CASE WHEN report_current.text IS excluded.text
+          AND substr(report_current.version,1,length(excluded.version))=excluded.version
+          AND substr(report_current.version,length(excluded.version)+1,3)='|d:'
+          THEN report_current.version ELSE excluded.version END,
+        read_version=CASE WHEN COALESCE(TRIM(report_current.text),'')=''
+          AND COALESCE(TRIM(excluded.text),'')<>'' THEN '' ELSE report_current.read_version END,
+        updated_at=excluded.updated_at, profile_generation=excluded.profile_generation,
+        child_admission_id=excluded.child_admission_id, revision=excluded.revision,
+        publication_id=excluded.publication_id
+      WHERE excluded.revision > report_current.revision
+        AND EXISTS (SELECT 1 FROM chat_profiles p WHERE p.phone10=excluded.phone10
+          AND p.profile_generation=excluded.profile_generation
+          AND (p.child_admission_id='' OR p.child_admission_id=excluded.child_admission_id))
+    `).bind(phone,kind,text,storedVersion,Number(item.updatedAt||0)||Date.now(),profileGeneration,
+      childAdmissionId,publicationRevision,publication.publicationId,
+      Number(publication.expectedRevision),kind,kind,Number(publication.expectedRevision),publication.sourceFingerprint,
+      phone,profileGeneration,childAdmissionId));
   });
-  let updated = 0;
-  if (statements.length) {
-    const results = await env.CHAT_DB.batch(statements);
-    updated = (results || []).reduce((total, result) => total + Number(result && result.meta && result.meta.changes || 0), 0);
+
+  publicationKinds.forEach(kind => {
+    const publication = publications[kind];
+    const expected = Number(publication.expectedRevision);
+    const next = expected + 1;
+    const manifest = Array.from(itemsByKey.values()).filter(item=>item.kind===kind).map(item=>({
+      phone:item.phone,profileGeneration:item.profileGeneration,childAdmissionId:item.childAdmissionId
+    }));
+    statements.push(env.CHAT_DB.prepare(`INSERT INTO report_publication_state
+      (kind,revision,source_fingerprint,publication_id,updated_at)
+      SELECT ?,?,?,?,?
+      WHERE NOT EXISTS (SELECT 1 FROM json_each(?) j WHERE NOT EXISTS (
+        SELECT 1 FROM chat_profiles p WHERE p.phone10=json_extract(j.value,'$.phone')
+          AND p.profile_generation=json_extract(j.value,'$.profileGeneration')
+          AND (p.child_admission_id='' OR p.child_admission_id=json_extract(j.value,'$.childAdmissionId'))
+      ))
+      ON CONFLICT(kind) DO UPDATE SET revision=excluded.revision,
+        source_fingerprint=excluded.source_fingerprint,publication_id=excluded.publication_id,
+        updated_at=excluded.updated_at
+      WHERE report_publication_state.revision=?
+        AND report_publication_state.source_fingerprint IS NOT excluded.source_fingerprint
+    `).bind(kind,next,publication.sourceFingerprint,publication.publicationId,Date.now(),JSON.stringify(manifest),expected));
+  });
+
+  if (statements.length) await env.CHAT_DB.batch(statements);
+
+  const acceptedStates = {};
+  const rejectedKinds = [];
+  for (const kind of publicationKinds) {
+    const current = await env.CHAT_DB.prepare('SELECT revision,source_fingerprint,publication_id FROM report_publication_state WHERE kind=?').bind(kind).first();
+    const requested = publications[kind];
+    const accepted = !!current && current.source_fingerprint === requested.sourceFingerprint &&
+      Number(current.revision || 0) === Number(nextRevisions[kind]) && current.publication_id === requested.publicationId;
+    acceptedStates[kind] = current ? { revision:Number(current.revision||0), sourceFingerprint:current.source_fingerprint||'', publicationId:current.publication_id||'' } : { revision:0,sourceFingerprint:'',publicationId:'' };
+    if (!accepted) rejectedKinds.push(kind);
   }
+
+  const appliedRows = new Set();
+  for (const [key,item] of itemsByKey) {
+    const active = await env.CHAT_DB.prepare(`SELECT 1 AS ok FROM report_current c
+      JOIN chat_profiles p ON p.phone10=c.phone10
+      WHERE c.phone10=? AND c.kind=? AND c.revision=? AND c.publication_id=?
+        AND c.profile_generation=? AND p.profile_generation=c.profile_generation
+        AND (c.child_admission_id='' OR p.child_admission_id='' OR c.child_admission_id=p.child_admission_id)
+        AND c.text=? AND c.version=? LIMIT 1`).bind(item.phone,item.kind,item.revision,item.publicationId,
+          item.profileGeneration,item.text,item.version).first();
+    if (active) appliedRows.add(key);
+  }
+  const updated = appliedRows.size;
+  const rejectedRows = itemsByKey.size - updated;
+  const confirmedNotifications = notificationCandidates.filter(item => {
+    const row = itemsByKey.get(`${item.phone}|${item.kind}`);
+    return row && appliedRows.has(`${item.phone}|${item.kind}`) &&
+      acceptedStates[item.kind] && acceptedStates[item.kind].publicationId === item.publicationId;
+  });
+
   let queued = 0;
-  if (notificationTargets.length) {
-    const reserved = await env.CHAT_DB.batch(notificationTargets.map(item => env.CHAT_DB.prepare(`
-      INSERT INTO report_push_dedup (phone10, kind, report_date, last_push_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(phone10, kind, report_date) DO UPDATE SET last_push_at = excluded.last_push_at
-      WHERE excluded.last_push_at - report_push_dedup.last_push_at >= 7200000
-    `).bind(item.phone, item.kind, item.reportDate, Date.now())));
-    const jobs = [];
-    reserved.forEach((result, index) => {
-      if (!result.meta || Number(result.meta.changes || 0) < 1) return;
-      queued += 1;
-      jobs.push(notifyParentReportBestEffort(env, notificationTargets[index].phone, notificationKind));
-    });
-    if (jobs.length) {
-      const pushJob = Promise.allSettled(jobs).then(results => {
-        const failed = results.filter(result => result.status === 'rejected').length;
-        if (failed) console.error('REPORT_PUSH_BATCH_FAILED', JSON.stringify({ kind: notificationKind, failed, total: results.length }));
-      });
-      if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(pushJob);
-      else await pushJob;
+  if (confirmedNotifications.length) {
+    const reserved = await env.CHAT_DB.batch(confirmedNotifications.map(item => env.CHAT_DB.prepare(`
+      INSERT INTO report_push_dedup (phone10,kind,report_date,last_push_at) VALUES (?,?,?,?)
+      ON CONFLICT(phone10,kind,report_date) DO UPDATE SET last_push_at=excluded.last_push_at
+      WHERE excluded.last_push_at-report_push_dedup.last_push_at>=7200000
+    `).bind(item.phone,item.kind,item.reportDate,Date.now())));
+    const jobs=[];
+    reserved.forEach((result,index)=>{if(!result.meta||Number(result.meta.changes||0)<1)return;queued++;jobs.push(notifyParentReportBestEffort(env,confirmedNotifications[index].phone,notificationKind));});
+    if(jobs.length){
+      const pushJob=Promise.allSettled(jobs).then(results=>{const failed=results.filter(result=>result.status==='rejected').length;if(failed)console.error('REPORT_PUSH_BATCH_FAILED',JSON.stringify({kind:notificationKind,failed,total:results.length}));});
+      if(ctx&&typeof ctx.waitUntil==='function')ctx.waitUntil(pushJob);else await pushJob;
     }
   }
-  return json({ ok: true, received: statements.length, updated, pushQueued: queued });
+  return json({ ok:true, received:itemsByKey.size, updated, rejectedRows, rejectedKinds, states:acceptedStates, pushQueued:queued });
 }
 
 function reportNotificationWindowOpen(kindRaw, timestamp) {
@@ -2143,6 +2240,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/admin/delete-profile-phone') return deleteProfilePhone(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/report-snapshots') return upsertReportSnapshots(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/report-current') return upsertCurrentReports(request, env, ctx);
+      if (request.method === 'GET' && url.pathname === '/admin/report-current/state') return getCurrentReportPublicationState(env);
       if (request.method === 'GET' && url.pathname === '/admin/parent-registration-outbox') return listParentRegistrationOutbox(env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/ack') return acknowledgeParentRegistrationOutbox(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/fail') return failParentRegistrationOutbox(request, env);

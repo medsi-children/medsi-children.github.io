@@ -85,11 +85,14 @@ function snapshotCurrentReportsForD1_(kindRaw) {
         kind:kind,
         text:text,
         version:reportContentVersionForD1_(rowsByPhone[phone] || [], kind),
+        profileGeneration:String(profile.profileGeneration || ''),
+        childAdmissionId:String(profile.childAdmissionId || ''),
         updatedAt:updatedAt
       });
     });
     if (needsPsychology) {
-      reports.push({ phone:phone, kind:'psychology', text:psychologyText, version:reportFingerprint_(psychologyText), updatedAt:updatedAt });
+      reports.push({ phone:phone, kind:'psychology', text:psychologyText, version:reportFingerprint_(psychologyText),
+        profileGeneration:String(profile.profileGeneration || ''), childAdmissionId:String(profile.childAdmissionId || ''), updatedAt:updatedAt });
     }
   });
   return reports;
@@ -103,7 +106,8 @@ function reportCurrentD1Fingerprints_(reports, publicationDates) {
     if (!phone || !grouped[kind]) return;
     // updatedAt is deliberately excluded: a periodic Sheets distribution must
     // not turn an unchanged report into a fresh D1 write/publication.
-    grouped[kind].push([phone, String(item && item.text || ''), String(item && item.version || '')]);
+    grouped[kind].push([phone, String(item && item.text || ''), String(item && item.version || ''),
+      String(item && item.profileGeneration || ''), String(item && item.childAdmissionId || '')]);
   });
   const fingerprints = {};
   Object.keys(grouped).forEach(function(kind) {
@@ -137,28 +141,55 @@ function syncD1CurrentReportsToWorker_(kindRaw, publicationKindRaw, forceRaw) {
   if (explicitPublication) publicationDates[requestedPublicationKind] = reportDate;
   const fingerprints = reportCurrentD1Fingerprints_(reports, publicationDates);
   const kinds = requestedKind && fingerprints[requestedKind] ? [requestedKind] : Object.keys(fingerprints);
+  // Cloudflare holds the last committed source revision. Reading only this
+  // aggregate state (no family rows) lets a lost response be retried safely.
+  const stateResponse = d1AdminRequest_('/admin/report-current/state', 'get');
+  const states = stateResponse.states || {};
   const changedKinds = kinds.filter(function(kind) {
-    return properties.getProperty('REPORT_CURRENT_D1_FINGERPRINT_' + kind.toUpperCase()) !== fingerprints[kind];
+    return String(states[kind] && states[kind].sourceFingerprint || '') !== fingerprints[kind];
   });
-  if (!changedKinds.length && forceRaw !== true) return { ok:true, reports:reports.length, updated:0, skipped:true, reason:'unchanged' };
+  kinds.forEach(function(kind) {
+    if (changedKinds.indexOf(kind) < 0) properties.setProperty('REPORT_CURRENT_D1_FINGERPRINT_' + kind.toUpperCase(), fingerprints[kind]);
+  });
+  if (!changedKinds.length) {
+    if (explicitPublication) properties.setProperty('REPORT_CURRENT_D1_PUBLICATION_DATE_' + requestedPublicationKind.toUpperCase(), reportDate);
+    return { ok:true, reports:reports.length, updated:0, skipped:true, reason:'unchanged' };
+  }
 
+  const publications = {};
+  changedKinds.forEach(function(kind) {
+    publications[kind] = {
+      expectedRevision:Number(states[kind] && states[kind].revision || 0),
+      sourceFingerprint:fingerprints[kind],
+      publicationId:Utilities.getUuid().replace(/-/g, '')
+    };
+  });
   const notificationKind = ['morning', 'evening'].includes(requestedPublicationKind) &&
     explicitPublication && changedKinds.indexOf(requestedPublicationKind) >= 0 ? requestedPublicationKind : '';
   const result = d1AdminRequest_('/admin/report-current', 'post', {
-    reports:reports,
+    reports:reports.filter(function(item) { return changedKinds.indexOf(String(item.kind || '').toLowerCase()) >= 0; }),
+    publications:publications,
     notificationKind:notificationKind,
     reportDate:reportDate,
     notificationEligible: reportNotificationWindowOpen_(notificationKind, new Date(now))
   });
-  // Advance only after Worker confirms success, so a failed sync is retried
-  // by the next distribution instead of being hidden by a local cache.
-  kinds.forEach(function(kind) {
+  if ((result.rejectedKinds || []).length || Number(result.rejectedRows || 0) > 0) {
+    throw new Error('Cloudflare отклонил устаревший или несогласованный снимок отчётов; повтор будет выполнен следующим запуском.');
+  }
+  // A response is considered complete only after every row was confirmed at
+  // the same committed publication revision. Failed requests remain retryable.
+  changedKinds.forEach(function(kind) {
+    const accepted = result.states && result.states[kind];
+    if (!accepted || accepted.sourceFingerprint !== fingerprints[kind] || accepted.publicationId !== publications[kind].publicationId) {
+      throw new Error('Cloudflare не подтвердил новую ревизию отчёта; повторите синхронизацию.');
+    }
     properties.setProperty('REPORT_CURRENT_D1_FINGERPRINT_' + kind.toUpperCase(), fingerprints[kind]);
   });
   if (explicitPublication) {
     properties.setProperty('REPORT_CURRENT_D1_PUBLICATION_DATE_' + requestedPublicationKind.toUpperCase(), reportDate);
   }
-  return { ok:true, reports:reports.length, updated:Number(result.updated || 0), changedKinds:changedKinds };
+  return { ok:true, reports:reports.length, updated:Number(result.updated || 0), changedKinds:changedKinds,
+    revisions:Object.keys(result.states || {}).reduce(function(out,kind) { out[kind]=Number(result.states[kind].revision||0); return out; },{}) };
 }
 
 // Report pushes are intentionally limited to the publication windows shown
@@ -200,7 +231,8 @@ function syncD1ProfileForPhone_(phoneRaw) {
   const profile = getProfileByPhone_(phone);
   if (!phone || !profile) return { ok:false, message:'Parent is absent from REPORTS.' };
   const enriched = enrichProfilesWithRelationships_([{
-    phone:phone, parentName:profile.parentName, childName:profile.childName
+    phone:phone, parentName:profile.parentName, childName:profile.childName,
+    profileGeneration:String(profile.profileGeneration || ''), childAdmissionId:String(profile.childAdmissionId || '')
   }], getReportRowsByPhone_(phone));
   return d1AdminRequest_('/admin/reconcile', 'post', {
     profiles:enriched, full:false

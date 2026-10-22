@@ -4549,7 +4549,8 @@ function applyRawReportCleanup_(plan) {
 }
 
 function distributeChildReports(triggerKindRaw) {
-  return withReportWriteLock_(function() {
+  let postCommitSync = null;
+  const result = withReportWriteLock_(function() {
   removeLegacyDistributionLogSheet_();
 
   const dataSheet    = getDataSheet_();
@@ -4634,23 +4635,37 @@ function distributeChildReports(triggerKindRaw) {
   if (eveningOwnershipPlan.distribution.ownershipBlockedRows) setRawReportSourceNote_(eveningSheet.getRange(1, 1), 'Часть блоков не распределена: сохранённый владелец отчёта не совпадает с текущим ребёнком. Уточните полную фамилию и проверьте текст.');
   // Один пакетный снимок после распределения. Повторные запуски с тем же
   // содержимым не меняют версию и не создают ложных уведомлений.
-  if (!reportStateUsesD1_()) syncReportNotificationState_(buildReportUpdatesByPhone_(reportPhones, morningOut, eveningOut), true);
-  syncReportInactivityState_(inactivityUpdates);
-  try {
-    const reportDate = reportHistoryDate_(new Date());
-    const changedPublications = [];
-    ['morning', 'evening'].forEach(function(kind) {
-      if (triggerKind === kind || reportHistoryPublicationMatches_(kind, reportDate)) changedPublications.push(kind);
-    });
-    if (changedPublications.length > 1) {
-      changedPublications.forEach(function(kind) { syncD1CurrentReportsToWorker_('', kind); });
-    } else {
-      syncD1CurrentReportsToWorker_('', changedPublications[0] || '');
-    }
-  } catch (error) {
-    Logger.log('REPORT_CURRENT_SYNC_AFTER_DISTRIBUTION_FAILED ' + (error && error.message || error));
-  }
+  const reportDate = reportHistoryDate_(new Date());
+  const changedPublications = [];
+  ['morning', 'evening'].forEach(function(kind) {
+    if (triggerKind === kind || reportHistoryPublicationMatches_(kind, reportDate)) changedPublications.push(kind);
   });
+  postCommitSync = {
+    notificationUpdates: buildReportUpdatesByPhone_(reportPhones, morningOut, eveningOut),
+    inactivityUpdates: inactivityUpdates,
+    changedPublications: changedPublications
+  };
+  });
+  // Сетевые вызовы выполняются после освобождения блокировки записи в отчёты.
+  // Если синхронизация задержится, D1 принимает публикации только по версии.
+  if (postCommitSync) {
+    if (!reportStateUsesD1_()) {
+      try { syncReportNotificationState_(postCommitSync.notificationUpdates, true); }
+      catch (error) { Logger.log('REPORT_NOTIFICATION_SYNC_AFTER_DISTRIBUTION_FAILED ' + (error && error.message || error)); }
+    }
+    try { syncReportInactivityState_(postCommitSync.inactivityUpdates); }
+    catch (error) { Logger.log('REPORT_INACTIVITY_SYNC_AFTER_DISTRIBUTION_FAILED ' + (error && error.message || error)); }
+    try {
+      if (postCommitSync.changedPublications.length > 1) {
+        postCommitSync.changedPublications.forEach(function(kind) { syncD1CurrentReportsToWorker_('', kind); });
+      } else {
+        syncD1CurrentReportsToWorker_('', postCommitSync.changedPublications[0] || '');
+      }
+    } catch (error) {
+      Logger.log('REPORT_CURRENT_SYNC_AFTER_DISTRIBUTION_FAILED ' + (error && error.message || error));
+    }
+  }
+  return result;
 }
 
 function withReportWriteLock_(callback) {

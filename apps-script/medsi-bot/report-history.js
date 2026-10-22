@@ -108,6 +108,14 @@ function captureReportHistoryKind_(kindRaw, reportDate) {
 
   const snapshots = [];
   const psychologyText = kind === 'psychology' ? psychologyHistoryText_() : '';
+  const publicationState = d1AdminRequest_('/admin/report-current/state', 'get').states || {};
+  const committedPublication = publicationState[kind] || {};
+  const revision = Number(committedPublication.revision || 0);
+  const publicationId = String(committedPublication.publicationId || '');
+  if (revision < 1 || !publicationId) {
+    return { ok:false, kind:kind, reportDate:reportDate, skipped:true,
+      message:'Текущая версия отчёта ещё не подтверждена Cloudflare; история будет сохранена при следующем запуске.' };
+  }
 
   snapshotActiveProfilesForD1_().forEach(function(profile) {
     const phone = last10_(profile.phone);
@@ -125,6 +133,10 @@ function captureReportHistoryKind_(kindRaw, reportDate) {
       kind: kind,
       reportDate: reportDate,
       text: report.text,
+      profileGeneration:String(profile.profileGeneration || ''),
+      childAdmissionId:String(profile.childAdmissionId || ''),
+      revision:revision,
+      publicationId:publicationId,
       capturedAt: Date.now()
     });
   });
@@ -171,13 +183,9 @@ function captureDueReportHistorySnapshots_() {
 }
 
 function captureScheduledReportHistory() {
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) return { ok:true, skipped:true, message:'Another report-history capture is running.' };
-  try {
-    return captureDueReportHistorySnapshots_();
-  } finally {
-    lock.releaseLock();
-  }
+  // Cloudflare makes capture idempotent and rejects stale publication IDs.
+  // Do not hold the global Apps Script lock while reading/writing D1.
+  return captureDueReportHistorySnapshots_();
 }
 
 function captureReportHistoryNow() {
