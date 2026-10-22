@@ -952,26 +952,15 @@ async function upsertCurrentReports(request, env, ctx) {
     const key = `${phone}|${kind}`;
     if (seen.has(key)) return;
     seen.add(key);
-    statements.push(env.CHAT_DB.prepare(`
-      INSERT INTO report_current (phone10, kind, text, version, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(phone10, kind) DO UPDATE SET
-        text = excluded.text,
-        version = excluded.version,
-        updated_at = excluded.updated_at
-    `).bind(
-      phone,
-      kind,
-      String(item && item.text || '').slice(0, 30000),
-      String(item && item.version || '').slice(0, 180),
-      Number(item && item.updatedAt || 0) || Date.now()
-    ));
     const text = String(item && item.text || '').trim();
+    const incomingVersion = String(item && item.version || '').slice(0, 180);
+    const previous = kind === notificationKind ? previousReports.get(phone) : null;
+    const previousDate = previous ? reportDateInMoscow(previous.updated_at) : '';
+    const refreshPublicationDate = !!(previous && text && notificationEligible && reportDate && previousDate !== reportDate);
+    const storedVersion = refreshPublicationDate ? `${incomingVersion}|d:${reportDate}` : incomingVersion;
     if (kind === notificationKind && reportDate && text && notificationEligible) {
-      const previous = previousReports.get(phone);
-      const previousDate = previous ? reportDateInMoscow(previous.updated_at) : '';
-      const incomingVersion = String(item && item.version || '');
       const previousVersion = String(previous && previous.version || '');
+      const previousBaseVersion = previousVersion.replace(/\|d:\d{4}-\d{2}-\d{2}$/, '');
       // During rollout, old rows contain a fingerprint of the rendered text
       // (which included the child name).  If the canonical body is unchanged,
       // treat the first v2 sync as the same publication and do not emit a
@@ -981,12 +970,44 @@ async function upsertCurrentReports(request, env, ctx) {
         previousVersion.indexOf('v2:') !== 0 &&
         canonicalReportTextForNotification(previous.text) === canonicalReportTextForNotification(text);
       const samePublishedReport = previous &&
-        (previousVersion === incomingVersion || sameCanonicalTextOnVersionMigration) &&
+        (previousBaseVersion === incomingVersion || sameCanonicalTextOnVersionMigration) &&
         previousDate === reportDate;
       if (!samePublishedReport) notificationTargets.push({ phone, kind, reportDate });
     }
+    statements.push(env.CHAT_DB.prepare(`
+      INSERT INTO report_current (phone10, kind, text, version, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(phone10, kind) DO UPDATE SET
+        text = excluded.text,
+        version = CASE
+          WHEN report_current.text IS excluded.text
+            AND substr(report_current.version, 1, length(excluded.version)) = excluded.version
+            AND substr(report_current.version, length(excluded.version) + 1, 3) = '|d:'
+          THEN report_current.version
+          ELSE excluded.version
+        END,
+        updated_at = excluded.updated_at
+      WHERE report_current.text IS NOT excluded.text
+        OR (report_current.version IS NOT excluded.version AND NOT (
+          report_current.text IS excluded.text
+          AND substr(report_current.version, 1, length(excluded.version)) = excluded.version
+          AND substr(report_current.version, length(excluded.version) + 1, 3) = '|d:'
+        ))
+        OR (? = 1 AND report_current.updated_at IS NOT excluded.updated_at)
+    `).bind(
+      phone,
+      kind,
+      String(item && item.text || '').slice(0, 30000),
+      storedVersion,
+      Number(item && item.updatedAt || 0) || Date.now(),
+      refreshPublicationDate ? 1 : 0
+    ));
   });
-  if (statements.length) await env.CHAT_DB.batch(statements);
+  let updated = 0;
+  if (statements.length) {
+    const results = await env.CHAT_DB.batch(statements);
+    updated = (results || []).reduce((total, result) => total + Number(result && result.meta && result.meta.changes || 0), 0);
+  }
   let queued = 0;
   if (notificationTargets.length) {
     const reserved = await env.CHAT_DB.batch(notificationTargets.map(item => env.CHAT_DB.prepare(`
@@ -1010,7 +1031,7 @@ async function upsertCurrentReports(request, env, ctx) {
       else await pushJob;
     }
   }
-  return json({ ok: true, received: statements.length, updated: statements.length, pushQueued: queued });
+  return json({ ok: true, received: statements.length, updated, pushQueued: queued });
 }
 
 function reportNotificationWindowOpen(kindRaw, timestamp) {
