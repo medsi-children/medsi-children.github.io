@@ -301,7 +301,6 @@ async function acknowledgeReportInactivity(request, env) {
 
 async function syncReportInactivity(request, env) {
   const payload = await body(request) || {}, items = Array.isArray(payload.items) ? payload.items.slice(0, 500) : [];
-  const mode = payload.mode === 'import' ? 'import' : 'live';
   const now = Date.now(), statements=[];
   items.forEach((item, index) => {
     const phone=phone10(item && item.phone); if(!phone)return;
@@ -311,38 +310,14 @@ async function syncReportInactivity(request, env) {
       last_new_report_at=CASE WHEN excluded.last_new_report_at>report_inactivity_state.last_new_report_at THEN excluded.last_new_report_at ELSE report_inactivity_state.last_new_report_at END,
       first_seen_at=CASE WHEN report_inactivity_state.first_seen_at=0 THEN excluded.first_seen_at ELSE report_inactivity_state.first_seen_at END,
       last_prompt_days=CASE WHEN excluded.last_new_report_at>report_inactivity_state.last_new_report_at THEN 0
-        WHEN ?='import' AND excluded.last_new_report_at>=report_inactivity_state.last_new_report_at THEN excluded.last_prompt_days
         ELSE report_inactivity_state.last_prompt_days END,
       roster_order=excluded.roster_order
       WHERE excluded.last_new_report_at>report_inactivity_state.last_new_report_at
         OR (report_inactivity_state.first_seen_at=0 AND excluded.first_seen_at<>0)
-        OR (?='import' AND excluded.last_new_report_at>=report_inactivity_state.last_new_report_at AND excluded.last_prompt_days<>report_inactivity_state.last_prompt_days)
-        OR excluded.roster_order<>report_inactivity_state.roster_order`).bind(phone, eventAt, first, tier, Number(item && item.rosterOrder || index), mode, mode));
+      OR excluded.roster_order<>report_inactivity_state.roster_order`).bind(phone, eventAt, first, tier, Number(item && item.rosterOrder || index)));
   });
   if(statements.length) await env.CHAT_DB.batch(statements);
   return json({ok:true,received:statements.length});
-}
-
-async function importReportReadState(request, env) {
-  const payload=await body(request)||{}, items=Array.isArray(payload.items)?payload.items.slice(0,1500):[];
-  const importId=String(payload.importId||'').trim();
-  if(!/^report-state-v1-[0-9]{8}(?:-[A-Za-z0-9_-]{4,16})?$/.test(importId)) return json({ok:false,message:'Некорректный идентификатор импорта.'},400);
-  const prior=await env.CHAT_DB.prepare('SELECT import_id FROM report_state_import_runs WHERE import_id=?').bind(importId).all();
-  if((prior.results||[]).length) return json({ok:true,received:0,alreadyImported:true});
-  const statements=[], validItems=[];
-  for(const item of items){const phone=phone10(item&&item.phone),kind=String(item&&item.kind||'').toLowerCase(),expectedVersion=String(item&&item.expectedVersion||'').slice(0,180);if(!phone||!['morning','evening','psychology'].includes(kind)||!expectedVersion)continue;
-    validItems.push({phone,kind,expectedVersion,unread:item.unread===true});
-    statements.push(env.CHAT_DB.prepare(`UPDATE report_current SET read_version=CASE WHEN ? THEN '' ELSE version END
-      WHERE phone10=? AND kind=? AND version=? AND read_version IS NOT CASE WHEN ? THEN '' ELSE version END
-        AND NOT EXISTS(SELECT 1 FROM report_state_import_runs WHERE import_id=?)`).bind(item.unread===true?1:0,phone,kind,expectedVersion,item.unread===true?1:0,importId));}
-  statements.push(env.CHAT_DB.prepare('INSERT OR IGNORE INTO report_state_import_runs(import_id, imported_at) VALUES(?,?)').bind(importId,Date.now()));
-  await env.CHAT_DB.batch(statements);
-  let verified=0;
-  for(const item of validItems){
-    const row=await env.CHAT_DB.prepare('SELECT version,read_version FROM report_current WHERE phone10=? AND kind=?').bind(item.phone,item.kind).first();
-    if(row&&row.version===item.expectedVersion&&(item.unread?row.read_version!==row.version:row.read_version===row.version))verified++;
-  }
-  return json({ok:true,received:validItems.length,verified,versionMismatches:validItems.length-verified});
 }
 
 async function registerParent(request, env) {
@@ -2244,7 +2219,6 @@ export default {
       if (request.method === 'GET' && url.pathname === '/admin/parent-registration-outbox') return listParentRegistrationOutbox(env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/ack') return acknowledgeParentRegistrationOutbox(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/fail') return failParentRegistrationOutbox(request, env);
-      if (request.method === 'POST' && url.pathname === '/admin/report-read-state/import') return importReportReadState(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/report-inactivity/sync') return syncReportInactivity(request, env);
       if (request.method === 'GET' && url.pathname === '/admin/report-current/versions') return getCurrentReportVersions(env);
       if (request.method === 'GET' && url.pathname === '/admin/parent-access-requests') return listParentAccessRequests(env);

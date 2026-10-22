@@ -615,7 +615,6 @@ function onReportsD1Edit(event) {
       const text = String(event.range.getSheet().getRange(1, 1).getValue() || '');
       saveRawReportPublication_('psychology', event.range.getSheet().getRange(1, 1), text, Date.now());
       recordReportHistoryPublication_('psychology', text);
-      syncPsychologyNotificationState_(text);
       syncD1CurrentReportsToWorker_('psychology');
       return;
     }

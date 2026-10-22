@@ -37,44 +37,27 @@ function makeDatabase() {
   return { db, context, env: { CHAT_DB: adapter } };
 }
 
-test('read-state import is version-bound, idempotent, and keeps stale imports from changing a newer report', async () => {
+test('D1 report read state is version-bound and ignores stale read acknowledgements', async () => {
   const { db, context, env } = makeDatabase();
   try {
     db.prepare('INSERT INTO report_current(phone10,kind,text,version,updated_at) VALUES(?,?,?,?,?)')
       .run('9990000001', 'morning', 'Synthetic', 'v2:current', 1);
     const request = value => ({ json: async () => value });
-    const imported = await context.importReportReadState(request({
-      importId: 'report-state-v1-20261022',
-      items: [{ phone: '9990000001', kind: 'morning', unread: true, expectedVersion: 'v2:current' }]
-    }), env);
-    const importResult = await imported.json();
-    assert.equal(importResult.ok, true);
-    assert.equal(importResult.received, 1);
-    assert.equal(importResult.verified, 1);
+    await context.markParentReportRead(request({ kind: 'morning', version: 'v2:stale' }), env, { role: 'parent', phone10: '9990000001' });
     let state = await (await context.getParentReportUnread(env, { role: 'parent', phone10: '9990000001' })).json();
     assert.equal(state.reportUnread.morning, true);
-    await context.markParentReportRead(request({ kind: 'morning', version: 'v2:stale' }), env, { role: 'parent', phone10: '9990000001' });
-    state = await (await context.getParentReportUnread(env, { role: 'parent', phone10: '9990000001' })).json();
-    assert.equal(state.reportUnread.morning, true);
     await context.markParentReportRead(request({ kind: 'morning', version: 'v2:current' }), env, { role: 'parent', phone10: '9990000001' });
-    state = await (await context.getParentReportUnread(env, { role: 'parent', phone10: '9990000001' })).json();
-    assert.equal(state.reportUnread.morning, false);
-    const replay = await context.importReportReadState(request({
-      importId: 'report-state-v1-20261022',
-      items: [{ phone: '9990000001', kind: 'morning', unread: true, expectedVersion: 'v2:current' }]
-    }), env);
-    assert.equal((await replay.json()).alreadyImported, true);
     state = await (await context.getParentReportUnread(env, { role: 'parent', phone10: '9990000001' })).json();
     assert.equal(state.reportUnread.morning, false);
   } finally { db.close(); }
 });
 
-test('inactivity import keeps absolute dates and tiers; live sync cannot undo educator acknowledgement', async () => {
+test('inactivity sync keeps existing acknowledgement and does not reset it on unchanged report', async () => {
   const { db, context, env } = makeDatabase();
   try {
     const lastReportAt = Date.UTC(2026, 9, 17, 9), firstSeenAt = Date.UTC(2026, 9, 1, 9);
     const request = value => ({ json: async () => value });
-    await context.syncReportInactivity(request({ mode: 'import', items: [{
+    await context.syncReportInactivity(request({ items: [{
       phone: '9990000002', lastNewReportAt: lastReportAt, lastPromptDays: 7, firstSeenAt, rosterOrder: 4
     }] }), env);
     let row = db.prepare('SELECT * FROM report_inactivity_state WHERE phone10=?').get('9990000002');

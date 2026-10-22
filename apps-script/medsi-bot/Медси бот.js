@@ -6,8 +6,6 @@ const SHEET_MORNING           = 'MORNING';
 const SHEET_EVENING           = 'EVENING';
 const SHEET_PSYCHOLOGY        = 'PSYCHOLOGY';
 const DATABASE_SHEET_NAME     = 'DATABASE';
-const REPORT_STATE_SHEET_NAME = 'REPORT_NOTIFICATION_STATE';
-const REPORT_INACTIVITY_STATE_SHEET_NAME = 'REPORT_INACTIVITY_STATE';
 const CHAT_PHOTOS_FOLDER_NAME = 'MEDSI_CHAT_PHOTOS';
 const PUSH_WORKER_URL_FALLBACK = 'https://medsi-push-worker.medsi-children.workers.dev/notify';
 const PUSH_WORKER_SECRET_PROPERTY = 'MEDSI_CHAT_PUSH_SECRET';
@@ -1591,7 +1589,6 @@ function appendReport(param, tutorTokenRaw) {
 
     if (targetSheetName === SHEET_PSYCHOLOGY) {
       recordReportHistoryPublication_('psychology', text);
-      if (!reportStateUsesD1_()) syncPsychologyNotificationState_(text);
       try {
         syncD1CurrentReportsToWorker_('psychology');
       } catch (error) {
@@ -1940,37 +1937,6 @@ function testValidateAndWriteReport(param, tutorTokenRaw) {
 
 
 /** ========= СОСТОЯНИЕ НЕПРОЧИТАННЫХ ОТЧЁТОВ ========= **/
-function ensureReportStateSheet_() {
-  if (reportStateUsesD1_()) throw new Error('Состояние прочитанности отчётов находится в D1; лист больше не используется.');
-  const ss = getSpreadsheet_();
-  let sh = ss.getSheetByName(REPORT_STATE_SHEET_NAME);
-  const headers = [[
-    'PHONE', 'PHONE10',
-    'MORNING_CURRENT', 'MORNING_READ',
-    'EVENING_CURRENT', 'EVENING_READ',
-    'PSYCHOLOGY_CURRENT', 'PSYCHOLOGY_READ',
-    'MORNING_WAS_MISSING', 'EVENING_WAS_MISSING', 'PSYCHOLOGY_WAS_MISSING'
-  ]];
-
-  if (!sh) {
-    sh = ss.insertSheet(REPORT_STATE_SHEET_NAME);
-    sh.getRange(1, 1, 1, headers[0].length).setValues(headers);
-    sh.hideSheet();
-    return sh;
-  }
-
-  const current = sh.getLastColumn() > 0
-    ? sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), headers[0].length)).getValues()[0]
-    : [];
-  if (
-    String(current[0] || '') !== 'PHONE' ||
-    String(current[7] || '') !== 'PSYCHOLOGY_READ' ||
-    String(current[10] || '') !== 'PSYCHOLOGY_WAS_MISSING'
-  ) {
-    sh.getRange(1, 1, 1, headers[0].length).setValues(headers);
-  }
-  return sh;
-}
 
 function isActualReportText_(raw) {
   const text = cleanIncomingText_(raw);
@@ -1987,203 +1953,10 @@ function reportFingerprint_(raw) {
   return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/g, '');
 }
 
-function reportContentFingerprintFromVersion_(versionRaw) {
-  return String(versionRaw || '').split('.')[0];
-}
-
-function buildReportUpdatesByPhone_(phones, morningValues, eveningValues, psychologyText) {
-  const grouped = {};
-  (phones || []).forEach((phoneRaw, i) => {
-    const phone = normalizePhone_(phoneRaw);
-    const phone10 = last10_(phone);
-    if (!phone10) return;
-    if (!grouped[phone10]) grouped[phone10] = { phone, morning: [], evening: [] };
-    if (morningValues) grouped[phone10].morning.push(String((morningValues[i] || [])[0] || ''));
-    if (eveningValues) grouped[phone10].evening.push(String((eveningValues[i] || [])[0] || ''));
-  });
-
-  const updates = {};
-  Object.keys(grouped).forEach(phone10 => {
-    const item = grouped[phone10];
-    updates[phone10] = { phone: item.phone };
-    if (morningValues) updates[phone10].morning = reportFingerprint_(item.morning.filter(isActualReportText_).join('\n\n'));
-    if (eveningValues) updates[phone10].evening = reportFingerprint_(item.evening.filter(isActualReportText_).join('\n\n'));
-    if (psychologyText !== undefined) updates[phone10].psychology = reportFingerprint_(psychologyText);
-  });
-  return updates;
-}
-
-function syncReportNotificationState_(updates, pruneMissing) {
-  if (reportStateUsesD1_()) return { ok:true, skipped:true };
-  if (!updates || !Object.keys(updates).length) return;
-  const lock = LockService.getScriptLock();
-  lock.waitLock(15000);
-  try {
-    const sh = ensureReportStateSheet_();
-    const lastRow = sh.getLastRow();
-    let existing = lastRow >= 2 ? sh.getRange(2, 1, lastRow - 1, 11).getValues() : [];
-    const byPhone = {};
-    let dirty = false;
-    let needsClear = false;
-    if (pruneMissing) {
-      const activePhones = new Set(Object.keys(updates));
-      const filtered = existing.filter(r => activePhones.has(last10_(r[1] || r[0])));
-      if (filtered.length !== existing.length) {
-        existing = filtered;
-        dirty = true;
-        needsClear = true;
-      }
-    }
-    existing.forEach((r, i) => {
-      const phone10 = last10_(r[1] || r[0]);
-      if (phone10 && byPhone[phone10] === undefined) byPhone[phone10] = i;
-    });
-
-    Object.keys(updates).forEach(phone10 => {
-      const update = updates[phone10] || {};
-      const index = byPhone[phone10];
-      if (index === undefined) {
-        const m = String(update.morning || '');
-        const e = String(update.evening || '');
-        const p = String(update.psychology || '');
-        byPhone[phone10] = existing.length;
-        existing.push([
-          update.phone || phone10, phone10,
-          m, m, e, e, p, p,
-          Object.prototype.hasOwnProperty.call(update, 'morning') ? !m : '',
-          Object.prototype.hasOwnProperty.call(update, 'evening') ? !e : '',
-          Object.prototype.hasOwnProperty.call(update, 'psychology') ? !p : ''
-        ]);
-        dirty = true;
-        return;
-      }
-
-      const row = existing[index];
-      if (update.phone && String(row[0] || '') !== String(update.phone)) {
-        row[0] = update.phone;
-        dirty = true;
-      }
-      const mapping = {
-        morning: { current: 2, read: 3, missing: 8 },
-        evening: { current: 4, read: 5, missing: 9 },
-        psychology: { current: 6, read: 7, missing: 10 }
-      };
-      Object.keys(mapping).forEach(kind => {
-        if (!Object.prototype.hasOwnProperty.call(update, kind)) return;
-        const fingerprint = String(update[kind] || '');
-        const currentIndex = mapping[kind].current;
-        const readIndex = mapping[kind].read;
-        const missingIndex = mapping[kind].missing;
-        const missingValue = row[missingIndex];
-        const missingInitialized = missingValue !== '' && missingValue !== null && missingValue !== undefined;
-        const wasMissing = row[missingIndex] === true || String(row[missingIndex]).toLowerCase() === 'true';
-
-        // Пустота сама по себе не создаёт уведомление, но взводит следующий
-        // непустой текст как новую публикацию — даже если текст вернули тот же.
-        if (!fingerprint) {
-          if (!wasMissing) {
-            row[missingIndex] = true;
-            dirty = true;
-          }
-          return;
-        }
-
-        const currentContent = reportContentFingerprintFromVersion_(row[currentIndex]);
-        if (!missingInitialized && !row[currentIndex] && !row[readIndex]) {
-          // Этот вид отчёта ещё ни разу не попадал в состояние (например,
-          // лист создала психотерапия до первого распределения утра/вечера).
-          row[currentIndex] = fingerprint;
-          row[readIndex] = fingerprint;
-          row[missingIndex] = false;
-          dirty = true;
-          return;
-        }
-        if (fingerprint !== currentContent || wasMissing) {
-          row[currentIndex] = (wasMissing && fingerprint === currentContent)
-            ? fingerprint + '.' + String(Date.now())
-            : fingerprint;
-          dirty = true;
-        }
-        if (wasMissing) {
-          row[missingIndex] = false;
-          dirty = true;
-        } else if (!missingInitialized) {
-          row[missingIndex] = false;
-          dirty = true;
-        }
-      });
-    });
-
-    if (dirty) {
-      if (needsClear && lastRow >= 2) sh.getRange(2, 1, lastRow - 1, 11).clearContent();
-      if (existing.length) sh.getRange(2, 1, existing.length, 11).setValues(existing);
-    }
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function initializeReportNotificationState_() {
-  if (reportStateUsesD1_()) return { ok:true, skipped:true };
-  const dataSheet = getDataSheet_();
-  if (!dataSheet || dataSheet.getLastRow() < 2) return;
-  const count = dataSheet.getLastRow() - 1;
-  const values = dataSheet.getRange(2, 1, count, 6).getValues();
-  const phones = values.map(r => r[0]);
-  const morning = values.map(r => [r[4]]);
-  const evening = values.map(r => [r[5]]);
-  const psychologySheet = getSheet_(SHEET_PSYCHOLOGY);
-  const psychology = psychologySheet ? String(psychologySheet.getRange(1, 1).getValue() || '') : '';
-  syncReportNotificationState_(buildReportUpdatesByPhone_(phones, morning, evening, psychology));
-}
-
-function syncPsychologyNotificationState_(textRaw) {
-  if (reportStateUsesD1_()) return { ok:true, skipped:true };
-  const dataSheet = getDataSheet_();
-  if (!dataSheet || dataSheet.getLastRow() < 2) return;
-  const phones = dataSheet.getRange(2, 1, dataSheet.getLastRow() - 1, 1).getValues().flat();
-  syncReportNotificationState_(buildReportUpdatesByPhone_(phones, null, null, String(textRaw || '')));
-}
-
-function reportStateUsesD1_() {
-  return PropertiesService.getScriptProperties().getProperty('REPORT_STATE_D1_CUTOVER') === 'true';
-}
-
-function getLegacyReportUnreadStatus_(phoneRaw) {
-  const phone10=last10_(phoneRaw),empty={morning:false,evening:false,psychology:false};
-  if(!phone10)return empty;
-  let sh=ensureReportStateSheet_(),last=sh.getLastRow();
-  if(last<2){initializeReportNotificationState_();sh=ensureReportStateSheet_();last=sh.getLastRow();}
-  if(last<2)return empty;
-  const rows=sh.getRange(2,2,last-1,7).getValues();
-  for(const row of rows)if(last10_(row[0])===phone10)return {morning:!!row[1]&&String(row[1])!==String(row[2]||''),evening:!!row[3]&&String(row[3])!==String(row[4]||''),psychology:!!row[5]&&String(row[5])!==String(row[6]||'')};
-  initializeReportNotificationState_();return getReportUnreadStatusWithoutInit_(phone10);
-}
-
 function getReportUnreadStatus_(phoneRaw) {
-  if(!reportStateUsesD1_())return getLegacyReportUnreadStatus_(phoneRaw);
   const empty={morning:false,evening:false,psychology:false};
   try{const state=getD1ParentReportUnread_(phoneRaw);return state&&state.reportUnread||empty;}
   catch(error){Logger.log('REPORT_READ_STATE_D1_READ_FAILED '+String(error&&error.message||error));return empty;}
-}
-
-function getReportUnreadStatusWithoutInit_(phoneRaw) {
-  const phone10 = last10_(phoneRaw);
-  const empty = { morning: false, evening: false, psychology: false };
-  const sh = ensureReportStateSheet_();
-  const lastRow = sh.getLastRow();
-  if (!phone10 || lastRow < 2) return empty;
-  const rows = sh.getRange(2, 2, lastRow - 1, 7).getValues();
-  for (const r of rows) {
-    if (last10_(r[0]) === phone10) {
-      return {
-        morning: !!r[1] && String(r[1]) !== String(r[2] || ''),
-        evening: !!r[3] && String(r[3]) !== String(r[4] || ''),
-        psychology: !!r[5] && String(r[5]) !== String(r[6] || '')
-      };
-    }
-  }
-  return empty;
 }
 
 function getReportVersion_(phoneRaw, kindRaw) {
@@ -2212,10 +1985,6 @@ function getParentUnreadState(phoneRaw, parentSessionRaw) {
   } catch (e) {
     return { ok: false, message: String(e && e.message || e) };
   }
-  if (!reportStateUsesD1_()) {
-    const chat=hasUnreadEducatorMessages(phoneRaw);
-    return {ok:true,hasUnread:!!(chat&&chat.ok&&chat.hasUnread),reportUnread:getLegacyReportUnreadStatus_(phoneRaw)};
-  }
   const worker=getD1ParentUnreadState_(phoneRaw);
   return {ok:true,hasUnread:!!(worker&&worker.hasUnread),reportUnread:worker&&worker.reportUnread||{morning:false,evening:false,psychology:false}};
 }
@@ -2225,11 +1994,6 @@ function markReportAsRead(phoneRaw, kindRaw, expectedVersionRaw, parentSessionRa
   const kind = String(kindRaw || '').toLowerCase();
   if (!phone10 || !['morning','evening','psychology'].includes(kind)) return { ok: false, message: 'Некорректный отчёт.' };
   requireParentAccess_(phone10, parentSessionRaw);
-  if (!reportStateUsesD1_()) {
-    const pair={morning:[3,4],evening:[5,6],psychology:[7,8]}[kind],lock=LockService.getScriptLock();
-    lock.waitLock(15000);
-    try{const sh=ensureReportStateSheet_(),last=sh.getLastRow();if(last<2)return {ok:true};const phones=sh.getRange(2,2,last-1,1).getValues().flat(),index=phones.findIndex(value=>last10_(value)===phone10);if(index<0)return {ok:true};const current=sh.getRange(index+2,pair[0]).getValue(),expected=String(expectedVersionRaw||'');if(expected&&String(current||'')!==expected)return {ok:true,skipped:true};if(current)sh.getRange(index+2,pair[1]).setValue(current);return {ok:true};}finally{lock.releaseLock();}
-  }
   try { return markD1ParentReportRead_(phone10,kind,String(expectedVersionRaw||'')); }
   catch(e) { return {ok:false,message:String(e&&e.message||e)}; }
 }
@@ -2396,81 +2160,24 @@ function getReportChildDeletionPreview(phoneRaw, tutorTokenRaw) {
   }
 }
 
-function ensureReportInactivityStateSheet_() {
-  if(reportStateUsesD1_())throw new Error('Состояние напоминаний находится в D1; лист больше не используется.');
-  const ss=getSpreadsheet_();let sh=ss.getSheetByName(REPORT_INACTIVITY_STATE_SHEET_NAME);
-  if(!sh){sh=ss.insertSheet(REPORT_INACTIVITY_STATE_SHEET_NAME);sh.getRange(1,1,1,4).setValues([['PHONE10','LAST_NEW_REPORT_AT','FIRST_SEEN_AT','LAST_PROMPT_DAYS']]);sh.hideSheet();}
-  return sh;
-}
-
-function migrateReportNotificationStateToD1() {
-  const props=PropertiesService.getScriptProperties();
-  if(reportStateUsesD1_())return {ok:true,alreadyMigrated:true};
-  const reportVersions=d1AdminRequest_('/admin/report-current/versions','get').versions||[],versionByPhoneKind={};
-  reportVersions.forEach(item=>{const phone=last10_(item.phone),kind=String(item.kind||'').toLowerCase();if(phone&&kind)versionByPhoneKind[phone+'|'+kind]=String(item.version||'');});
-  const reportSheet=ensureReportStateSheet_();if(reportSheet.getLastRow()<2)initializeReportNotificationState_();
-  const count=Math.max(reportSheet.getLastRow()-1,0),reportRows=count?reportSheet.getRange(2,1,count,11).getValues():[],items=[];
-  reportRows.forEach(row=>{const phone=last10_(row[1]||row[0]);if(!phone)return;[['morning',2,3],['evening',4,5],['psychology',6,7]].forEach(pair=>{const expectedVersion=versionByPhoneKind[phone+'|'+pair[0]]||'';if(expectedVersion)items.push({phone,kind:pair[0],unread:!!row[pair[1]]&&String(row[pair[1]])!==String(row[pair[2]]||''),expectedVersion});});});
-  const date=Utilities.formatDate(new Date(),'Europe/Moscow','yyyyMMdd'),suffix=Utilities.getUuid().replace(/-/g,'').slice(0,8);
-  const readState=d1AdminRequest_('/admin/report-read-state/import','post',{importId:'report-state-v1-'+date+'-'+suffix,items});
-  if(!readState.alreadyImported&&(Number(readState.received||0)!==items.length||Number(readState.verified||0)!==items.length))throw new Error('Не все отметки прочтения совпали с текущими версиями отчётов. Повторите запуск.');
-  const stateSheet=ensureReportInactivityStateSheet_(),stateCount=Math.max(stateSheet.getLastRow()-1,0),stateRows=stateCount?stateSheet.getRange(2,1,stateCount,4).getValues():[],byPhone={};
-  stateRows.forEach(row=>{const phone=last10_(row[0]);if(phone)byPhone[phone]=row;});
-  const data=getDataSheet_(),rosterCount=data?Math.max(data.getLastRow()-1,0):0,phones=rosterCount?data.getRange(2,1,rosterCount,1).getValues().flat():[],now=Date.now();
-  const inactivity=phones.map((raw,index)=>{const phone=last10_(raw),row=byPhone[phone]||[];return phone?{phone,hasNewReport:false,lastNewReportAt:row[1] instanceof Date?row[1].getTime():Number(row[1]||0),firstSeenAt:row[2] instanceof Date?row[2].getTime():Number(row[2]||now),lastPromptDays:Number(row[3]||0),rosterOrder:index}:null;}).filter(Boolean);
-  const inactivityState=d1AdminRequest_('/admin/report-inactivity/sync','post',{mode:'import',items:inactivity});
-  if(Number(inactivityState.received||0)!==inactivity.length)throw new Error('Импорт напоминаний завершился не полностью. Повторите запуск.');
-  props.setProperty('REPORT_STATE_D1_CUTOVER','true');
-  return {ok:true,reportVersions:reportVersions.length,readCandidates:items.length,inactivityCandidates:inactivity.length,cutover:true};
-}
-
 function syncReportInactivityState_(updates) {
-  if(!reportStateUsesD1_())return syncLegacyReportInactivityState_(updates);
   const list=(updates||[]).map((item,index)=>{const phone=last10_(item&&item.phone);return phone&&item.hasNewReport===true?{phone,hasNewReport:true,rosterOrder:index}:null;}).filter(Boolean);
   if(!list.length)return {ok:true,skipped:true};
   return d1AdminRequest_('/admin/report-inactivity/sync','post',{items:list});
 }
 
-function syncLegacyReportInactivityState_(updates) {
-  if(reportStateUsesD1_())return {ok:true,skipped:true};
-  const sh=ensureReportInactivityStateSheet_(),now=new Date(),last=sh.getLastRow(),rows=last>=2?sh.getRange(2,1,last-1,4).getValues():[],byPhone={};
-  rows.forEach((row,index)=>{const phone=last10_(row[0]);if(phone)byPhone[phone]=index;});
-  (updates||[]).forEach(update=>{const phone=last10_(update&&update.phone);if(!phone)return;const index=byPhone[phone];if(index===undefined){byPhone[phone]=rows.length;rows.push([phone,update.hasNewReport?now:'',now,'']);}else if(update.hasNewReport){rows[index][1]=now;rows[index][3]='';}});
-  if(last>=2)sh.getRange(2,1,last-1,4).clearContent();if(rows.length)sh.getRange(2,1,rows.length,4).setValues(rows);
-}
-
-function removeReportInactivityState_(phoneRaw) {
-  if(reportStateUsesD1_())return {ok:true,phone:last10_(phoneRaw)};
-  const phone=last10_(phoneRaw);if(!phone)return;const sh=ensureReportInactivityStateSheet_(),last=sh.getLastRow();if(last<2)return;const phones=sh.getRange(2,1,last-1,1).getValues().flat();for(let i=phones.length-1;i>=0;i--)if(last10_(phones[i])===phone)sh.deleteRow(i+2);
-}
-
 function getReportInactivityReminder(tutorTokenRaw) {
-  try{requireTutorSession_(tutorTokenRaw);if(reportStateUsesD1_())return d1EducatorWorkerRequest_('/lab/report-inactivity','get');return getLegacyReportInactivityReminder_(tutorTokenRaw);}
+  try{requireTutorSession_(tutorTokenRaw);return d1EducatorWorkerRequest_('/lab/report-inactivity','get');}
   catch(e){return {ok:false,message:'Не удалось проверить напоминания: '+String(e&&e.message||e)};}
-}
-
-function getLegacyReportInactivityReminder_(tutorTokenRaw) {
-  const data=getDataSheet_(),count=data?Math.max(data.getLastRow()-1,0):0;if(!count)return {ok:true,reminder:null};
-  const rows=data.getRange(2,1,count,4).getValues(),names=normalizeReportChildNames_(data,rows.map(r=>String(r[2]||'').trim()),rows.map(r=>String(r[3]||'').trim()));
-  syncLegacyReportInactivityState_(rows.map(row=>({phone:row[0],hasNewReport:false})));
-  const sh=ensureReportInactivityStateSheet_(),n=Math.max(sh.getLastRow()-1,0),states=n?sh.getRange(2,1,n,4).getValues():[],map={};states.forEach(row=>{const phone=last10_(row[0]);if(phone)map[phone]=row;});
-  const now=Date.now(),candidates=[];rows.forEach((row,index)=>{const phone=last10_(row[0]),state=map[phone];if(!phone||!state)return;const days=Math.floor((now-new Date(state[1]||state[2]).getTime())/86400000),tier=days>=21?21:days>=7?7:days>=3?3:0;if(tier&&tier>Number(state[3]||0))candidates.push({phone:normalizePhone_(row[0]),childName:names[index]||'Без имени ребёнка',days,tier,index});});
-  candidates.sort((a,b)=>b.index-a.index);return {ok:true,reminder:candidates[0]||null};
 }
 
 function acknowledgeReportInactivityReminder(phoneRaw,tierRaw,expectedLastReportAtRaw,expectedFirstSeenAtRaw,tutorTokenRaw) {
   try{
     if(tutorTokenRaw===undefined&&expectedFirstSeenAtRaw===undefined&&typeof expectedLastReportAtRaw==='string'){tutorTokenRaw=expectedLastReportAtRaw;expectedLastReportAtRaw=undefined;}
     requireTutorSession_(tutorTokenRaw);
-    if(!reportStateUsesD1_())return acknowledgeLegacyReportInactivityReminder_(phoneRaw,tierRaw,tutorTokenRaw);
     if(expectedLastReportAtRaw===undefined){const current=d1EducatorWorkerRequest_('/lab/report-inactivity','get').reminder;if(!current||last10_(current.phone)!==last10_(phoneRaw)||Number(current.tier)!==Number(tierRaw))return {ok:false,message:'Напоминание уже изменилось.'};expectedLastReportAtRaw=current.lastNewReportAt;expectedFirstSeenAtRaw=current.firstSeenAt;}
     return d1EducatorWorkerRequest_('/lab/report-inactivity/ack','post',{phone:last10_(phoneRaw),tier:Number(tierRaw),expectedLastNewReportAt:Number(expectedLastReportAtRaw||0),expectedFirstSeenAt:Number(expectedFirstSeenAtRaw||0)});
   }catch(e){return {ok:false,message:'Не удалось отметить напоминание: '+String(e&&e.message||e)};}
-}
-
-function acknowledgeLegacyReportInactivityReminder_(phoneRaw,tierRaw,tutorTokenRaw) {
-  try{requireTutorSession_(tutorTokenRaw);const phone=last10_(phoneRaw),tier=Number(tierRaw||0);if(!phone||!tier)return {ok:false,message:'Не удалось отметить напоминание.'};const sh=ensureReportInactivityStateSheet_(),last=sh.getLastRow();if(last<2)return {ok:false,message:'Напоминание не найдено.'};const phones=sh.getRange(2,1,last-1,1).getValues().flat(),index=phones.findIndex(value=>last10_(value)===phone);if(index<0)return {ok:false,message:'Напоминание не найдено.'};sh.getRange(index+2,4).setValue(tier);return {ok:true};}
-  catch(e){return {ok:false,message:'Не удалось отметить напоминание: '+String(e&&e.message||e)};}
 }
 
 function deletionProfileMatchesExpected_(row, expectedRaw) {
@@ -4641,7 +4348,6 @@ function distributeChildReports(triggerKindRaw) {
     if (triggerKind === kind || reportHistoryPublicationMatches_(kind, reportDate)) changedPublications.push(kind);
   });
   postCommitSync = {
-    notificationUpdates: buildReportUpdatesByPhone_(reportPhones, morningOut, eveningOut),
     inactivityUpdates: inactivityUpdates,
     changedPublications: changedPublications
   };
@@ -4649,10 +4355,6 @@ function distributeChildReports(triggerKindRaw) {
   // Сетевые вызовы выполняются после освобождения блокировки записи в отчёты.
   // Если синхронизация задержится, D1 принимает публикации только по версии.
   if (postCommitSync) {
-    if (!reportStateUsesD1_()) {
-      try { syncReportNotificationState_(postCommitSync.notificationUpdates, true); }
-      catch (error) { Logger.log('REPORT_NOTIFICATION_SYNC_AFTER_DISTRIBUTION_FAILED ' + (error && error.message || error)); }
-    }
     try { syncReportInactivityState_(postCommitSync.inactivityUpdates); }
     catch (error) { Logger.log('REPORT_INACTIVITY_SYNC_AFTER_DISTRIBUTION_FAILED ' + (error && error.message || error)); }
     try {
