@@ -98,17 +98,17 @@
     parentName=String(safeGet(PARENT_KEY)||'').trim();
     childName=String(safeGet(CHILD_KEY)||'').trim();
     parentSession=safeGet(PARENT_SESSION_KEY);if(!parentSession){clearSession();$('phoneInputAuth').value=ph;showAuth();return}syncPushIdentity();
-    let savedAuth=parentSession;
-    await renewSavedParentSession();savedAuth=parentSession;
+    const restoreRun=flowRun;
+    renewSavedParentSession();
     await Promise.resolve(window.MedsiAssistantReady);
-    if(currentPhone!==ph||parentSession!==savedAuth)return;
+    if(currentPhone!==ph||flowRun!==restoreRun)return;
     showChoose();
     try{if(await refreshProfileFromD1()){prewarmAll();refreshChatUnreadFromD1();return}}catch(_){/* fall back to the authoritative Apps Script check below */}
     const lastBootstrap=Number(safeGet(BOOTSTRAP_CHECK_KEY)||0);
     if(lastBootstrap&&Date.now()-lastBootstrap<15*60*1000){prewarmAll();return}
     try{
       const res=await callApi('getParentBootstrap',[ph,parentSession],12000);
-      if(currentPhone!==ph||parentSession!==savedAuth)return;
+      if(currentPhone!==ph||flowRun!==restoreRun)return;
       if(!applyBootstrap(res)){if(res&&res.code==='NOT_FOUND'){clearSession();$('phoneInputAuth').value=ph;showAuth();}return}
       safeSet(BOOTSTRAP_CHECK_KEY,String(Date.now()));
       setChips();
