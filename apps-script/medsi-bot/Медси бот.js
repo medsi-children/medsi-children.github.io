@@ -4215,11 +4215,11 @@ function redistributeChildReportKindMaintenanceCore_(kindRaw) {
     dataSheet,
     count
   );
-  const knownBaseKeys = buildKnownBaseKeys_(children);
   const contextByBase = buildDistributionContext_(children, []);
-  const parsed = parseReportBlocks_(getLatestReport(sourceSheet, 1) || '', knownBaseKeys, contextByBase);
-  const distribution = applyRawReportOwnershipGuard_(kind, parsed, contextByBase,
-    buildSafeDistribution_(kind, parsed, contextByBase),
+  const plan = computeReportKindPlan_(kind, getLatestReport(sourceSheet, 1) || '', children, contextByBase);
+  if (!plan.ok) return plan;
+  const distribution = applyRawReportOwnershipGuard_(kind, plan.parsed, contextByBase,
+    plan.distribution,
     dataSheet.getRange(2, kind === 'morning' ? 5 : 6, count, 1).getValues().map(function(row) { return row[0]; }), false);
   const MISSING = 'Пока ещё нет отчёта 🙏';
   const output = buildReportRowValues_(baseNames, distribution.byRow, MISSING);
@@ -4520,16 +4520,15 @@ function distributeChildReports(triggerKindRaw) {
     dataSheet,
     count
   );
-  const knownBaseKeys = buildKnownBaseKeys_(children);
-
   const contextByBase = buildDistributionContext_(children, []);
-  const parsedMorning = parseReportBlocks_(morningText, knownBaseKeys, contextByBase);
-  const parsedEvening = parseReportBlocks_(eveningText, knownBaseKeys, contextByBase);
+  const morningPlan = computeReportKindPlan_('morning', morningText, children, contextByBase);
+  const eveningPlan = computeReportKindPlan_('evening', eveningText, children, contextByBase);
+  if (!morningPlan.ok || !eveningPlan.ok) return;
 
-  const morningDistribution = applyRawReportOwnershipGuard_('morning', parsedMorning, contextByBase,
-    buildSafeDistribution_('morning', parsedMorning, contextByBase), previousReports.map(function(row) { return row[0]; }), false);
-  const eveningDistribution = applyRawReportOwnershipGuard_('evening', parsedEvening, contextByBase,
-    buildSafeDistribution_('evening', parsedEvening, contextByBase), previousReports.map(function(row) { return row[1]; }), false);
+  const morningDistribution = applyRawReportOwnershipGuard_('morning', morningPlan.parsed, contextByBase,
+    morningPlan.distribution, previousReports.map(function(row) { return row[0]; }), false);
+  const eveningDistribution = applyRawReportOwnershipGuard_('evening', eveningPlan.parsed, contextByBase,
+    eveningPlan.distribution, previousReports.map(function(row) { return row[1]; }), false);
 
   const MISSING = "Пока ещё нет отчёта 🙏";
   const morningOut = buildReportRowValues_(baseNames, morningDistribution.byRow, MISSING);

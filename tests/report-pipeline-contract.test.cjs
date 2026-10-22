@@ -53,6 +53,19 @@ test('roster permutations cannot redirect reports or grow ownership on a repeate
     first.forEach(([phone,,text])=>{assert.notEqual(text,missing);if(expected.has(phone))assert.equal(text,expected.get(phone));else expected.set(phone,text)});
   }
 });
+test('shared kind planner is repeatable and has no Sheets or ownership side effects',()=>{
+  const f=fixture([{name:'Екатерина Г',family:'Громова',phone:'89990000001'}]);
+  const children=f.context.buildReportValidationChildren_();
+  const contextByBase=f.context.buildDistributionContext_(children,[]);
+  const before=[...f.properties];
+  const first=f.context.computeReportKindPlan_('morning','Катя Г: Синтетический текст.',children,contextByBase);
+  const second=f.context.computeReportKindPlan_('morning','Катя Г: Синтетический текст.',children,contextByBase);
+  assert.equal(first.ok,true);
+  assert.deepEqual(JSON.parse(JSON.stringify(first.distribution)),JSON.parse(JSON.stringify(second.distribution)));
+  assert.deepEqual([...f.properties],before);
+  assert.deepEqual(f.writes,[]);
+  assert.equal(f.context.computeReportKindPlan_('night','',children,contextByBase).ok,false);
+});
 test('discharge followed by a namesake arrival stays blocked through both complete writers',()=>{
   const old={name:'Саша Б',family:'Бурова',phone:'89990000001'};
   for(const maintenance of [false,true]){

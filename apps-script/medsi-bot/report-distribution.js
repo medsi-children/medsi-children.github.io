@@ -11,3 +11,15 @@ function buildReportRowValues_(storedNamesRaw, assignedRowsRaw, missingTextRaw) 
     return [prepareReportForParent_(assigned, storedName, cleanName)];
   });
 }
+
+// Pure calculation shared by publication and directory maintenance. Callers
+// still apply the persisted ownership guard and own all Sheets/Worker effects.
+function computeReportKindPlan_(kindRaw, rawText, childrenRaw, contextByBase) {
+  const kind = String(kindRaw || '').toLowerCase();
+  if (kind !== 'morning' && kind !== 'evening') return { ok:false, message:'Неизвестный вид отчёта.' };
+  const children = Array.isArray(childrenRaw) ? childrenRaw : [];
+  const knownBaseKeys = buildKnownBaseKeys_(children);
+  const parsed = parseReportBlocks_(String(rawText || ''), knownBaseKeys, contextByBase || {});
+  const distribution = buildSafeDistribution_(kind, parsed, contextByBase || {});
+  return { ok:true, kind:kind, parsed:parsed, distribution:distribution };
+}
