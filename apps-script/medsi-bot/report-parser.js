@@ -264,15 +264,17 @@ function isPotentialUnassignedReportHeader_(header) {
 }
 
 function normalizeReportBlockBody_(bodyRaw) {
-  // Переносы нужны только пока мы ищем границы блоков. В самом отчёте для
-  // родителя они не несут отдельного смысла и могут появиться из-за вставки
-  // текста воспитателем, поэтому превращаем их в обычные пробелы.
-  const flattened = String(bodyRaw || '')
-    .replace(/[ \t]*\n[ \t]*/g, ' ')
-    .replace(/[ \t]{2,}/g, ' ')
+  // Сохраняем смысловые переносы воспитателя и исправляем знаки отдельно
+  // в каждой строке, чтобы текст не слипался в один абзац.
+  return String(bodyRaw || '')
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .split('\n')
+    .map(function(line) {
+      return normalizeReportBlockPunctuation_(line.replace(/[ \t]{2,}/g, ' '));
+    })
+    .join('\n')
+    .replace(/^\n+|\n+$/g, '')
     .trim();
-
-  return normalizeReportBlockPunctuation_(flattened);
 }
 
 function normalizeReportBlockPunctuation_(text) {
@@ -284,6 +286,12 @@ function normalizeReportBlockPunctuation_(text) {
     .replace(/,(?=[А-Яа-яЁёA-Za-z])/g, ', ')
     .replace(/([а-яёa-z])\.([А-ЯЁA-Z])/gu, '$1. $2')
     .trim();
+}
+
+function normalizeReportSourcePunctuation_(text) {
+  // Форматируем текст при сохранении в сырой лист, не меняя количество и
+  // расположение переносов строк.
+  return String(text || '').split('\n').map(normalizeReportBlockPunctuation_).join('\n');
 }
 
 function parseReportBlocks_(text, knownBaseKeys, contextByBase) {

@@ -1556,6 +1556,8 @@ function appendReport(param, tutorTokenRaw) {
       if (!prepared.ok) return prepared.validation;
       text = prepared.text;
       reportValidation = prepared.validation;
+    } else {
+      text = normalizeReportSourcePunctuation_(text);
     }
 
     submissionId = normalizeReportSubmissionId_(param && param.submissionId);
@@ -3912,6 +3914,8 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
     next = next.slice(candidates[0].start).replace(/^\s+/, '');
     preambleRemoved = true;
   }
+
+  next = normalizeReportSourcePunctuation_(next);
 
   return {
     text:next,

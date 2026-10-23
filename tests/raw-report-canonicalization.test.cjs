@@ -68,6 +68,21 @@ test('canonicalizer normalizes initial punctuation and delimiter without touchin
   });
 });
 
+test('report submission repairs comma spacing while preserving meaningful line breaks', () => {
+  const x = api();
+  const lisa = child(x, 'Лиза', 'Федорова', '89990000001');
+  const raw = 'Лиза Ф: Утром играла ,общалась.\nПосле обеда читала ,отдыхала.';
+  const result = x.canonicalizeRawChildReport_(raw, { children:[lisa] });
+
+  assert.equal(
+    result.text,
+    'Лиза Ф. — Утром играла, общалась.\nПосле обеда читала, отдыхала.'
+  );
+
+  const parsed = x.parseReportBlocks_(result.text, x.buildKnownBaseKeys_([lisa]), x.buildDistributionContext_([lisa], []));
+  assert.equal(parsed.blocks[0].body, 'Утром играла, общалась.\nПосле обеда читала, отдыхала.');
+});
+
 test('room number before a child header is removed without consuming the name separator', () => {
   const x = api();
   const lisa = child(x, 'Лиза', 'Федорова', '89990000001');
@@ -338,7 +353,7 @@ test('room cleanup preserves multiline child content and removes only separate l
   assert.equal(prepared.ok,true);
   const parsed=x.parseReportBlocks_(prepared.text,x.buildKnownBaseKeys_(children),x.buildDistributionContext_(children,[]));
   assert.match(parsed.blocks[0].body,/комнату 502:/);
-  assert.match(parsed.blocks[0].body,/504 Это число/);
+  assert.match(parsed.blocks[0].body,/504\nЭто число/);
   assert.match(parsed.blocks[1].body,/палату 507/);
   assert.match(parsed.blocks[1].body,/509$/);
 });
@@ -375,6 +390,16 @@ test('web and manual sheet edits share structural rules and allow correctable fo
   assert.equal(result.ok,false);
   assert.match(note,/повторяется/);
   assert.equal(cell.getValue(),raw);
+
+  let saved='';
+  const correctable='Лена Т: Была активна ,играла.\nПосле обеда отдыхала ,читала.';
+  const validCell={getValue:()=>correctable,setNote(){},clearNote(){}};
+  x.getLatestReportCell_=()=>validCell;
+  x.saveRawReportPublication_=(kind,target,text)=>{saved=text;return true;};
+  x.distributeChildReports=()=>{};
+  const edited=x.processRawReportSourceEdit_('morning',{});
+  assert.equal(edited.ok,true);
+  assert.equal(saved,'Лена Т. — Была активна, играла.\nПосле обеда отдыхала, читала.');
 });
 
 
