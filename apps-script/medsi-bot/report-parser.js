@@ -264,8 +264,19 @@ function isPotentialUnassignedReportHeader_(header) {
 }
 
 function normalizeReportBlockBody_(bodyRaw) {
-  // Сохраняем смысловые переносы воспитателя и исправляем знаки отдельно
-  // в каждой строке, чтобы текст не слипался в один абзац.
+  // Стабильная форма для сравнений и ключей защиты. Не менять способ
+  // склейки переносов: от него зависят уже сохранённые записи владельцев.
+  const flattened = String(bodyRaw || '')
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .replace(/\n+/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+
+  return normalizeReportBlockPunctuation_(flattened);
+}
+
+function formatReportBlockBody_(bodyRaw) {
+  // Для показа сохраняем смысловые переносы, отдельно поправляя каждую строку.
   return String(bodyRaw || '')
     .replace(/[ \t]*\n[ \t]*/g, '\n')
     .split('\n')
@@ -343,7 +354,7 @@ function parseReportBlocks_(text, knownBaseKeys, contextByBase) {
 
   for (let i = 0; i < uniqueParts.length; i++) {
     const bodyEnd = (i + 1 < uniqueParts.length) ? uniqueParts[i + 1].start : clean.length;
-    const body = normalizeReportBlockBody_(clean.slice(uniqueParts[i].bodyStart, bodyEnd));
+    const body = formatReportBlockBody_(clean.slice(uniqueParts[i].bodyStart, bodyEnd));
     const header = uniqueParts[i].header;
 
     blocks.push({

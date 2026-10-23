@@ -81,6 +81,10 @@ test('report submission repairs comma spacing while preserving meaningful line b
 
   const parsed = x.parseReportBlocks_(result.text, x.buildKnownBaseKeys_([lisa]), x.buildDistributionContext_([lisa], []));
   assert.equal(parsed.blocks[0].body, 'Утром играла, общалась.\nПосле обеда читала, отдыхала.');
+  assert.equal(
+    x.normalizeReportBlockBody_(parsed.blocks[0].body),
+    x.normalizeReportBlockBody_('Утром играла, общалась. После обеда читала, отдыхала.')
+  );
 });
 
 test('room number before a child header is removed without consuming the name separator', () => {
