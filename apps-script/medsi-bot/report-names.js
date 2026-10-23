@@ -4,10 +4,11 @@
 function loadNameEquivalents_() {
   const dict = {};
   const canon = {};
+  const preferred = {};
   const sheet = getSheet_('NAME_VARIANTS');
   if (!sheet) {
     Logger.log('⚠️ Лист NAME_VARIANTS не найден');
-    return { dict, canon };
+    return { dict, canon, preferred };
   }
 
   const data = sheet.getDataRange().getValues();
@@ -16,10 +17,12 @@ function loadNameEquivalents_() {
     const canonRaw = String(data[i][0] || '');
     const variantsRaw = String(data[i][1] || '');
     addNameVariantRow_(dict, canon, canonRaw, variantsRaw);
+    const canonKey = normalizeName_(canonRaw);
+    if (canonKey && !preferred[canonKey]) preferred[canonKey] = canonRaw.trim();
   }
 
   Logger.log(`📖 Загружено ${Object.keys(dict).length} групп вариантов имён`);
-  return { dict, canon };
+  return { dict, canon, preferred };
 }
 
 function ensureNameEquivalentsLoaded_() {
@@ -27,6 +30,7 @@ function ensureNameEquivalentsLoaded_() {
   NAME_DATA = loadNameEquivalents_();
   NAME_EQUIVALENTS = NAME_DATA.dict;
   CANON_NAME_MAP = NAME_DATA.canon;
+  PREFERRED_NAME_MAP = NAME_DATA.preferred || {};
 }
 
 // Historical helper kept for compatibility. NAME_VARIANTS is now matching-only:
@@ -39,6 +43,18 @@ function canonizeChildName_(fullName) {
   const suf  = getSuffixToken_(raw);
 
   return suf ? `${base} ${suf}` : base;
+}
+
+// First column of NAME_VARIANTS is the preferred spelling for raw report
+// headings. It is a display choice only; every listed form remains equivalent
+// for matching, and the registered name stays in REPORTS/parent views.
+function getPreferredNameVariant_(nameRaw) {
+  ensureNameEquivalentsLoaded_();
+  const key = normalizeName_(stripInitialFromName_(nameRaw));
+  const groupKey = CANON_NAME_MAP && CANON_NAME_MAP[key] || key;
+  return PREFERRED_NAME_MAP && PREFERRED_NAME_MAP[groupKey]
+    ? String(PREFERRED_NAME_MAP[groupKey]).trim()
+    : '';
 }
 
 function normRu(s) {

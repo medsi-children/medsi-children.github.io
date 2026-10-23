@@ -703,6 +703,7 @@ function addNameVariantRow_(dict, canon, canonRaw, variantsRaw) {
 let NAME_DATA = null;
 let NAME_EQUIVALENTS = {};
 let CANON_NAME_MAP = {};
+let PREFERRED_NAME_MAP = {};
 
 
 function isInNameBase(nameNorm) {
@@ -807,7 +808,7 @@ function smartRegisterFromInboxCore_(phoneRaw, parentNameRaw, childNameRaw, defe
   sh.appendRow([
     phone,
     parentFirst,
-    addFamilyInitialToName_(childFirst, familyForStore),
+    childFirst,
     familyForStore,
     '',
     '',
@@ -2921,15 +2922,26 @@ function getFamilyInitialSuffix_(familyRaw) {
   return m ? m[1].toUpperCase() : '';
 }
 
+function stripStoredFamilyQualifier_(nameRaw, familyRaw) {
+  const name = String(nameRaw || '').trim();
+  if (!name) return '';
+  const suffix = getSuffixToken_(name);
+  const familyKey = normalizeFamilyName_(familyRaw);
+  const suffixKey = normalizeSuffixKey_(suffix);
+  // C may still contain a legacy initial or a short surname prefix. Remove it
+  // only when D proves it belongs to this child's surname. This also keeps
+  // compound first names and unrelated trailing words intact.
+  if (suffix && suffixKey.length <= 4 && familyKey && familyKey.indexOf(suffixKey) === 0) {
+    return stripInitialFromName_(name) || name;
+  }
+  return name;
+}
+
 function normalizeReportChildName_(nameRaw, familyRaw) {
   const name = String(nameRaw || '').trim();
   if (!name) return '';
-
-  // Preserve the first name exactly as stored in REPORTS. NAME_VARIANTS only
-  // decides whether another spelling can match this child during distribution.
-  const baseName = stripInitialFromName_(name) || name;
-  const suffix = getSuffixToken_(name) || getFamilyInitialSuffix_(familyRaw);
-
+  const baseName = stripStoredFamilyQualifier_(name, familyRaw) || name;
+  const suffix = getFamilyInitialSuffix_(familyRaw);
   return suffix ? `${baseName} ${suffix}` : baseName;
 }
 
@@ -2939,19 +2951,9 @@ function addFamilyInitialToName_(nameRaw, familyRaw) {
 
 function normalizeReportChildNames_(dataSheet, names, families) {
   if (!dataSheet || !names || !names.length) return names;
-
-  let changed = false;
-  const nextNames = names.map((name, index) => {
-    const nextName = normalizeReportChildName_(name, families[index]);
-    if (nextName && nextName !== name) changed = true;
-    return nextName || name;
-  });
-
-  if (changed) {
-    dataSheet.getRange(2, 3, nextNames.length, 1).setValues(nextNames.map(name => [name]));
-  }
-
-  return nextNames;
+  // This helper builds the report-matching form in memory. Never rewrite C as
+  // a side effect of report distribution; C stores the registered first name.
+  return names.map((name, index) => normalizeReportChildName_(name, families[index]) || name);
 }
 
 function escapeRegExp_(s) {
@@ -3552,14 +3554,16 @@ function formatRawReportNameToken_(valueRaw) {
     .join('');
 }
 
-function canonicalRawReportLabelForChild_(child, contextByBase) {
+function canonicalRawReportLabelForChild_(child, contextByBase, sourceNameRaw) {
   if (!child) return '';
 
-  // Canonical raw formatting follows the registered display spelling, not the
-  // orientation name in NAME_VARIANTS.
-  const baseName = formatRawReportNameToken_(
-    stripInitialFromName_(child.fullName || child.baseName) || child.baseName || child.fullName
-  );
+  // For raw headings, use the first-column preferred form from NAME_VARIANTS.
+  // If the educator's form is not in the dictionary, keep that form. The
+  // parent-facing report continues to use the registered name from REPORTS.
+  const sourceBase = stripInitialFromName_(sourceNameRaw || '') || String(sourceNameRaw || '').trim();
+  const registeredBase = stripInitialFromName_(child.fullName || child.baseName) || child.baseName || child.fullName;
+  const preferredBase = getPreferredNameVariant_(sourceBase || registeredBase);
+  const baseName = formatRawReportNameToken_(preferredBase || sourceBase || registeredBase);
   if (!baseName) return '';
 
   const familyKey = normalizeFamilyName_(child.family || '');
@@ -3567,6 +3571,7 @@ function canonicalRawReportLabelForChild_(child, contextByBase) {
   const ctx = contextByBase && contextByBase[child.baseKey] || { registered: [] };
   const siblings = uniqueReportChildrenByIdentity_(ctx.registered || []);
 
+  let label = '';
   if (familyKey) {
     const initial = familyKey.charAt(0);
     const sameInitial = siblings.filter(function(candidate) {
@@ -3575,30 +3580,54 @@ function canonicalRawReportLabelForChild_(child, contextByBase) {
     });
 
     if (sameInitial.length <= 1) {
-      return baseName + ' ' + initial.toUpperCase() + '.';
-    }
-
-    for (let len = 2; len <= Math.min(4, familyKey.length); len += 1) {
-      const prefix = familyKey.slice(0, len);
-      const matching = uniqueReportChildrenByIdentity_(siblings.filter(function(candidate) {
-        const family = normalizeFamilyName_(candidate && candidate.family || '');
-        return family && family.indexOf(prefix) === 0;
-      }));
-      if (matching.length === 1 && reportChildIdentityKey_(matching[0]) === reportChildIdentityKey_(child)) {
-        return baseName + ' ' + formatRawReportNameToken_(prefix);
+      label = baseName + ' ' + initial.toUpperCase() + '.';
+    } else {
+      for (let len = 2; len <= Math.min(4, familyKey.length); len += 1) {
+        const prefix = familyKey.slice(0, len);
+        const matching = uniqueReportChildrenByIdentity_(siblings.filter(function(candidate) {
+          const family = normalizeFamilyName_(candidate && candidate.family || '');
+          return family && family.indexOf(prefix) === 0;
+        }));
+        if (matching.length === 1 && reportChildIdentityKey_(matching[0]) === reportChildIdentityKey_(child)) {
+          label = baseName + ' ' + formatRawReportNameToken_(prefix);
+          break;
+        }
       }
+
+      if (!label) label = baseName + ' ' + formatRawReportNameToken_(child.family || familyKey);
     }
-
-    return baseName + ' ' + formatRawReportNameToken_(child.family || familyKey);
-  }
-
-  if (suffixKey) {
-    return suffixKey.length === 1
+  } else if (suffixKey) {
+    label = suffixKey.length === 1
       ? baseName + ' ' + suffixKey.toUpperCase() + '.'
       : baseName + ' ' + formatRawReportNameToken_(child.suffix || suffixKey);
+  } else {
+    return baseName;
   }
 
-  return baseName;
+  // Changing Александр/Александра to neutral «Саша» is safe only when the
+  // resulting heading still resolves to this same child. Keep the educator's
+  // explicit form if the preferred spelling would make the block ambiguous.
+  const parsed = getReportHeaderParts_(label);
+  const resolution = resolveReportBlock_({
+    rawName:parsed.raw,
+    baseRaw:parsed.baseRaw,
+    baseKey:parsed.baseKey,
+    suffix:parsed.suffix,
+    suffixKey:parsed.suffixKey,
+    hasSuffix:parsed.hasSuffix
+  }, contextByBase || {});
+  const targets = reportResolutionTargets_(resolution);
+  if (targets.length && targets.every(function(target) {
+    return reportChildIdentityKey_(target) === reportChildIdentityKey_(child);
+  })) return label;
+
+  const fallbackBase = formatRawReportNameToken_(sourceBase || registeredBase);
+  if (!fallbackBase) return '';
+  if (familyKey) {
+    const suffix = label.slice(baseName.length).trim();
+    return fallbackBase + ' ' + suffix;
+  }
+  return fallbackBase;
 }
 
 function canonicalRawReportLabelForHeader_(header) {
@@ -3813,7 +3842,7 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
         unresolved.push(String(item.header.raw || '').trim());
         return;
       }
-      label = canonicalRawReportLabelForChild_(targets[0], currentContext);
+      label = canonicalRawReportLabelForChild_(targets[0], currentContext, item.header.baseRaw);
     } else if (
       currentResolution &&
       currentResolution.status === 'ambiguous' &&
@@ -3844,7 +3873,7 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
           currentTargets:mappedTargets
         })
       ) {
-        label = canonicalRawReportLabelForChild_(mappedTargets[0], currentContext);
+        label = canonicalRawReportLabelForChild_(mappedTargets[0], currentContext, item.header.baseRaw);
         recovered += 1;
       }
     } else if (

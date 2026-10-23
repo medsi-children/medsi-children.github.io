@@ -378,7 +378,7 @@ test('web and manual sheet edits share structural rules and allow correctable fo
 });
 
 
-test('NAME_VARIANTS matches aliases without renaming the registered display name', () => {
+test('NAME_VARIANTS uses the first column for raw display but keeps the registered parent name', () => {
   const x = api([['Владимир', 'Вова, Володя']]);
   const volodya = child(x, 'Володя', 'Сидоров', '89990000001');
   volodya.index = 0;
@@ -391,7 +391,7 @@ test('NAME_VARIANTS matches aliases without renaming the registered display name
     'Вова С: Спокойно участвовал в занятиях.',
     { children:[volodya] }
   );
-  assert.equal(prepared.text, 'Володя С. — Спокойно участвовал в занятиях.');
+  assert.equal(prepared.text, 'Владимир С. — Спокойно участвовал в занятиях.');
 
   const parsed = x.parseReportBlocks_(
     prepared.text,
@@ -400,6 +400,38 @@ test('NAME_VARIANTS matches aliases without renaming the registered display name
   );
   const distributed = x.buildSafeDistribution_('morning', parsed, context);
   assert.equal(distributed.byRow[0], 'Володя: Спокойно участвовал в занятиях.');
+});
+
+test('preferred neutral raw name keeps two Sasha aliases separated by surname while parents keep registered forms', () => {
+  const x = api([['Саша', 'Александр, Александра']]);
+  const alexander = child(x, 'Александр', 'Баженов', '89990000001');
+  const alexandra = child(x, 'Александра', 'Букачёва', '89990000002');
+  alexander.index = 0;
+  alexandra.index = 1;
+  const children = [alexander, alexandra];
+  const raw = 'Александр Ба: Текст мальчика.\nАлександра Бу: Текст девочки.';
+
+  const prepared = x.canonicalizeRawChildReport_(raw, { children });
+  assert.equal(prepared.text, 'Саша Ба — Текст мальчика.\nСаша Бу — Текст девочки.');
+  const context = x.buildDistributionContext_(children, []);
+  const parsed = x.parseReportBlocks_(prepared.text, x.buildKnownBaseKeys_(children), context);
+  const distributed = x.buildSafeDistribution_('morning', parsed, context);
+  assert.equal(distributed.byRow[0], 'Александр: Текст мальчика.');
+  assert.equal(distributed.byRow[1], 'Александра: Текст девочки.');
+});
+
+test('name without a NAME_VARIANTS entry keeps the educator spelling and still adds the surname initial', () => {
+  const x = api();
+  const childRow = child(x, 'Екатерина', 'Глотова', '89990000001');
+  const prepared = x.canonicalizeRawChildReport_('Екатерина: Текст.', { children:[childRow] });
+  assert.equal(prepared.text, 'Екатерина Г. — Текст.');
+});
+
+test('registered REPORTS name is stored without its surname initial and legacy suffix is read without writing it back', () => {
+  const x = api();
+  assert.equal(x.normalizeReportChildName_('Саша Б.', 'Баженов'), 'Саша Б');
+  assert.equal(x.normalizeReportChildNames_({}, ['Саша Б.'], ['Баженов'])[0], 'Саша Б');
+  assert.equal(x.stripStoredFamilyQualifier_('Анна-Мария', 'Баженова'), 'Анна-Мария');
 });
 
 test('NAME_VARIANTS spellings resolve by surname suffix and bare aliases stay ambiguous', () => {
