@@ -427,11 +427,14 @@ test('name without a NAME_VARIANTS entry keeps the educator spelling and still a
   assert.equal(prepared.text, 'Екатерина Г. — Текст.');
 });
 
-test('registered REPORTS name is stored without its surname initial and legacy suffix is read without writing it back', () => {
+test('legacy surname qualifier is reconstructed only for matching and never written back to REPORTS', () => {
   const x = api();
+  let writes = 0;
+  const readOnlySheet = { getRange() { return { setValues() { writes += 1; } }; } };
   assert.equal(x.normalizeReportChildName_('Саша Б.', 'Баженов'), 'Саша Б');
-  assert.equal(x.normalizeReportChildNames_({}, ['Саша Б.'], ['Баженов'])[0], 'Саша Б');
+  assert.equal(x.normalizeReportChildNames_(readOnlySheet, ['Саша Б.'], ['Баженов'])[0], 'Саша Б');
   assert.equal(x.stripStoredFamilyQualifier_('Анна-Мария', 'Баженова'), 'Анна-Мария');
+  assert.equal(writes, 0);
 });
 
 test('NAME_VARIANTS spellings resolve by surname suffix and bare aliases stay ambiguous', () => {

@@ -52,6 +52,7 @@ test('legacy registration corrects only an inherited surname; explicit surname i
     x.appendToDatabase_=()=>{};
     x.smartRegisterFromInboxCore_('89990000001','Анна Иванова',child,true);
     assert.equal(saved[0][3],expected);
+    assert.equal(saved[0][2],'Никита');
   }
 });
 test('failed report claims can retry; completed and active claims stay idempotent',()=>{
