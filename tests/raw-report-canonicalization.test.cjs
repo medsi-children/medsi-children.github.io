@@ -71,20 +71,28 @@ test('canonicalizer normalizes initial punctuation and delimiter without touchin
 test('report submission repairs comma spacing while preserving meaningful line breaks', () => {
   const x = api();
   const lisa = child(x, 'Лиза', 'Федорова', '89990000001');
-  const raw = 'Лиза Ф: Утром играла ,общалась.\nПосле обеда читала ,отдыхала.';
+  const raw = 'Лиза Ф: Утром играла ,общалась ( очень активно ).\nПосле обеда читала ,отдыхала.';
   const result = x.canonicalizeRawChildReport_(raw, { children:[lisa] });
 
   assert.equal(
     result.text,
-    'Лиза Ф. — Утром играла, общалась.\nПосле обеда читала, отдыхала.'
+    'Лиза Ф. — Утром играла, общалась (очень активно).\nПосле обеда читала, отдыхала.'
   );
 
   const parsed = x.parseReportBlocks_(result.text, x.buildKnownBaseKeys_([lisa]), x.buildDistributionContext_([lisa], []));
-  assert.equal(parsed.blocks[0].body, 'Утром играла, общалась.\nПосле обеда читала, отдыхала.');
+  assert.equal(parsed.blocks[0].body, 'Утром играла, общалась (очень активно).\nПосле обеда читала, отдыхала.');
   assert.equal(
     x.normalizeReportBlockBody_(parsed.blocks[0].body),
-    x.normalizeReportBlockBody_('Утром играла, общалась. После обеда читала, отдыхала.')
+    x.normalizeReportBlockBody_('Утром играла, общалась (очень активно). После обеда читала, отдыхала.')
   );
+
+  const masha=child(x,'Маша','Сидорова','89990000002');
+  const twoChildren=x.canonicalizeRawChildReport_(
+    'Лиза Ф: Текст первого ребёнка.\n\n\nМаша С: Текст второго ребёнка.',
+    {children:[lisa,masha]}
+  );
+  assert.equal(twoChildren.text,'Лиза Ф. — Текст первого ребёнка.\nМаша С. — Текст второго ребёнка.');
+  assert.equal(x.parseReportBlocks_(twoChildren.text,x.buildKnownBaseKeys_([lisa,masha]),x.buildDistributionContext_([lisa,masha],[])).blocks.length,2);
 });
 
 test('room number before a child header is removed without consuming the name separator', () => {

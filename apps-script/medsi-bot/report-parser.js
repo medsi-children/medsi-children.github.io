@@ -294,15 +294,21 @@ function normalizeReportBlockPunctuation_(text) {
   // регистр, тире и не трогаем десятичные числа вроде «1,5».
   return String(text || '')
     .replace(/[ \t]+([,.])/g, '$1')
+    .replace(/\([ \t]+/g, '(')
+    .replace(/[ \t]+\)/g, ')')
     .replace(/,(?=[А-Яа-яЁёA-Za-z])/g, ', ')
     .replace(/([а-яёa-z])\.([А-ЯЁA-Z])/gu, '$1. $2')
     .trim();
 }
 
 function normalizeReportSourcePunctuation_(text) {
-  // Форматируем текст при сохранении в сырой лист, не меняя количество и
-  // расположение переносов строк.
-  return String(text || '').split('\n').map(normalizeReportBlockPunctuation_).join('\n');
+  // Убираем пустые строки подряд, но оставляем один перенос между строками:
+  // заголовки детей остаются явными границами блоков.
+  return String(text || '')
+    .replace(/\n{2,}/g, '\n')
+    .split('\n')
+    .map(normalizeReportBlockPunctuation_)
+    .join('\n');
 }
 
 function parseReportBlocks_(text, knownBaseKeys, contextByBase) {
