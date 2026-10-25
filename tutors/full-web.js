@@ -247,6 +247,7 @@
     jobs.forEach(job=>{
       const item=document.createElement('div');item.className='parent-deletion-job status error';
       const label=document.createElement('span');label.textContent='Не удалось завершить удаление: '+(job.childName||displayPhone(job.phone)||'ребёнок');item.appendChild(label);
+      const reason=String(job.message||'').trim();if(reason){const detail=document.createElement('span');detail.className='parent-deletion-error-detail';detail.textContent=reason;item.appendChild(detail)}
       const retry=document.createElement('button');retry.type='button';retry.className='btn btn-teal phone-action-btn';retry.textContent='Повторить';
       retry.onclick=async()=>{retry.disabled=true;try{const session=await ensureD1Fresh();await MedsiOverlayTransport.retryParentDelete(session,job.operationId);await refreshDeletionJobs()}catch(e){retry.disabled=false;alert(String(e&&e.message||e))}};
       item.appendChild(retry);

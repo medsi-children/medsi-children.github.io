@@ -2239,10 +2239,21 @@ function createParentDeletionCheckpoint_(operationId, phone10, expectedProfile, 
   })) return { error:'RECORD_CHANGED', message:'Данные ребёнка изменились после запроса удаления; автоматическое удаление остановлено.' };
 
   const removedRows = rowIndexes.map(function(index) { return values[index]; });
+  let removedTargets = removedRows.map(rawReportChildTargetFromReportRow_).filter(Boolean);
   if (!removedRows.length) {
-    return { error:'CHECKPOINT_UNRECOVERABLE', message:'Строка REPORTS и сохранённый снимок удаления не найдены; продолжение остановлено без догадок.' };
+    // A new parent is created in D1 first; the Sheets mirror runs in the
+    // background. If an educator removes that profile before the mirror is
+    // materialized, the deletion queue still carries the parent's full child
+    // name. Use it only when it yields a name plus surname prefix; otherwise
+    // stop rather than guessing which raw-report block belongs to the child.
+    const fromRegistration = rawReportChildTargetFromProfileSnapshot_({
+      childName:String(expectedProfile && expectedProfile.childName || '').trim()
+    });
+    if (!fromRegistration) {
+      return { error:'CHECKPOINT_UNRECOVERABLE', message:'Ребёнка нет в таблице, а полного имени не хватает, чтобы безопасно найти его блок в сыром отчёте.' };
+    }
+    removedTargets = [fromRegistration];
   }
-  const removedTargets = removedRows.map(rawReportChildTargetFromReportRow_).filter(Boolean);
   const activeTargets = values.filter(function(row) { return last10_(row[0]) !== phone10; })
     .map(rawReportChildTargetFromReportRow_).filter(Boolean);
   const rawTargets = rawReportTargetsNoLongerActive_(removedTargets, activeTargets);

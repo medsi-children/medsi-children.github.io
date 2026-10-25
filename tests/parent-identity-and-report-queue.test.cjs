@@ -244,6 +244,26 @@ test('parent deletion resumes raw cleanup from its operation checkpoint after RE
   const second=x.deleteReportChildByPhoneCore_('89990000001',{parentName:'Анна',childName:'Никита Иванов'},'delete_synthetic123456');
   assert.equal(second.coreComplete,true);assert.equal(second.cleanupComplete,true);assert.equal(captured[0].familyKey,'иванов');
 });
+test('D1-first registration can be safely deleted before its REPORTS mirror arrives',()=>{
+  const x=apps(),properties=new Map(),sheet={};
+  x.PropertiesService={getScriptProperties:()=>({getProperty:key=>properties.get(key)||(key==='MEDSI_SPREADSHEET_ID'?'synthetic':''),setProperty:(key,value)=>properties.set(key,value)})};
+  x.rawReportOwnershipProperty_=()=>'';
+  const created=x.createParentDeletionCheckpoint_('delete_synthetic123456','9990000001',
+    {parentName:'Тестовый родитель',childName:'Денис Фридриков'},sheet,[]);
+  assert.equal(created.error,undefined);
+  assert.deepEqual(Array.from(created.checkpoint.rowIdentity),[]);
+  assert.equal(created.checkpoint.rawTargets[0].baseKey,'денис');
+  assert.equal(created.checkpoint.rawTargets[0].familyKey,'фридриков');
+  assert.equal(created.checkpoint.steps.reports,false);
+});
+test('D1-only deletion still stops if the full child name cannot identify a surname',()=>{
+  const x=apps(),properties=new Map();
+  x.PropertiesService={getScriptProperties:()=>({getProperty:key=>properties.get(key)||(key==='MEDSI_SPREADSHEET_ID'?'synthetic':''),setProperty:(key,value)=>properties.set(key,value)})};
+  const created=x.createParentDeletionCheckpoint_('delete_synthetic654321','9990000001',
+    {parentName:'Тестовый родитель',childName:'Денис'}, {}, []);
+  assert.equal(created.error,'CHECKPOINT_UNRECOVERABLE');
+  assert.match(created.message,/полного имени не хватает/);
+});
 test('deletion without S3 attachments does not require Timeweb cleanup',()=>{
   const x=apps(),properties=new Map();
   x.PropertiesService={getScriptProperties:()=>({getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value)})};
