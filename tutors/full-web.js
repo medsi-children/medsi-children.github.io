@@ -242,30 +242,29 @@
     });
   }
   function renderDeletionJobs(rows){
-    const box=$('parentDeletionJobs');if(!box)return;box.replaceChildren();
-    const jobs=Array.isArray(rows)?rows:[];box.classList.toggle('hidden',!jobs.length);
+    const box=$('parentDeletionJobs');if(!box||typeof box.replaceChildren!=='function')return;box.replaceChildren();
+    const jobs=Array.isArray(rows)?rows.filter(job=>job.status==='failed'):[];box.classList.toggle('hidden',!jobs.length);
     jobs.forEach(job=>{
-      const item=document.createElement('div');item.className='parent-deletion-job status '+(job.status==='failed'?'error':'');
-      const label=document.createElement('span');label.textContent=(job.status==='failed'?'Не удалось завершить удаление: ':'Удаление выполняется: ')+(job.childName||displayPhone(job.phone)||'ребёнок');item.appendChild(label);
-      if(job.status==='failed'){
-        const retry=document.createElement('button');retry.type='button';retry.className='btn btn-teal phone-action-btn';retry.textContent='Повторить';
-        retry.onclick=async()=>{retry.disabled=true;try{const session=await ensureD1Fresh();await MedsiOverlayTransport.retryParentDelete(session,job.operationId);await refreshDeletionJobs()}catch(e){retry.disabled=false;alert(String(e&&e.message||e))}};
-        item.appendChild(retry);
-      }
+      const item=document.createElement('div');item.className='parent-deletion-job status error';
+      const label=document.createElement('span');label.textContent='Не удалось завершить удаление: '+(job.childName||displayPhone(job.phone)||'ребёнок');item.appendChild(label);
+      const retry=document.createElement('button');retry.type='button';retry.className='btn btn-teal phone-action-btn';retry.textContent='Повторить';
+      retry.onclick=async()=>{retry.disabled=true;try{const session=await ensureD1Fresh();await MedsiOverlayTransport.retryParentDelete(session,job.operationId);await refreshDeletionJobs()}catch(e){retry.disabled=false;alert(String(e&&e.message||e))}};
+      item.appendChild(retry);
       box.appendChild(item);
     });
   }
   async function refreshDeletionJobs(){
+    if(deletionStatusTimer){clearTimeout(deletionStatusTimer);deletionStatusTimer=null}
     try{
       const session=await ensureD1Fresh();const result=await MedsiOverlayTransport.parentDeletePending(session);const jobs=result&&result.operations||[];
       const activeIds=new Set(jobs.map(job=>String(job.operationId||'')));
       saveDeletionIds(savedDeletionIds().filter(id=>activeIds.has(id)));
       renderDeletionJobs(jobs);
-      if(deletionStatusTimer){clearTimeout(deletionStatusTimer);deletionStatusTimer=null}
-      if(['screenChoose','screenPhones'].includes(document.body.dataset.screen)&&jobs.some(job=>job.status==='pending'||job.status==='retry'||job.status==='processing')){
+      const settingsOpen=!$('tutorSettingsDialog').classList.contains('hidden');
+      if((document.body.dataset.screen==='screenPhones'||settingsOpen)&&jobs.some(job=>job.status==='pending'||job.status==='retry'||job.status==='processing')){
         deletionStatusTimer=setTimeout(refreshDeletionJobs,5000);
       }
-    }catch(_){ }
+    }catch(_){renderDeletionJobs([])}
   }
   function removePhoneCardOptimistically(row,card){
     const snapshot=parentsCache.slice();
@@ -330,9 +329,10 @@
   function fillSettingsSelect(select,rows,placeholder){select.replaceChildren();const first=document.createElement('option');first.value='';first.textContent=placeholder;select.appendChild(first);rows.forEach((row,index)=>{const option=document.createElement('option');option.value=String(index);option.textContent=[row.childName||'Без имени',row.parentName?'— '+row.parentName:'',row.relationship&&row.relationship!=='Родитель'?'('+row.relationship+')':''].filter(Boolean).join(' ');select.appendChild(option)})}
   async function refreshSettings(){const status=$('previewParentStatus');status.textContent='';$('previewChildSelect').innerHTML='<option value="">Загружаем список…</option>';$('deleteChildSelect').innerHTML='<option value="">Загружаем список…</option>';try{const rows=await refreshPhones();fillSettingsSelect($('previewChildSelect'),rows,'Выберите ребёнка');fillSettingsSelect($('deleteChildSelect'),rows,'Выберите ребёнка')}catch(error){fillSettingsSelect($('previewChildSelect'),[],'Не удалось загрузить список');fillSettingsSelect($('deleteChildSelect'),[],'Не удалось загрузить список');status.textContent=String(error&&error.message||error)}}
   async function updatePushControl(){const button=$('tutorPushToggle'),status=$('tutorPushStatus');try{if(!window.MedsiPush)throw new Error('Управление уведомлениями ещё загружается.');const enabled=await MedsiPush.getEnabled();button.textContent=enabled?'Отключить уведомления':'Включить уведомления';button.dataset.enabled=enabled?'1':'0';status.textContent=Notification.permission==='denied'&&!enabled?'Разрешите уведомления в настройках браузера.':''}catch(error){button.textContent='Уведомления недоступны';button.disabled=true;status.textContent=String(error&&error.message||'Не удалось проверить уведомления.')}}
-  $('tutorSettingsOpen').addEventListener('click',()=>{settingsDialog.classList.remove('hidden');refreshSettings();updatePushControl()});
-  $('tutorSettingsClose').addEventListener('click',()=>settingsDialog.classList.add('hidden'));
-  settingsDialog.addEventListener('click',event=>{if(event.target===settingsDialog)settingsDialog.classList.add('hidden')});
+  $('tutorSettingsOpen').addEventListener('click',()=>{settingsDialog.classList.remove('hidden');refreshSettings();refreshDeletionJobs();updatePushControl()});
+  const closeSettings=()=>{settingsDialog.classList.add('hidden');if(deletionStatusTimer){clearTimeout(deletionStatusTimer);deletionStatusTimer=null}};
+  $('tutorSettingsClose').addEventListener('click',closeSettings);
+  settingsDialog.addEventListener('click',event=>{if(event.target===settingsDialog)closeSettings()});
   $('tutorPushToggle').addEventListener('click',async()=>{const button=$('tutorPushToggle');button.disabled=true;$('tutorPushStatus').textContent='';try{await MedsiPush.toggle();await updatePushControl()}catch(error){$('tutorPushStatus').textContent=String(error&&error.message||'Не удалось изменить уведомления.')}finally{button.disabled=false}});
   $('settingsDeleteChild').addEventListener('click',async()=>{const select=$('deleteChildSelect'),row=parentsCache[Number(select.value)];if(!row){alert('Сначала выберите ребёнка.');return}await deleteParent(row,null);refreshSettings()});
   $('previewParentButton').addEventListener('click',async()=>{const row=parentsCache[Number($('previewChildSelect').value)],button=$('previewParentButton'),status=$('previewParentStatus');if(!row){status.textContent='Сначала выберите ребёнка.';return}button.disabled=true;status.textContent='Открываем панель…';try{const session=await ensureD1Fresh(),response=await fetch('/lab/parent-preview',{method:'POST',headers:{'content-type':'application/json','X-Medsi-Chat-Session':session.token},body:JSON.stringify({phone:row.phone}),cache:'no-store'}),result=await response.json();if(!response.ok||!result||!result.ok)throw new Error(result&&result.message||'Не удалось открыть профиль.');sessionStorage.setItem('medsi_parent_preview_once',JSON.stringify(result));location.assign('/')}catch(error){status.textContent=String(error&&error.message||error);button.disabled=false}});

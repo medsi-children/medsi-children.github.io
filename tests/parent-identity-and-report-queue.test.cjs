@@ -448,6 +448,24 @@ test('educator frontend no longer waits for Apps Script to delete a child', () =
   assert.ok(fn.indexOf('removePhoneCardOptimistically') < fn.indexOf('await ensureD1Fresh'));
 });
 
+test('background deletion status is kept in Settings and stale status is cleared on lookup failure', () => {
+  const html=read('tutors.html');
+  const choose=html.slice(html.indexOf('<section id="screenChoose"'),html.indexOf('</section>',html.indexOf('<section id="screenChoose"')));
+  const settings=html.slice(html.indexOf('id="tutorSettingsDialog"'),html.indexOf('id="tutorQrModal"'));
+  assert.doesNotMatch(choose,/parentDeletionJobs/);
+  assert.match(settings,/id="parentDeletionJobs"/);
+  const source=read('tutors/full-web.js');
+  const start=source.indexOf('  async function refreshDeletionJobs()');
+  const end=source.indexOf('  function removePhoneCardOptimistically',start);
+  const fn=source.slice(start,end);
+  assert.match(fn,/catch\(_\)\{renderDeletionJobs\(\[\]\)\}/);
+  assert.match(fn,/settingsOpen/);
+  assert.doesNotMatch(fn,/screenChoose.*jobs\.some/);
+  const renderer=source.slice(source.indexOf('  function renderDeletionJobs('),source.indexOf('  async function refreshDeletionJobs('));
+  assert.match(renderer,/filter\(job=>job\.status==='failed'\)/);
+  assert.doesNotMatch(renderer,/Удаление выполняется/);
+});
+
 
 test('chat deletion uses a fresh educator session and keeps the child until durable acceptance', async () => {
   const source=read('chat-overlay/educator-chat.js');

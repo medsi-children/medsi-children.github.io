@@ -19,8 +19,8 @@
 
 /* Phones screen copied from the current production educator UI. */
 #screenPhones .phones-list{display:flex;flex-direction:column;gap:10px;width:100%}
-#screenPhones #parentDeletionJobs,#screenChoose #parentDeletionJobs{display:grid;gap:8px;margin:0 0 14px}
-#screenPhones .parent-deletion-job,#screenChoose .parent-deletion-job{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#screenPhones #parentDeletionJobs,#tutorSettingsDialog #parentDeletionJobs{display:grid;gap:8px;margin:14px 0 0}
+#screenPhones .parent-deletion-job,#tutorSettingsDialog .parent-deletion-job{display:flex;align-items:center;justify-content:space-between;gap:12px}
 #screenPhones .phone-card{display:block;position:relative;width:100%;text-align:left;background:#fdfefe;border:1.5px solid rgba(36,211,218,.22);border-radius:14px;padding:14px 56px 14px 16px;color:var(--fg);box-shadow:0 4px 14px rgba(36,211,218,.04);transition:opacity .28s ease,transform .28s ease,box-shadow .28s ease,border-color .28s ease,filter .28s ease}
 #screenPhones .phone-card-title{font-weight:800;margin-bottom:6px;color:var(--fg)}
 #screenPhones .phone-card-meta{color:var(--muted);font-size:.95rem;line-height:1.45;white-space:pre-line;margin-bottom:12px}
