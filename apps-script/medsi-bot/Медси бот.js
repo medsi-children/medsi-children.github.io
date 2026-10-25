@@ -2179,6 +2179,12 @@ function syncReportInactivityState_(updates) {
   return d1AdminRequest_('/admin/report-inactivity/sync','post',{items:list});
 }
 
+function removeReportInactivityState_(phoneRaw) {
+  const phone = last10_(phoneRaw);
+  if (!phone) return { ok:true, deleted:false };
+  return d1AdminRequest_('/admin/report-inactivity/remove','post',{ phone:phone });
+}
+
 function getReportInactivityReminder(tutorTokenRaw) {
   try{requireTutorSession_(tutorTokenRaw);return d1EducatorWorkerRequest_('/lab/report-inactivity','get');}
   catch(e){return {ok:false,message:'Не удалось проверить напоминания: '+String(e&&e.message||e)};}

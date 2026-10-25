@@ -42,3 +42,14 @@ test('minute report distribution sends only new inactivity reminders to D1', () 
     { phone:'9990000002', hasNewReport:true, rosterOrder:1 }
   ]);
 });
+
+test('parent deletion removes the migrated inactivity marker from D1', () => {
+  const context = app();
+  const calls = [];
+  context.last10_ = value => String(value || '').replace(/\D/g, '').slice(-10);
+  context.d1AdminRequest_ = (url, method, payload) => { calls.push({ url, method, payload }); return { ok:true, deleted:true }; };
+  assert.deepEqual(JSON.parse(JSON.stringify(context.removeReportInactivityState_('+7 (999) 000-00-01'))), { ok:true, deleted:true });
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{
+    url:'/admin/report-inactivity/remove', method:'post', payload:{ phone:'9990000001' }
+  }]);
+});

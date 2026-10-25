@@ -78,6 +78,20 @@ test('inactivity sync keeps existing acknowledgement and does not reset it on un
   } finally { db.close(); }
 });
 
+test('admin deletion removes only the requested D1 inactivity state', async () => {
+  const { db, context, env } = makeDatabase();
+  try {
+    db.prepare('INSERT INTO report_inactivity_state(phone10,last_new_report_at,first_seen_at,last_prompt_days) VALUES(?,?,?,?)')
+      .run('9990000006', 10, 1, 7);
+    db.prepare('INSERT INTO report_inactivity_state(phone10,last_new_report_at,first_seen_at,last_prompt_days) VALUES(?,?,?,?)')
+      .run('9990000007', 20, 2, 3);
+    const result = await context.removeReportInactivity({ json: async () => ({ phone:'89990000006' }) }, env);
+    assert.deepEqual(JSON.parse(JSON.stringify(await result.json())), { ok:true, deleted:true });
+    assert.equal(db.prepare('SELECT count(*) AS n FROM report_inactivity_state WHERE phone10=?').get('9990000006').n, 0);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM report_inactivity_state WHERE phone10=?').get('9990000007').n, 1);
+  } finally { db.close(); }
+});
+
 test('deleting a profile also deletes its D1 inactivity state', async () => {
   const { db, context, env } = makeDatabase();
   try {

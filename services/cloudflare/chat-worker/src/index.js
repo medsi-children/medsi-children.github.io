@@ -327,6 +327,14 @@ async function syncReportInactivity(request, env) {
   return json({ok:true,received:statements.length});
 }
 
+async function removeReportInactivity(request, env) {
+  const payload = await body(request) || {};
+  const phone = phone10(payload.phone);
+  if (!phone) return json({ok:false,message:'Некорректный номер профиля.'},400);
+  const result = await env.CHAT_DB.prepare('DELETE FROM report_inactivity_state WHERE phone10=?').bind(phone).run();
+  return json({ok:true,deleted:Number(result.meta && result.meta.changes || 0) > 0});
+}
+
 async function registerParent(request, env) {
   const payload = await body(request) || {};
   const phone = phone10(payload.phone);
@@ -2160,6 +2168,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/ack') return acknowledgeParentRegistrationOutbox(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-registration-outbox/fail') return failParentRegistrationOutbox(request, env);
       if (request.method === 'POST' && url.pathname === '/admin/report-inactivity/sync') return syncReportInactivity(request, env);
+      if (request.method === 'POST' && url.pathname === '/admin/report-inactivity/remove') return removeReportInactivity(request, env);
       if (request.method === 'GET' && url.pathname === '/admin/report-current/versions') return getCurrentReportVersions(env);
       if (request.method === 'GET' && url.pathname === '/admin/parent-access-requests') return listParentAccessRequests(env);
       if (request.method === 'POST' && url.pathname === '/admin/parent-access-requests/decision') return decideParentAccessRequest(request, env);
