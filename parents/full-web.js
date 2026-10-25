@@ -5,7 +5,7 @@
   const CHAT_WORKER_URL='https://medsi-chat-worker.medsi-children.workers.dev';
   const PUSH_APP_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
   const PUSH_SERVICE_URL='https://medsi-push-worker.medsi-children.workers.dev';
-  const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',BOOTSTRAP_CHECK_KEY='medsi_parent_bootstrap_check_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1',PASSKEY_OFFER_KEY='medsi_parent_passkey_offer_v1';
+  const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',BOOTSTRAP_CHECK_KEY='medsi_parent_bootstrap_check_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1';
   const $=id=>document.getElementById(id);
   const reportCache={},reportPending={},reportReadPending={};
   const REPORT_FRESH_MS=60000;let sessionPending=null,menuPending=null,openingChat=false,reportRun=0,historyRun=0,previewMode=false;
@@ -64,7 +64,44 @@
   let preparedPasskeyLogin=null;
   async function preparePasskeyLogin(){const button=$('passkeyLoginBtn');if(!button||!window.PublicKeyCredential||!navigator.credentials){button.disabled=true;button.textContent='Ключ доступа не поддерживается';return}button.disabled=true;button.textContent='Подготавливаем вход…';try{preparedPasskeyLogin=await callCloudflare('/lab/parent-passkeys/authentication/options','POST',{});if(document.body.dataset.screen==='screenAuth'){button.disabled=false;button.textContent='Войти с ключом доступа'}}catch(error){preparedPasskeyLogin=null;if(document.body.dataset.screen==='screenAuth'){button.disabled=false;button.textContent='Попробовать снова';$('passkeyLoginError').textContent='Не удалось подготовить вход. Проверьте связь и попробуйте ещё раз.';$('passkeyLoginError').classList.remove('hidden')}}}
   async function loginWithPasskey(){const button=$('passkeyLoginBtn'),error=$('passkeyLoginError');error.classList.add('hidden');if(!preparedPasskeyLogin){await preparePasskeyLogin();return}const ready=preparedPasskeyLogin;preparedPasskeyLogin=null;button.disabled=true;button.textContent='Подтвердите вход…';try{const credential=await navigator.credentials.get({publicKey:webauthnOptions(ready.options,false)});if(!credential)throw new Error('Вход отменён.');const result=await callCloudflare('/lab/parent-passkeys/authentication/verify','POST',{challengeId:ready.challengeId,credential:webauthnCredentialJSON(credential,false)});if(!applyBootstrap(result))throw new Error('Не удалось сохранить вход.');safeRemove(REAUTH_KEY);prewarmAll();justRegistered=false;showChoose()}catch(e){if(e&&e.name==='NotAllowedError'){error.textContent='Ключ не найден или вход отменён. Попробуйте ещё раз на устройстве, где он сохранён.'}else error.textContent=String(e&&e.message||'Не удалось выполнить вход.');error.classList.remove('hidden');button.disabled=false;button.textContent='Войти с ключом доступа';preparePasskeyLogin()}}
-  async function askToSavePasskey(){if(!navigator.credentials||!window.PublicKeyCredential)return;let prepared;try{const status=await callParentPasskey('/lab/parent-passkeys/status',{});if(status.hasPasskey){safeSet(PASSKEY_OFFER_KEY,'saved');return}prepared=await callParentPasskey('/lab/parent-passkeys/registration/options',{})}catch(_){return}const dialog=$('passkeyOfferDialog'),later=$('passkeyLaterBtn'),save=$('passkeySaveBtn'),error=$('passkeyOfferError');if(!dialog||dialog.open)return;error.classList.add('hidden');dialog.showModal();await new Promise(resolve=>{later.onclick=()=>{safeSet(PASSKEY_OFFER_KEY,'declined');dialog.close();resolve()};save.onclick=async()=>{save.disabled=true;save.textContent='Создаём ключ…';try{const credential=await navigator.credentials.create({publicKey:webauthnOptions(prepared.options,true)});if(!credential)throw new Error('Не удалось создать ключ доступа.');await callParentPasskey('/lab/parent-passkeys/registration/verify',{challengeId:prepared.challengeId,credential:webauthnCredentialJSON(credential,true)});safeSet(PASSKEY_OFFER_KEY,'saved');dialog.close();resolve()}catch(e){error.textContent=e&&e.name==='NotAllowedError'?'Не удалось сохранить ключ. Можно продолжить без него.':'Не удалось сохранить ключ. Попробуйте позже.';error.classList.remove('hidden');save.disabled=false;save.textContent='Повторить'} }})}
+  async function askToSavePasskey(){
+    const dialog=$('passkeyOfferDialog'),later=$('passkeyLaterBtn'),save=$('passkeySaveBtn'),error=$('passkeyOfferError');
+    if(!dialog||dialog.open)return;
+    error.classList.add('hidden');save.classList.remove('hidden');save.disabled=false;save.textContent='Включить';later.textContent='Не сейчас';
+    if(!window.isSecureContext||!navigator.credentials||!window.PublicKeyCredential){
+      error.textContent='Этот браузер не поддерживает защищённый вход. Вы можете продолжить без него.';
+      error.classList.remove('hidden');save.classList.add('hidden');later.textContent='Продолжить';dialog.showModal();
+      await new Promise(resolve=>{later.onclick=()=>{dialog.close();resolve()}});
+      return;
+    }
+    let prepared=null,alreadyHasPasskey=false;
+    const prepare=async()=>{
+      const status=await callParentPasskey('/lab/parent-passkeys/status',{});
+      if(status.hasPasskey){alreadyHasPasskey=true;return}
+      prepared=await callParentPasskey('/lab/parent-passkeys/registration/options',{});
+    };
+    try{await prepare()}catch(_){error.textContent='Не удалось проверить защищённый вход. Можно продолжить или попробовать ещё раз.';error.classList.remove('hidden')}
+    if(alreadyHasPasskey)return;
+    dialog.showModal();
+    await new Promise(resolve=>{
+      later.onclick=()=>{dialog.close();resolve()};
+      save.onclick=async()=>{
+        if(!prepared){
+          save.disabled=true;save.textContent='Проверяем…';error.classList.add('hidden');
+          try{await prepare();if(alreadyHasPasskey){dialog.close();resolve();return}error.textContent='Готово. Нажмите «Включить» ещё раз, чтобы сохранить ключ.'}
+          catch(_){error.textContent='Проверка не прошла. Проверьте связь и нажмите «Повторить».'}
+          error.classList.remove('hidden');save.disabled=false;save.textContent='Повторить';return;
+        }
+        save.disabled=true;save.textContent='Создаём ключ…';error.classList.add('hidden');
+        try{
+          const credential=await navigator.credentials.create({publicKey:webauthnOptions(prepared.options,true)});
+          if(!credential)throw new Error('Не удалось создать ключ доступа.');
+          await callParentPasskey('/lab/parent-passkeys/registration/verify',{challengeId:prepared.challengeId,credential:webauthnCredentialJSON(credential,true)});
+          dialog.close();resolve();
+        }catch(e){prepared=null;error.textContent=e&&e.name==='NotAllowedError'?'Не удалось сохранить ключ. Можно продолжить без него.':'Не удалось сохранить ключ. Проверьте связь и попробуйте ещё раз.';error.classList.remove('hidden');save.disabled=false;save.textContent='Повторить'}
+      };
+    });
+  }
   function callCloudflareRegistration(status,data){
     const path=status?'/lab/parent-registration/status?phone='+encodeURIComponent(data.phone)+'&attemptId='+encodeURIComponent(data.attemptId):'/lab/parent-registration';
     return callCloudflare(path,status?'GET':'POST',status?null:{parentName:data.parentName,childName:data.childName,phone:data.phone,attemptId:data.attemptId});
@@ -124,7 +161,7 @@
   function makeFlowId(prefix){let value='';try{if(crypto&&crypto.randomUUID)value=crypto.randomUUID()}catch(_){}if(!value)value=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);return prefix+'_'+value.replace(/[^A-Za-z0-9_-]/g,'')}
   function makeAccessSecret(){return bytesToB64url(crypto.getRandomValues(new Uint8Array(32)))}
   function registrationFingerprint(data){return [onlyDigits(data.phone).slice(-10),data.parentName,data.childName].join('|')}
-  async function finishRegistration(res,run){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;prewarmAll();const attemptId=String(res.registrationAttemptId||'');if(attemptId)callApi('mirrorCloudflareParentRegistration',[currentPhone,attemptId,parentSession],5000,true).catch(()=>null);await Promise.resolve(window.MedsiAssistantReady);if(run===flowRun){showChoose();if(!safeGet(PASSKEY_OFFER_KEY))askToSavePasskey()}}
+  async function finishRegistration(res,run){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;prewarmAll();const attemptId=String(res.registrationAttemptId||'');if(attemptId)callApi('mirrorCloudflareParentRegistration',[currentPhone,attemptId,parentSession],5000,true).catch(()=>null);await Promise.resolve(window.MedsiAssistantReady);if(run===flowRun){showChoose();askToSavePasskey()}}
   async function runRegistrationFlow(data){
     const run=++flowRun;
     show('screenRegistrationPending');
