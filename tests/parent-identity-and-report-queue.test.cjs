@@ -411,6 +411,7 @@ test('Worker retries Apps Script deletion when critical cleanup is incomplete', 
   try{
     await context.drainParentDeletionQueue({APP_SCRIPT_URL:'https://example.invalid',CHAT_ADMIN_TOKEN:'synthetic',CHAT_DB:{prepare:wrap}});
     assert.equal(db.prepare('SELECT status FROM parent_deletion_queue').get().status,'retry');
+    assert.match(db.prepare('SELECT last_error FROM parent_deletion_queue').get().last_error,/unfinished steps: raw/);
   }finally{db.close();}
 });
 

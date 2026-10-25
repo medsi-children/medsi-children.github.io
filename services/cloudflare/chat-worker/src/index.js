@@ -1486,7 +1486,15 @@ async function drainParentDeletionQueue(env) {
       if (!response.ok || !result || result.ok !== true ||
           (result.operationId && result.operationId !== row.operation_id) ||
           result.coreComplete !== true || result.cleanupComplete !== true) {
-        const error = new Error(result && result.message || `Apps Script did not confirm complete parent deletion (HTTP ${response.status})`);
+        const details = [];
+        if (result && result.message) details.push(String(result.message));
+        if (result && Array.isArray(result.pendingSteps) && result.pendingSteps.length) {
+          details.push(`unfinished steps: ${result.pendingSteps.map(step => String(step).slice(0, 40)).join(', ')}`);
+        }
+        if (result && Array.isArray(result.cleanupErrors) && result.cleanupErrors.length) {
+          details.push(`cleanup errors: ${result.cleanupErrors.map(item => String(item).slice(0, 140)).join('; ').slice(0, 360)}`);
+        }
+        const error = new Error(details.join(' | ') || `Apps Script did not confirm complete parent deletion (HTTP ${response.status})`);
         error.code = result && result.code || '';
         throw error;
       }
