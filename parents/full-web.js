@@ -162,20 +162,35 @@
   function makeAccessSecret(){return bytesToB64url(crypto.getRandomValues(new Uint8Array(32)))}
   function registrationFingerprint(data){return [onlyDigits(data.phone).slice(-10),data.parentName,data.childName].join('|')}
   async function finishRegistration(res,run){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;prewarmAll();const attemptId=String(res.registrationAttemptId||'');if(attemptId)callApi('mirrorCloudflareParentRegistration',[currentPhone,attemptId,parentSession],5000,true).catch(()=>null);await Promise.resolve(window.MedsiAssistantReady);if(run===flowRun){showChoose();askToSavePasskey()}}
+  function registrationCanRetry(message,data,run){
+    if(run!==flowRun)return;
+    $('registrationPendingText').textContent=message;
+    $('registrationPendingSpinner').classList.add('hidden');
+    const actions=$('registrationPendingActions');actions.classList.remove('hidden');
+    $('registrationRetryBtn').onclick=()=>{if(run!==flowRun)return;actions.classList.add('hidden');$('registrationPendingSpinner').classList.remove('hidden');runRegistrationFlow(data)};
+    $('registrationCancelBtn').onclick=()=>{if(run!==flowRun)return;flowRun++;showStart()};
+  }
   async function runRegistrationFlow(data){
     const run=++flowRun;
     show('screenRegistrationPending');
+    $('registrationPendingActions').classList.add('hidden');
+    $('registrationPendingSpinner').classList.remove('hidden');
     const pendingText=$('registrationPendingText');
     pendingText.textContent='Пожалуйста, подождите. Мы сохраняем данные и готовим Медси Бот.';
     let phase='register',delay=1000,notFoundCount=0,processingCount=0;
-    while(run===flowRun){
+    const deadline=Date.now()+90000;
+    while(run===flowRun&&Date.now()<deadline){
       try{
         let res=null;
         if(phase==='register'){
           try{
             res=await callCloudflareRegistration(false,data);
-          }catch(_){
+          }catch(error){
             if(run!==flowRun)return;
+            if(error&&error.code==='DELETION_PENDING'){
+              registrationCanRetry('Предыдущее удаление профиля ещё завершается. Подождите немного и нажмите «Проверить снова».',data,run);
+              return;
+            }
             phase='status';
             pendingText.textContent='Регистрация занимает больше времени, чем обычно. Проверяем результат…';
           }
@@ -212,6 +227,7 @@
       await wait(delay);
       delay=Math.min(3500,delay+400);
     }
+    if(run===flowRun)registrationCanRetry('Не удалось подтвердить регистрацию. Ваши данные сохранены. Нажмите «Проверить снова», чтобы безопасно продолжить ту же попытку.',data,run);
   }
   async function register(){const digits=onlyDigits($('phoneInputReg').value),err=$('phoneErrorReg'),info=$('alreadyRegistered');err.classList.add('hidden');info.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}const snapshot={phone:digits,parentName:regParentName,childName:regChildName};const saved=readJson(REG_ATTEMPT_KEY);snapshot.attemptId=saved&&saved.fingerprint===registrationFingerprint(snapshot)?saved.attemptId:makeFlowId('reg');snapshot.fingerprint=registrationFingerprint(snapshot);safeSet(REG_ATTEMPT_KEY,JSON.stringify(snapshot));runRegistrationFlow(snapshot)}
   function resetAuthPendingUi(){const screen=$('screenAuthPending');screen.classList.remove('is-approved');$('authPendingSpinner').classList.remove('hidden');$('authApprovedIcon').classList.add('hidden');$('authPendingTitle').textContent='Проверяем доступ';$('authPendingText').textContent='Пожалуйста, подождите…';$('authRequestCode').textContent='••••';$('authRequestCodeWrap').classList.add('hidden');$('authPendingBackBtn').classList.add('hidden')}

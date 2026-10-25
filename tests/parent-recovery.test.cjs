@@ -15,11 +15,20 @@ function environment(fetch){
 function parent(fetch){
   const env=environment(fetch);
   let source=fs.readFileSync(path.join(root,'parents/full-web.js'),'utf8');
-  source=source.replace('  boot();',`  window.audit={warmD1,warmReport,readD1,clearSession,openChat,setup(session){currentPhone='0000000000';parentSession='test-auth';d1Session=session;},setSession(session){d1Session=session;},cache:reportCache};`);
+  source=source.replace('  boot();',`  window.audit={warmD1,warmReport,readD1,clearSession,openChat,runRegistrationFlow,setup(session){currentPhone='0000000000';parentSession='test-auth';d1Session=session;},setSession(session){d1Session=session;},cache:reportCache};`);
   vm.runInContext(source,env.ctx);return {...env,api:env.ctx.window.audit};
 }
 const session={token:'synthetic',expiresAt:Date.now()+3600000};
 const response=value=>({ok:true,status:200,json:async()=>value,text:async()=>JSON.stringify(value)});
+test('registration stops with a retry message when Cloudflare says the previous deletion is still running',async()=>{
+  let calls=0;
+  const env=parent(async()=>{calls++;return {ok:false,status:409,json:async()=>({ok:false,code:'DELETION_PENDING',message:'pending'})}});
+  await env.api.runRegistrationFlow({phone:'89990000000',parentName:'Родитель Тест',childName:'Ребёнок Тест',attemptId:'reg_synthetic'});
+  assert.equal(calls,1,'a known deletion block should not start endless status polling');
+  assert.match(env.elements.get('registrationPendingText').textContent,/Предыдущее удаление профиля/);
+  assert.equal(typeof env.elements.get('registrationRetryBtn').onclick,'function');
+  assert.equal(typeof env.elements.get('registrationCancelBtn').onclick,'function');
+});
 test('parallel session renewal makes only one gateway request and allows its retries to finish',async()=>{
   let calls=0,resolve;const env=parent(()=>{calls++;return new Promise(r=>resolve=r)});env.api.setup({...session,expiresAt:0});
   const a=env.api.warmD1(),b=env.api.warmD1();assert.equal(calls,1);assert.ok([...env.timers.values()].some(t=>t.ms===35000));
