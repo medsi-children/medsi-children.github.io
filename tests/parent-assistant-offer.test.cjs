@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 test('parent assistant offers only for confident mapped topics and still skips urgent or uncertain messages', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen.js'), 'utf8');
   const anchor = '  window.MedsiParentChatScreen={open,close,refresh};';
   assert.ok(source.includes(anchor));
   const instrumented = source.replace(anchor, `window.__assistantIntent=assistantIntent;${anchor}`);
@@ -38,21 +38,21 @@ test('parent assistant offers only for confident mapped topics and still skips u
 });
 
 test('doctor-directed answers reveal doctor contacts before asking whether the question was resolved', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen.js'), 'utf8');
   assert.match(source, /const DOCTOR_CONTACT_INTENTS=new Set\(\['meetings','meetTime','calls','payment','medical','medicine'\]\)/);
   assert.match(source, /assistantButton\('Контакты врача',\(\)=>\{body\.textContent=ASSISTANT_ANSWERS\.doctors;showResolutionActions\(\)\}\),assistantButton\('Да, вопрос решился'/);
   assert.match(source, /function showResolutionActions\(\)\{actions\.replaceChildren\(assistantButton\('Да, вопрос решился'/);
 });
 
 test('resolved parent questions close cleanly instead of asking to send them anyway', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen.js'), 'utf8');
   assert.match(source, /if\(resolved\)\{/);
   assert.match(source, /Хорошо, тогда вопрос воспитателям не отправляю\./);
   assert.doesNotMatch(source, /Всё ещё отправить вопрос воспитателям\?/);
 });
 
 test('report timing answers do not offer an unavailable report and explicit report requests ask which report to show', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen.js'), 'utf8');
   assert.ok(source.includes("reports:'Утренний отчёт с 15:00 до 16:00.\\nВечерний — с 21:00 до 22:00.'"));
   assert.ok(!source.includes("reports:'Утренний отчёт с 15:00 до 16:00.\\nВечерний — с 21:00 до 22:00.\\n\\nХотите посмотреть отчёт?'"));
   assert.match(source, /suggestion&&suggestion\.key==='reportRequest'&&!suggestion\.kind/);
@@ -75,8 +75,8 @@ test('main parent blob follows the same conservative report flow', () => {
   assert.doesNotMatch(source, /Встречи с детьми проходят с 17:00 до 20:00\. Пожалуйста, согласуйте встречу/);
 });
 
-test('experimental parent assistant uses the Medsi blob and existing report-delay wording, without snapshot-error copy', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+test('parent assistant uses the Medsi blob and existing report-delay wording, without snapshot-error copy', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen.js'), 'utf8');
   assert.match(source, /src="\/parents\/blob\.webp"/);
   assert.match(source, /Сейчас идёт окно публикации:/);
   assert.match(source, /Похоже, сегодня подготовка отчёта занимает немного больше времени\. Пожалуйста, подождите ещё немного\./);
@@ -89,7 +89,7 @@ test('experimental parent assistant uses the Medsi blob and existing report-dela
 
 test('the production parent chat now has the same tested assistant flow and styling', () => {
   const production = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen.js'), 'utf8');
-  const experimental = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+  const experimental = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen.js'), 'utf8');
   const styles = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-ui.css'), 'utf8');
   // Production may include safety controls that are intentionally absent from
   // the isolated experiment, while retaining the same assistant behavior.
@@ -108,10 +108,10 @@ test('the production parent chat now has the same tested assistant flow and styl
   assert.match(production, /parent-assistant-card is-compact/);
 });
 
-test('experimental parent and educator doctor contacts match the assistant and stay in one quick-reply button', () => {
-  const parentTest = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen-test.js'), 'utf8');
+test('parent and educator doctor contacts match the assistant and stay in one quick-reply button', () => {
+  const parentTest = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen.js'), 'utf8');
   const parentAssistant = fs.readFileSync(path.join(__dirname, '..', 'parents', 'bot-chat-runtime.js'), 'utf8');
-  const educatorTest = fs.readFileSync(path.join(__dirname, '..', 'chat-overlay', 'educator-chat-test.js'), 'utf8');
+  const educatorTest = fs.readFileSync(path.join(__dirname, '..', 'chat-overlay', 'educator-chat.js'), 'utf8');
   const unescapeNewlines = value => value.replace(/\\n/g, '\n');
   const testParentContacts = parentTest.match(/doctors:'([^']*)'/)?.[1];
   const sourceContacts = parentAssistant.match(/DOCTOR_CONTACTS_TEXT = "([^"]*)"/)?.[1];

@@ -60,20 +60,16 @@ test('parents still cannot delete another side message', async()=>{
   assert.equal(target.updates.length,0);
 });
 
-test('both educator panels expose delete for parent messages while keeping own-message editing',()=>{
-  for(const file of ['chat-overlay/educator-chat.js','chat-overlay/educator-chat-test.js']) {
-    const source=read(file);
-    assert.match(source,/m\.side==='educator'\|\|m\.side==='parent'/);
-    assert.match(source,/contextAction\('⌫','Удалить',async\(\)=>\{if\(!confirm\('Удалить это сообщение\?'\)\)/);
-    assert.match(source,/m\.side==='educator'&&\['text','image','video'\]\.includes\(m\.type\).*Редактировать/);
-  }
+test('educator chat exposes delete for parent messages while keeping own-message editing',()=>{
+  const source=read('chat-overlay/educator-chat.js');
+  assert.match(source,/m\.side==='educator'\|\|m\.side==='parent'/);
+  assert.match(source,/contextAction\('⌫','Удалить',async\(\)=>\{if\(!confirm\('Удалить это сообщение\?'\)\)/);
+  assert.match(source,/m\.side==='educator'&&\['text','image','video'\]\.includes\(m\.type\).*Редактировать/);
 });
 
 test('educator chat keeps manual quick replies but no longer mounts the contextual assistant',()=>{
   const production=read('chat-overlay/educator-chat.js');
-  const experimental=read('chat-overlay/educator-chat-test.js');
   const styles=read('tutors/assistant.css');
-  assert.equal(production,experimental);
   assert.match(production,/\['reportDelay','Задержка отчёта','quick-indigo'\]/);
   assert.match(read('chat-overlay/educator-exact.css'),/\.quick-indigo\{/);
   assert.doesNotMatch(production,/tutorSuggestionPlan|detectTutorSuggestion|makeTutorSuggestion|closeTutorAssistant|tutor-assistant-suggestion/);
@@ -81,7 +77,7 @@ test('educator chat keeps manual quick replies but no longer mounts the contextu
   assert.doesNotMatch(styles,/\.tutor-assistant-suggestion|\.tutor-assistant-copy|\.tutor-assistant-actions/);
 });
 
-for (const file of ['chat-overlay/educator-chat.js', 'chat-overlay/educator-chat-test.js']) {
+for (const file of ['chat-overlay/educator-chat.js']) {
   function threadLoader(thread) {
     const source = read(file);
     const prefix = source.slice(0, source.indexOf('  function mount('));
@@ -113,7 +109,7 @@ for (const file of ['chat-overlay/educator-chat.js', 'chat-overlay/educator-chat
   });
 }
 
-for(const file of ['tutors.html','tutors_test.html']) {
+for(const file of ['tutors.html']) {
   test(`${file}: stalled deferred scripts cannot prevent the loading watchdog`,()=>{
     const script=read(file).match(/<script>\s*([\s\S]*?)<\/script>/)[1];
     const nodes={authCheckingText:{textContent:''},authRetry:{classList:{remove(value){this.removed=value;}}}};

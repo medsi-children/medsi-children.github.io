@@ -84,7 +84,7 @@ test('phone directory and Cloudflare-first profile lookup work without historica
   x.d1AdminRequest_=()=>{throw Error('offline')};assert.equal(x.getProfileByPhone_('9990000001'),null);
 });
 test('current page script graph has no retired adapter and all literal API methods remain supported',()=>{
-  const x=apps(),methods=x.getApiMethodMap_(),seen=new Set(),pending=['index.html','tutors.html','psychology.html','parents_test.html','tutors_test.html'];
+  const x=apps(),methods=x.getApiMethodMap_(),seen=new Set(),pending=['index.html','tutors.html','psychology.html'];
   while(pending.length){
     const file=pending.shift();if(seen.has(file))continue;seen.add(file);
     const source=read(file);
