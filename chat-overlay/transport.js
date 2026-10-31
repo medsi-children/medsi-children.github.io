@@ -32,6 +32,20 @@
   }
 
   async function request(session, path, options, retryTransientWrite) {
+    const provider = window.MedsiEducatorSession;
+    const auth = provider ? {...await provider.get()} : session;
+    try {
+      return await requestAuthenticated(auth, path, options, retryTransientWrite);
+    } catch (error) {
+      if (!provider || error.status !== 401) throw error;
+      // An explicit rejection happens before the operation. Renew once; never
+      // turn network failures or permission denials into a login refresh loop.
+      const renewed = await provider.renew(auth.token);
+      return requestAuthenticated(renewed, path, options, retryTransientWrite);
+    }
+  }
+
+  async function requestAuthenticated(session, path, options, retryTransientWrite) {
     const auth = requireSession(session);
     const method = String((options && options.method) || 'GET').toUpperCase();
     const isWrite = method !== 'GET' && method !== 'HEAD';
@@ -42,6 +56,7 @@
       const timer = controller ? setTimeout(() => controller.abort(), isWrite ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS) : null;
       try {
         const response = await fetch(BASE_URL + path, {
+          cache: 'no-store',
           ...(options || {}),
           signal: controller ? controller.signal : undefined,
           headers: {
@@ -240,7 +255,7 @@
   }
 
   async function upload(session, phone, file) {
-    const auth = requireSession(session);
+    let auth = requireSession(window.MedsiEducatorSession ? await window.MedsiEducatorSession.get() : session);
     if (file && Number(file.size || 0) > MAX_UPLOAD_BYTES) {
       const error = new Error('Размер файла не должен превышать 100 МБ.');
       error.code = 'FILE_TOO_LARGE';
@@ -251,6 +266,10 @@
     try {
       return await uploadAttempt(auth, phone, file, uploadId);
     } catch (error) {
+      if (error.status === 401 && window.MedsiEducatorSession) {
+        auth = requireSession(await window.MedsiEducatorSession.renew(auth.token));
+        return uploadAttempt(auth, phone, file, uploadId);
+      }
       if (!isTransientUploadError(error)) throw error;
       await new Promise(resolve => setTimeout(resolve, 700));
       return uploadAttempt(auth, phone, file, uploadId);

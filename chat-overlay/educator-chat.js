@@ -112,6 +112,8 @@
       title.textContent='Чат с родителями';
       meta.textContent=bucket==='read'?'Прочитанные чаты':'Выберите чат с нужным родителем.';
       screenChats.classList.remove('hidden');
+      // Navigation must remain usable while the list request is pending.
+      screenChats.classList.add('overlay-screen-ready');
       screenChatThread.classList.add('hidden');
     }
     function showThreadScreen(){document.body.dataset.screen='screenChatThread';screenChats.classList.add('hidden');screenChatThread.classList.remove('hidden')}
@@ -201,7 +203,18 @@
         if(disposed||requestId!==chatsRequestId)return;
         currentChats=(res&&res.chats||[]).slice().sort((a,b)=>Number(b&&b.pinnedBucket===bucket)-Number(a&&a.pinnedBucket===bucket));
         renderList();
-      }catch(err){if(!disposed&&requestId===chatsRequestId)overlay.showError(err.message||'Не удалось загрузить список чатов.')}finally{if(requestId===chatsRequestId)setRefresh(false)}
+        overlay.clearError();
+      }catch(err){
+        if(!disposed&&requestId===chatsRequestId){
+          if(!currentChats.length){
+            const state=document.createElement('div');state.className='chat-empty';
+            const label=document.createElement('p');label.textContent='Не удалось получить список чатов.';
+            const retry=document.createElement('button');retry.type='button';retry.className='btn';retry.textContent='Повторить';retry.onclick=()=>loadChats(true);
+            state.append(label,retry);chatList.replaceChildren(state);
+          }
+          overlay.showError(err.message||'Не удалось получить список чатов.');
+        }
+      }finally{if(requestId===chatsRequestId)setRefresh(false)}
     }
     const refreshChats=()=>loadChats(true);
     document.addEventListener('medsi:refresh-educator-chats',refreshChats);

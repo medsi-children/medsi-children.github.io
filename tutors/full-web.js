@@ -12,6 +12,7 @@
   let overlayCleanup=null;
   let parentsCache=[];
   let parentsSignature='';
+  let parentsRequest=null;
   let authBusy=false;
   let authVerifyInFlight=false;
   let authRetryTimer=null;
@@ -25,7 +26,7 @@
   function saveDeletionIds(ids){safeSet(DELETION_KEY,JSON.stringify((ids||[]).slice(-20)))}
   function loadD1(){try{const s=JSON.parse(safeGet(D1_KEY)||'null');return s&&s.token&&Number(s.expiresAt||0)>Date.now()+30000?s:null}catch(_){return null}}
   function extractD1(res){if(!res)return null;if(res.d1Session&&res.d1Session.token)return res.d1Session;if(res.session&&res.session.token)return res.session;if(res.token)return res;return null}
-  function saveAuth(token,session){tutorToken=String(token||'');if(tutorToken)safeSet(TUTOR_KEY,tutorToken);if(session&&session.token){d1Session=session;safeSet(D1_KEY,JSON.stringify(session))}}
+  function saveAuth(token,session){tutorToken=String(token||'');if(tutorToken)safeSet(TUTOR_KEY,tutorToken);if(session&&session.token){if(d1Session)Object.assign(d1Session,session);else d1Session={...session};safeSet(D1_KEY,JSON.stringify(d1Session))}}
   function clearAuth(){tutorToken='';d1Session=null;d1RefreshPromise=null;if(d1WarmTimer){clearTimeout(d1WarmTimer);d1WarmTimer=null}if(authRetryTimer){clearTimeout(authRetryTimer);authRetryTimer=null}safeRemove(TUTOR_KEY);safeRemove(D1_KEY)}
   function phone10(v){return String(v||'').replace(/\D+/g,'').slice(-10)}
   function displayPhone(v){const p=phone10(v);return p?'8'+p:''}
@@ -42,12 +43,12 @@
   }
   async function callApi(method,args,timeoutMs){
     const readOnly=/^(get|list|verify|check)/i.test(String(method||''));
-    const attempts=readOnly?2:1;
+    const attempts=method==='verifyTutorSession'?1:(readOnly?2:1);
     const sessionMethod=['verifyTutorAccess','verifyTutorSession','getD1ChatSession'].includes(method);
     let lastError;
     for(let attempt=0;attempt<attempts;attempt++){
       const controller=new AbortController();
-      const timer=setTimeout(()=>controller.abort(),sessionMethod?Math.max(timeoutMs||0,method==='verifyTutorAccess'?30000:45000):(timeoutMs||15000));
+      const timer=setTimeout(()=>controller.abort(),sessionMethod?Math.max(timeoutMs||0,method==='verifyTutorAccess'?30000:22000):(timeoutMs||15000));
       try{
         const body=JSON.stringify({action:'api',method,args:args||[]});
         const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body,cache:'no-store',signal:controller.signal});
@@ -81,11 +82,9 @@
   function requestFreshD1(){
     if(d1RefreshPromise)return d1RefreshPromise;
     d1RefreshPromise=(async()=>{
-      let session=null;
-      try{session=extractD1(await callApi('getD1ChatSession',['educator','',tutorToken],17000))}catch(_){}
-      if(!session){
-        try{session=extractD1(await callApi('verifyTutorSession',[tutorToken],17000))}catch(_){}
-      }
+      const result=await callApi('verifyTutorSession',[tutorToken],17000);
+      if(result&&result.ok===false){clearAuth();showGate(false);throw new Error('Сохранённый вход завершился. Введите логин и пароль.');}
+      const session=extractD1(result);
       if(!session||!session.token)throw new Error('Не удалось обновить сессию чата.');
       saveAuth(tutorToken,session);return session;
     })().finally(()=>{d1RefreshPromise=null});
@@ -103,12 +102,7 @@
   }
   async function refreshSavedSessionInBackground(){
     try{
-      const verify=await callApi('verifyTutorSession',[tutorToken],17000);
-      if(verify&&verify.ok===false){
-        clearAuth();showGate(false);setAuthError('Сохранённый вход завершился. Введите логин и пароль.');
-        return;
-      }
-      const session=extractD1(verify)||await requestFreshD1();
+      const session=await requestFreshD1();
       if(session){saveAuth(tutorToken,session);prewarmParents();refreshUnreadBadge()}
     }catch(_){
       // Keep the already restored menu visible; the next foreground action
@@ -198,27 +192,19 @@
   function showReportError(text){const el=$('reportError');el.textContent=text;el.classList.remove('hidden')}
 
   async function prewarmParents(){
-    if(!d1Session||!window.MedsiOverlayTransport)return;
-    try{
-      const res=await MedsiOverlayTransport.parents(d1Session);
-      const rows=Array.isArray(res&&res.parents)?res.parents:(Array.isArray(res&&res.rows)?res.rows:[]);
-      if(rows.length||res){parentsCache=rows;parentsSignature=parentSig(rows)}
-    }catch(_){}
+    try{await refreshPhones()}catch(_){}
   }
-  async function refreshPhones(){
-    try{
-      let rows=[];
-      if(d1Session&&window.MedsiOverlayTransport){
-        const res=await MedsiOverlayTransport.parents(d1Session);
-        rows=Array.isArray(res&&res.parents)?res.parents:(Array.isArray(res&&res.rows)?res.rows:[]);
-      }else{
-        const res=await callApi('listAvailableParentsForChat',[tutorToken],20000);
-        if(!res||!res.ok)throw new Error((res&&res.message)||'Не удалось загрузить родителей.');
-        rows=Array.isArray(res.rows)?res.rows:[];
-      }
-      parentsCache=rows.map(r=>({phone:r.phone||r.phone10||'',parentName:r.parentName||r.parent_name||'',childName:r.childName||r.child_name||'',relationship:r.relationship||'Родитель'}));
+  function refreshPhones(){
+    if(parentsRequest)return parentsRequest;
+    parentsRequest=(async()=>{
+      if(!window.MedsiOverlayTransport)throw new Error('Не загрузился модуль списка детей. Обновите страницу.');
+      const session=await ensureD1Fresh();
+      const res=await MedsiOverlayTransport.parents(session);
+      if(!Array.isArray(res&&res.parents))throw new Error('Сервер не вернул список детей. Повторите попытку.');
+      parentsCache=res.parents.map(r=>({phone:r.phone||'',parentName:r.parentName||'',childName:r.childName||'',relationship:r.relationship||'Родитель'}));
       parentsSignature=parentSig(parentsCache);return parentsCache;
-    }catch(e){throw e}
+    })().finally(()=>{parentsRequest=null});
+    return parentsRequest;
   }
   async function copyPhone(phone,btn){
     const value=String(phone||'').trim();if(!value)return;
@@ -314,6 +300,13 @@
   }
 
   async function ensureD1Fresh(){if(d1Session&&Number(d1Session.expiresAt||0)>Date.now()+60000)return d1Session;return requestFreshD1()}
+  window.MedsiEducatorSession=Object.freeze({
+    get:ensureD1Fresh,
+    renew(rejectedToken){
+      if(d1Session&&d1Session.token!==rejectedToken)return ensureD1Fresh();
+      return requestFreshD1();
+    }
+  });
   async function openChat(){try{const s=await ensureD1Fresh();overlay.open({type:'medsi:chat-overlay',action:'open',role:'educator',session:s})}catch(e){alert(String(e&&e.message||e))}}
   async function refreshUnreadBadge(){const badge=$('newParentMsgBanner');if(!d1Session||!window.MedsiOverlayTransport){badge.classList.add('hidden');return}try{const res=await MedsiOverlayTransport.chats(d1Session,'unread');const chats=Array.isArray(res&&res.chats)?res.chats:[];badge.classList.toggle('hidden',!chats.some(x=>!!x.hasUnread))}catch(_){badge.classList.add('hidden')}}
 
@@ -335,8 +328,8 @@
   $('tutorSettingsClose').addEventListener('click',closeSettings);
   settingsDialog.addEventListener('click',event=>{if(event.target===settingsDialog)closeSettings()});
   $('tutorPushToggle').addEventListener('click',async()=>{const button=$('tutorPushToggle');button.disabled=true;$('tutorPushStatus').textContent='';try{await MedsiPush.toggle();await updatePushControl()}catch(error){$('tutorPushStatus').textContent=String(error&&error.message||'Не удалось изменить уведомления.')}finally{button.disabled=false}});
-  $('settingsDeleteChild').addEventListener('click',async()=>{const select=$('deleteChildSelect'),row=parentsCache[Number(select.value)];if(!row){alert('Сначала выберите ребёнка.');return}await deleteParent(row,null);refreshSettings()});
-  $('previewParentButton').addEventListener('click',async()=>{const row=parentsCache[Number($('previewChildSelect').value)],button=$('previewParentButton'),status=$('previewParentStatus');if(!row){status.textContent='Сначала выберите ребёнка.';return}button.disabled=true;status.textContent='Открываем панель…';try{const session=await ensureD1Fresh(),response=await fetch('/lab/parent-preview',{method:'POST',headers:{'content-type':'application/json','X-Medsi-Chat-Session':session.token},body:JSON.stringify({phone:row.phone}),cache:'no-store'}),result=await response.json();if(!response.ok||!result||!result.ok)throw new Error(result&&result.message||'Не удалось открыть профиль.');sessionStorage.setItem('medsi_parent_preview_once',JSON.stringify(result));location.assign('/')}catch(error){status.textContent=String(error&&error.message||error);button.disabled=false}});
+  $('settingsDeleteChild').addEventListener('click',async()=>{const select=$('deleteChildSelect'),row=parentsCache[Number(select.value)];if(select.value===''||!row){alert('Сначала выберите ребёнка.');return}await deleteParent(row,null);refreshSettings()});
+  $('previewParentButton').addEventListener('click',async()=>{const row=parentsCache[Number($('previewChildSelect').value)],button=$('previewParentButton'),status=$('previewParentStatus');if($('previewChildSelect').value===''||!row){status.textContent='Сначала выберите ребёнка.';return}button.disabled=true;status.textContent='Открываем панель…';try{const session=await ensureD1Fresh(),response=await fetch('/lab/parent-preview',{method:'POST',headers:{'content-type':'application/json','X-Medsi-Chat-Session':session.token},body:JSON.stringify({phone:row.phone}),cache:'no-store'}),result=await response.json();if(!response.ok||!result||!result.ok)throw new Error(result&&result.message||'Не удалось открыть профиль.');sessionStorage.setItem('medsi_parent_preview_once',JSON.stringify(result));location.assign('/')}catch(error){status.textContent=String(error&&error.message||error);button.disabled=false}});
 
   $('btnParentChats').addEventListener('click',openChat);$('btnMorning').addEventListener('click',()=>openReport('morning'));$('btnEvening').addEventListener('click',()=>openReport('evening'));$('btnPsychology').addEventListener('click',()=>openReport('psychology'));$('btnParentPhones').addEventListener('click',openPhones);$('btnBack').addEventListener('click',showMenu);$('btnPhonesBack').addEventListener('click',showMenu);$('btnAgain').addEventListener('click',showMenu);$('btnSend').addEventListener('click',sendReport);$('tutorLoginBtn').addEventListener('click',submitLogin);$('tutorPassword').addEventListener('keydown',e=>{if(e.key==='Enter')submitLogin()});
   // The assistant uses the same authenticated operations as the existing panel.

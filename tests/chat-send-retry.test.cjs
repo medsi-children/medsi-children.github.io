@@ -6,8 +6,9 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'chat-overlay', 'transport.js'), 'utf8');
 
-function transport(fetch) {
+function transport(fetch, provider) {
   const window = { location: { origin: 'https://example.test' } };
+  if (provider) window.MedsiEducatorSession = provider;
   const document = {
     getElementById: () => null,
     createElement: () => ({}),
@@ -23,6 +24,44 @@ function transport(fetch) {
   });
   return window.MedsiOverlayTransport;
 }
+
+test('educator reads use the current session even when an open screen holds an older one', async () => {
+  const keys=[];
+  const chat=transport(async(_url,options)=>{keys.push(options.headers['X-Medsi-Chat-Session']);return {ok:true,status:200,json:async()=>({ok:true,parents:[]})}},
+    {get:async()=>({token:'current-key'}),renew:async()=>{throw new Error('Unexpected renewal')}});
+  await chat.parents({token:'old-screen-key',expiresAt:1});
+  assert.deepEqual(keys,['current-key']);
+});
+
+test('a rejected educator key is renewed once and the same operation is retried', async () => {
+  const keys=[],ids=[];let renewals=0;
+  const chat=transport(async(_url,options)=>{
+    keys.push(options.headers['X-Medsi-Chat-Session']);ids.push(JSON.parse(options.body).clientMessageId);
+    return keys.length===1?{ok:false,status:401,json:async()=>({ok:false,code:'SESSION_EXPIRED'})}
+      :{ok:true,status:200,json:async()=>({ok:true})};
+  },{get:async()=>({token:'rejected'}),renew:async token=>{assert.equal(token,'rejected');renewals++;return {token:'renewed'}}});
+  await chat.sendMessage({token:'old-screen-key'},'educator','0000000000',{type:'text',text:'Synthetic'});
+  assert.deepEqual(keys,['rejected','renewed']);assert.equal(renewals,1);assert.equal(ids[0],ids[1]);
+});
+
+test('an unavailable educator authorization never causes an endless renewal loop', async () => {
+  let renewals=0,calls=0;
+  const chat=transport(async()=>{calls++;return {ok:false,status:401,json:async()=>({ok:false,message:'Denied'})}},
+    {get:async()=>({token:'rejected'}),renew:async()=>{renewals++;return {token:'still-rejected'}}});
+  await assert.rejects(chat.parents({token:'old'}),/Denied/);
+  assert.equal(renewals,1);assert.equal(calls,2);
+});
+
+test('simultaneous educator session renewals share one authorization request', async () => {
+  const full=fs.readFileSync(path.join(__dirname,'..','tutors','full-web.js'),'utf8');
+  const helper=full.slice(full.indexOf('  function requestFreshD1()'),full.indexOf('  function scheduleD1Warm()'));
+  let calls=0,resolve;
+  const context={callApi:async()=>{calls++;return new Promise(r=>{resolve=r})},extractD1:x=>x.d1Session,saveAuth(){},tutorToken:'synthetic',d1RefreshPromise:null};
+  vm.runInNewContext(helper+';globalThis.renew=requestFreshD1;',context);
+  const first=context.renew(),second=context.renew();
+  assert.equal(first,second);assert.equal(calls,1);
+  resolve({d1Session:{token:'renewed'}});await Promise.all([first,second]);
+});
 
 test('only educator text receives conservative punctuation spacing', async () => {
   const requests = [];

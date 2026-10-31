@@ -4,8 +4,6 @@
   transport.__medsiPrewarmWrapped=true;
 
   const SESSION_KEY='medsi_d1_educator_session_v1';
-  const TUTOR_KEY='medsi_tutor_session_v1';
-  const APP_BASE_URL=window.MEDSI_APP_BASE_URL||'https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
   const listCache=new Map(),threadCache=new Map(),listInFlight=new Map(),threadInFlight=new Map();
   let sessionRequest=null,startedForToken='',backgroundRun=0;
   const original={chats:transport.chats.bind(transport),thread:transport.thread.bind(transport),sendMessage:transport.sendMessage.bind(transport),markRead:transport.markRead.bind(transport),markUnread:transport.markUnread.bind(transport),remove:transport.remove.bind(transport),pin:transport.pin.bind(transport)};
@@ -13,7 +11,6 @@
   const sameSession=(a,b)=>!!(a&&b&&a.token&&b.token&&a.token===b.token);
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   function savedSession(){try{const s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(!s||!s.token)return null;if(Number(s.expiresAt||0)&&Number(s.expiresAt)<=Date.now()+3000)return null;return s}catch(_){return null}}
-  function saveSession(s){try{if(s&&s.token)localStorage.setItem(SESSION_KEY,JSON.stringify(s))}catch(_){}return s}
   function listKey(session,bucket){return String(session&&session.token||'').slice(-18)+'|'+String(bucket||'all')}
   function threadKey(session,phone,before,limit){return String(session&&session.token||'').slice(-18)+'|'+phone10(phone)+'|'+String(before||'')+'|'+String(limit||50)}
   async function fetchList(session,bucket,forceFresh){const key=listKey(session,bucket);if(!forceFresh&&listInFlight.has(key))return listInFlight.get(key);const p=original.chats(session,bucket).then(res=>{listCache.set(key,{value:res,at:now()});return res}).finally(()=>{if(listInFlight.get(key)===p)listInFlight.delete(key)});if(!forceFresh)listInFlight.set(key,p);return p}
@@ -66,7 +63,13 @@
       return r;
     }catch(_){}
   }
-  async function ensureSession(){const existing=savedSession();if(existing){start(existing);return existing}const tutor=String(localStorage.getItem(TUTOR_KEY)||'');if(!tutor)return null;if(sessionRequest)return sessionRequest;sessionRequest=(async()=>{try{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method:'getD1ChatSession',args:['educator','',tutor]}),cache:'no-store'});const p=await r.json();const x=p&&p.ok?p.result:null;const s=x&&x.d1Session&&x.d1Session.token?x.d1Session:x&&x.session&&x.session.token?x.session:x&&x.token?x:null;if(s&&s.token){saveSession(s);start(s);return s}}catch(_){}return null})().finally(()=>{sessionRequest=null});return sessionRequest}
+  async function ensureSession(){
+    const provider=window.MedsiEducatorSession;
+    if(!provider){const existing=savedSession();if(existing)start(existing);return existing}
+    if(sessionRequest)return sessionRequest;
+    sessionRequest=provider.get().then(s=>{if(s)start(s);return s}).catch(()=>null).finally(()=>{sessionRequest=null});
+    return sessionRequest;
+  }
   function kick(){ensureSession().catch(()=>{})}
   kick();
   const timer=setInterval(()=>{const s=savedSession();if(s&&s.token!==startedForToken)start(s);else if(!s)ensureSession().catch(()=>{});if(startedForToken&&s&&s.token===startedForToken)clearInterval(timer)},500);
