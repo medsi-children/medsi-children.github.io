@@ -105,6 +105,7 @@
     let deleteTarget=null;
     const deletionOperations=new Map();
     let threadRequestId=0;
+    let chatsRequestId=0;
     let initialMessagesRendered=false;
     function showListScreen(){
       document.body.dataset.screen='screenChats';
@@ -192,15 +193,18 @@
       setTimeout(()=>{if(!disposed&&document.body.dataset.screen==='screenChats')renderList()},220);
     }
     async function loadChats(spinner){
+      const requestId=++chatsRequestId;
       showListScreen();if(spinner)setRefresh(true);
       if(!chatList.childElementCount)chatList.innerHTML='<div class="chat-empty">Загрузка...</div>';
       try{
-        const res=await transport.chats(session,bucket,spinner?{fresh:true}:undefined);
-        if(disposed)return;
+        const res=await transport.chats(session,bucket,{fresh:true});
+        if(disposed||requestId!==chatsRequestId)return;
         currentChats=(res&&res.chats||[]).slice().sort((a,b)=>Number(b&&b.pinnedBucket===bucket)-Number(a&&a.pinnedBucket===bucket));
         renderList();
-      }catch(err){overlay.showError(err.message||'Не удалось загрузить список чатов.')}finally{setRefresh(false)}
+      }catch(err){if(!disposed&&requestId===chatsRequestId)overlay.showError(err.message||'Не удалось загрузить список чатов.')}finally{if(requestId===chatsRequestId)setRefresh(false)}
     }
+    const refreshChats=()=>loadChats(true);
+    document.addEventListener('medsi:refresh-educator-chats',refreshChats);
 
     function renderThreadHeader(chat){chatThreadHeader.replaceChildren();[(chat.relationship||'Родитель')+': '+(chat.parentName||'—'),'Ребёнок: '+(chat.childName||'—'),'Номер телефона: '+displayPhone(chat.phone||'')].forEach(text=>{const d=document.createElement('div');d.textContent=text;chatThreadHeader.appendChild(d)})}
     function threadWithTimeout(phone){
@@ -392,6 +396,7 @@
     loadChats(false);
     return()=>{
       disposed=true;
+      document.removeEventListener('medsi:refresh-educator-chats',refreshChats);
       if(window.__medsiEducatorApplyThreadRefresh===applyLiveRows)delete window.__medsiEducatorApplyThreadRefresh;
       if(pendingUrl)URL.revokeObjectURL(pendingUrl);
       contextMenu.remove();childDeleteModal.remove();

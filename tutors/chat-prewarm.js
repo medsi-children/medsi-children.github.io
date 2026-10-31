@@ -16,11 +16,11 @@
   function saveSession(s){try{if(s&&s.token)localStorage.setItem(SESSION_KEY,JSON.stringify(s))}catch(_){}return s}
   function listKey(session,bucket){return String(session&&session.token||'').slice(-18)+'|'+String(bucket||'all')}
   function threadKey(session,phone,before,limit){return String(session&&session.token||'').slice(-18)+'|'+phone10(phone)+'|'+String(before||'')+'|'+String(limit||50)}
-  async function fetchList(session,bucket){const key=listKey(session,bucket);if(listInFlight.has(key))return listInFlight.get(key);const p=original.chats(session,bucket).then(res=>{listCache.set(key,{value:res,at:now()});return res}).finally(()=>listInFlight.delete(key));listInFlight.set(key,p);return p}
+  async function fetchList(session,bucket,forceFresh){const key=listKey(session,bucket);if(!forceFresh&&listInFlight.has(key))return listInFlight.get(key);const p=original.chats(session,bucket).then(res=>{listCache.set(key,{value:res,at:now()});return res}).finally(()=>{if(listInFlight.get(key)===p)listInFlight.delete(key)});if(!forceFresh)listInFlight.set(key,p);return p}
   async function fetchThread(session,phone,before,limit){const key=threadKey(session,phone,before,limit);if(threadInFlight.has(key))return threadInFlight.get(key);const p=original.thread(session,phone,before,limit).then(res=>{threadCache.set(key,{value:res,at:now()});return res}).finally(()=>threadInFlight.delete(key));threadInFlight.set(key,p);return p}
   async function warmThread(session,phone){const key=threadKey(session,phone,'',100);const cached=threadCache.get(key);if(cached&&now()-cached.at<45000)return cached.value;try{const res=await original.thread(session,phone,'',100);threadCache.set(key,{value:res,at:now()});return res}catch(_){return null}}
   transport.chats=function(session,bucket,options){
-    if(options&&options.fresh)return fetchList(session,bucket);
+    if(options&&options.fresh)return fetchList(session,bucket,true);
     const key=listKey(session,bucket),cached=listCache.get(key);
     if(cached&&now()-cached.at<=3500)return Promise.resolve(cached.value)
     return fetchList(session,bucket)

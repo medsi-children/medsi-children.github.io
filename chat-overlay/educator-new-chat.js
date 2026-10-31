@@ -66,6 +66,7 @@
       title.textContent='Чат с родителями';meta.textContent='Выберите чат с нужным родителем.';
       screen.classList.add('hidden');screen.classList.remove('overlay-screen-ready');screenThread.classList.add('hidden');screenChats.classList.remove('hidden');
       requestAnimationFrame(()=>screenChats.classList.add('overlay-screen-ready'));
+      document.dispatchEvent(new Event('medsi:refresh-educator-chats'));
     }
     function render(rows){
       list.replaceChildren();rows=Array.isArray(rows)?rows:[];
@@ -109,7 +110,7 @@
       clearTimeout(bridgeTimer);
       window.__medsiForcedEducatorParent=parent;
       root.classList.add('educator-new-chat-bridging');
-      btnRefresh.click();
+      document.dispatchEvent(new Event('medsi:refresh-educator-chats'));
       const started=Date.now();
       const probe=()=>{
         if(disposed)return;
